@@ -5,7 +5,9 @@ import Control.Applicative
 import Control.Monad
 import Safe
 import System.Console.GetOpt
+import System.Directory
 import System.Environment
+import System.Exit
 import Whacked.Frontend.Parser
 import Whacked.Frontend.Generator
 
@@ -60,8 +62,24 @@ usage = do
 main :: IO ()
 main
   = getOpt Permute options <$> getArgs >>= \case
-    (opts, [source], []) -> do
+    (opts, [sourcePath], []) -> do
       let Options{..} = foldl (flip ($)) defaultOptions opts
-      when optPrintHelp usage
-      print source
+
+      -- |Print usage information and quit if requested.
+      when optPrintHelp (usage >> exitSuccess)
+
+      -- |Quit if file does not exist.
+      doesFileExist sourcePath >>= \exists -> unless exists $ do
+        putStrLn $ "[" ++ sourcePath ++ "]: File does not exist."
+        exitFailure
+
+      -- |Get the AST.
+      source <- readFile sourcePath
+      case parse source of
+        Left err -> print err
+        Right ast -> do
+          when optPrintAST $ print ast
+
+          -- |TODO: The rest.
+
     (_, _, errs) -> usage

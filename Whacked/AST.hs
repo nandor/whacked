@@ -12,8 +12,7 @@ data ATag
 data AProgram
   = AProgram
     { apFunctions :: [AFunction]
-    , apMain :: ABlock
-    , apTag :: ATag
+    , apMain :: [AStatement]
     }
   deriving (Eq, Ord, Show)
 
@@ -23,7 +22,7 @@ data AFunction
     { afArgs :: [AArg]
     , afReturn :: AType
     , afName :: String
-    , afBody :: ABlock
+    , afBody :: [AStatement]
     , afTag :: ATag
     }
   deriving (Eq, Ord, Show)
@@ -35,11 +34,6 @@ data AArg
     , aaType :: AType
     , aaName :: String
     }
-  deriving (Eq, Ord, Show)
-
-
-data ABlock
-  = ABlock [AStatement]
   deriving (Eq, Ord, Show)
 
 
