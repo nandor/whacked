@@ -1,7 +1,7 @@
 begin
   int f(int a, int b) is
-    return a * a + b;
+    return a * a + b
   end
 
-  print f(5);
+  print a
 end

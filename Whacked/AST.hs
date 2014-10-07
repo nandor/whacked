@@ -1,13 +1,15 @@
 module Whacked.AST where
 
 
+
 data ATag
   = ATag
-    { atLine :: Int
+    { atSource :: String
+    , atLine :: Int
     , atChar :: Int
-    , atIndex :: Int
     }
   deriving (Eq, Ord, Show)
+
 
 data AProgram
   = AProgram
@@ -38,8 +40,8 @@ data AArg
 
 
 data AStatement
-  = AReturn AExpr
-  | APrint AExpr
+  = AReturn ATag AExpr
+  | APrint ATag AExpr
   deriving (Eq, Ord, Show)
 
 
@@ -48,6 +50,7 @@ data ABinary
   | ASub
   | AMul
   | ADiv
+  | AMod
   deriving (Eq, Ord, Show)
 
 

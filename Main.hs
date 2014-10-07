@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards, NamedFieldPuns #-}
 module Main where
 
+
 import Control.Applicative
 import Control.Monad
 import Safe
@@ -10,6 +11,8 @@ import System.Environment
 import System.Exit
 import Whacked.Frontend.Parser
 import Whacked.Frontend.Generator
+
+
 
 data Options
   = Options
@@ -62,20 +65,19 @@ usage = do
 main :: IO ()
 main
   = getOpt Permute options <$> getArgs >>= \case
-    (opts, [sourcePath], []) -> do
+    (opts, [sourceName], []) -> do
       let Options{..} = foldl (flip ($)) defaultOptions opts
 
       -- |Print usage information and quit if requested.
       when optPrintHelp (usage >> exitSuccess)
 
       -- |Quit if file does not exist.
-      doesFileExist sourcePath >>= \exists -> unless exists $ do
-        putStrLn $ "[" ++ sourcePath ++ "]: File does not exist."
+      doesFileExist sourceName >>= \exists -> unless exists $ do
+        putStrLn $ "[" ++ sourceName ++ "]: File does not exist."
         exitFailure
 
       -- |Get the AST.
-      source <- readFile sourcePath
-      case parse source of
+      readFile sourceName >>= \source -> case parse sourceName source of
         Left err -> print err
         Right ast -> do
           when optPrintAST $ print ast
