@@ -1,0 +1,7 @@
+begin
+  int f(int a, int b) is
+    return a * a + b;
+  end
+
+  print f(5);
+end
