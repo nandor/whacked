@@ -75,6 +75,21 @@ genExpr ACall{..} = do
   return (IInt, temp)
 
 
+genAssign :: String -> AExpr -> Generator ()
+genAssign name expr = do
+  -- Increment temp count to create a new version for the variable.
+  scope@Scope{ nextTemp } <- get
+  (t, temp') <- genExpr expr
+
+  -- Update the variable's version.
+  -- If the expression was a simple variable reference, then genExpr
+  -- returned the ID of that variable. In this case, the variable name
+  -- will point to the ID of the source value. Otherwise, the name
+  -- of the new variable will be the ID of the result of the expression.
+  scope@Scope{ vars } <- get
+  put scope{ vars = Map.insert name temp' vars}
+
+
 genStmt :: AStatement -> Generator ()
 genStmt AReturn{..} = do
   (t, temp) <- genExpr asExpr
@@ -84,18 +99,11 @@ genStmt APrint{..} = do
   tell [ICall Nothing "__print_int" [temp]]
 genStmt AAssign{..} = do
   case asTo of
-    ALVar{..} -> do
-      -- Increment temp count to create a new version for the variable.
-      scope@Scope{ nextTemp } <- get
-      (t, temp') <- genExpr asExpr
-
-      -- Update the variable's version.
-      -- If the expression was a simple variable reference, then genExpr
-      -- returned the ID of that variable. In this case, the variable name
-      -- will point to the ID of the source value. Otherwise, the name
-      -- of the new variable will be the ID of the result of the expression.
-      scope@Scope{ vars } <- get
-      put scope{ vars = Map.insert alName temp' vars}
+    ALVar{..} -> genAssign alName asExpr
+genStmt AVarDecl{..} = do
+  forM_ asVars $ \(tag, name, expr) -> case expr of
+    Nothing -> return ()
+    Just expr -> genAssign name expr
 
 
 genFunction :: AFunction -> IFunction

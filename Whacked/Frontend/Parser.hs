@@ -134,10 +134,11 @@ aExpr
 
 aStatement :: GenParser Char st AStatement
 aStatement
-  = asum
+  = asum $ map try
     [ aReturn
     , aPrint
     , aAssign
+    , aVarDecl
     ]
   where
     aReturn = do
@@ -159,6 +160,16 @@ aStatement
       expr <- aExpr
       return $ AAssign tag lval expr
 
+    aVarDecl = do
+      tag <- aTag
+      varType <- aType
+      vars <- commaSep1 $ do
+        tag <- aTag
+        name <- identifier
+        val <- optionMaybe (reservedOp "=" *> aExpr)
+        return (tag, name, val)
+      return $ AVarDecl tag varType vars
+
 
 aFunction :: GenParser Char st AFunction
 aFunction = do
@@ -179,7 +190,7 @@ aFunction = do
 aProgram :: GenParser Char st AProgram
 aProgram = do
   reserved "begin"
-  functions <- many aFunction
+  functions <- many (try aFunction)
   tag <- aTag
   body <- semiSep aStatement
   reserved "end"

@@ -2,8 +2,19 @@ begin
   int f(int a, int b) is
     a = 5;
     b = a + a + a;
+    a = 3;
+    a = 4;
+    a = 5;
+    a = b + b;
+    a = b + b;
+    a = b + c + c;
     return a * a + b
   end
 
-  print f(4, 5)
+  int g() is
+    print 5
+  end
+
+  int a = 1, b = 2;
+  print f(a, b)
 end

@@ -64,6 +64,11 @@ data AStatement
     , asTo :: ALValue
     , asExpr :: AExpr
     }
+  | AVarDecl
+    { asTag :: ATag
+    , asType :: AType
+    , asVars :: [(ATag, String, Maybe AExpr)]
+    }
   deriving (Eq, Ord, Show)
 
 

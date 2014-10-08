@@ -9,6 +9,8 @@ import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
 import           System.Exit
+import           Whacked.AST
+import           Whacked.IMF
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import qualified Whacked.Backend.ARM as ARM
@@ -99,11 +101,16 @@ main
         Right ast -> do
           when optPrintAST $ print ast
 
+          -- |TODO: Proper print for AST.
           let imf = generate ast
-          when optPrintIMF $ print imf
+          when optPrintIMF $ do
+            forM_ (ipFuncs imf) $ \IFunction{..} -> do
+              putStrLn ifName
+              mapM_ (putStrLn . show) ifInstr
 
+          -- |TOOD: Proper print for IMF.
           let asm = ARM.compile imf
-          when optPrintASM $ print asm
+          when optPrintASM $ mapM_ (putStrLn . show) asm
 
           writeFile optOutput (show asm)
 
