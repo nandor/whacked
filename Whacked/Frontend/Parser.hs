@@ -32,13 +32,20 @@ whacked
       , Token.identLetter     = alphaNum <|> char '_'
       , Token.opStart         = Token.opLetter whacked'
       , Token.opLetter        = oneOf "!%&*+./<=>?^|-~"
-      , Token.reservedOpNames = ["="]
+      , Token.reservedOpNames =
+          [ "="
+          , "&&"
+          , "||"
+          ]
       , Token.reservedNames   =
           [ "begin"
           , "end"
           , "int"
           , "is"
           , "return"
+          , "while"
+          , "do"
+          , "done"
           ]
       , Token.caseSensitive   = True
       }
@@ -111,16 +118,22 @@ aRValue = do
 
 aExprOp :: OperatorTable Char st AExpr
 aExprOp
-  = [ [ Infix  (tagBin "*"  Mul) AssocLeft
-      , Infix  (tagBin "/"  Div) AssocLeft
-      , Infix  (tagBin "%"  Mod) AssocLeft
+  = [ [ Infix (tagBin "*"  Mul) AssocLeft
+      , Infix (tagBin "/"  Div) AssocLeft
+      , Infix (tagBin "%"  Mod) AssocLeft
       ]
-    , [ Infix  (tagBin "+"  Add) AssocLeft
-      , Infix  (tagBin "-"  Sub) AssocLeft
+    , [ Infix (tagBin "+"  Add) AssocLeft
+      , Infix (tagBin "-"  Sub) AssocLeft
+      ]
+    , [ Infix (tagBin "<" CmpLt) AssocNone
+      , Infix (tagBin ">" CmpLt) AssocNone
+      ]
+    , [ Infix (tagBin "&&" And) AssocRight
+      ]
+    , [ Infix (tagBin "||" Or) AssocRight
       ]
     ]
   where
-    tagBin :: String -> BinaryOp -> GenParser Char u (AExpr -> AExpr -> AExpr)
     tagBin op name = do
       tag <- aTag
       reservedOp op
@@ -139,6 +152,8 @@ aStatement
     , aPrint
     , aAssign
     , aVarDecl
+    , aWhile
+    , aBlock
     ]
   where
     aReturn = do
@@ -169,6 +184,22 @@ aStatement
         val <- optionMaybe (reservedOp "=" *> aExpr)
         return (tag, name, val)
       return $ AVarDecl tag varType vars
+
+    aWhile = do
+      tag <- aTag
+      reserved "while"
+      cond <- aExpr
+      reserved "do"
+      body <- semiSep1 aStatement
+      reserved "done"
+      return $ AWhile tag cond body
+
+    aBlock = do
+      tag <- aTag
+      reserved "begin"
+      body <- semiSep1 aStatement
+      reserved "end"
+      return $ ABlock tag body
 
 
 aFunction :: GenParser Char st AFunction

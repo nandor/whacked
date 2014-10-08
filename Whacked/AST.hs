@@ -69,6 +69,15 @@ data AStatement
     , asType :: AType
     , asVars :: [(ATag, String, Maybe AExpr)]
     }
+  | AWhile
+    { asTag :: ATag
+    , asExpr :: AExpr
+    , asBody :: [AStatement]
+    }
+  | ABlock
+    { asTag :: ATag
+    , asBody :: [AStatement]
+    }
   deriving (Eq, Ord, Show)
 
 

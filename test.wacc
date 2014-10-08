@@ -1,20 +1,18 @@
 begin
   int f(int a, int b) is
     a = 5;
+    a = 6;
+    a = 7;
+    a = 8;
     b = a + a + a;
-    a = 3;
-    a = 4;
-    a = 5;
-    a = b + b;
-    a = b + b;
-    a = b + c + c;
-    return a * a + b
+    b = a + a;
+    return a * b * c
   end
 
-  int g() is
-    print 5
-  end
-
-  int a = 1, b = 2;
-  print f(a, b)
+  int a = 5;
+  int b = 6;
+  while b < 10 && (a > 10 || a < 20) && b < 20 do
+    print f(a, b);
+    b = b + 1
+  done
 end

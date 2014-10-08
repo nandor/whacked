@@ -7,6 +7,10 @@ data BinaryOp
   | Mul
   | Div
   | Mod
+  | And
+  | Or
+  | CmpLt
+  | CmpGt
   deriving (Eq, Ord, Show)
 
 

@@ -11,6 +11,16 @@ data IType
   deriving (Eq, Ord, Show)
 
 
+data ICond
+  = ILT
+  | IGT
+  | ILTE
+  | IGTE
+  | IEQ
+  | INEQ
+  deriving (Eq, Ord, Show)
+
+
 type ITemp = Int
 
 
@@ -24,7 +34,7 @@ data IProgram
 data IFunction
   = IFunction
     { ifName :: String
-    , ifInstr :: [IInstr]
+    , ifInstr :: [(Int, IInstr)]
     }
   deriving (Eq, Ord, Show)
 
@@ -39,11 +49,6 @@ data IInstr
     { iiType :: IType
     , iiDest :: ITemp
     }
-  | IMov
-    { iiType :: IType
-    , iiDest :: ITemp
-    , iiSource :: ITemp
-    }
   | IReturn
     { iiType :: IType
     , iiDest :: ITemp
@@ -56,6 +61,12 @@ data IInstr
     { iiType :: IType
     , iiBinOp :: BinaryOp
     , iiDest :: ITemp
+    , iiLeft :: ITemp
+    , iiRight :: ITemp
+    }
+  | IBinJump
+    { iiWhere :: Int
+    , iiCond :: ICond
     , iiLeft :: ITemp
     , iiRight :: ITemp
     }

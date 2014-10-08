@@ -29,12 +29,12 @@ newtype Compiler a
   deriving (Applicative, Functor, Monad, MonadState Scope, MonadWriter [ASM])
 
 
-compileInstr :: IInstr -> Compiler ()
-compileInstr IConstInt{..} = do
+compileInstr :: (Int, IInstr) -> Compiler ()
+compileInstr (_, IConstInt{..}) = do
   tell [ARMLDR R0 iiIntVal]
-compileInstr IBinOp{..} = do
+compileInstr (_, IBinOp{..}) = do
   tell [ARMAdd R0 R1 R2]
-compileInstr IReturn{..} = do
+compileInstr (_, IReturn{..}) = do
   tell [ARMLDM [PC]]
 compileInstr _ = do
   return ()
