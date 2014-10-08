@@ -12,6 +12,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Whacked.AST
 import           Whacked.IMF
+import           Whacked.Ops
 
 
 import Debug.Trace
@@ -53,13 +54,21 @@ emit instr = do
   tell [(instrIdx, instr)]
 
 
-genBody :: [AStatement] -> Generator [(Int, IInstr)]
-genBody instrs = do
+isolateBody :: [AStatement] -> Generator [(Int, IInstr)]
+isolateBody instrs = do
   scope <- get
   let scope' = scope{vars = Map.empty : vars scope}
-      ((_, s), i) = runWriter. runStateT (run $ mapM_ genStmt instrs) $ scope'
+      ((_, s), i) = runWriter . runStateT (run $ mapM_ genStmt instrs) $ scope'
   put s{ vars = tail (vars s) }
   return i
+
+
+isolateExpr :: Generator a -> Generator (a, [(Int, IInstr)])
+isolateExpr gen = do
+  scope <- get
+  let ((x, s), i) = runWriter . runStateT (run gen) $ scope
+  put s
+  return (x, i)
 
 
 genTemp :: Generator ITemp
@@ -83,16 +92,30 @@ getVar name = do
     Just loc -> return loc
 
 
-genTrueJump :: AExpr -> Int -> Generator()
-genTrueJump expr target = do
-  -- |TODO: implement this.
-  emit (IBinJump target ILT 0 0)
+genJump :: Bool -> AExpr -> Int -> Generator ()
+genJump branch op@ABinOp{..} target = do
+  case aeBinOp of
+    And | branch -> do
+      genJump False aeLeft target
+      genJump True aeRight target
 
+    And | not branch -> do
+      genJump False aeLeft target
+      genJump True aeRight target
 
-genFalseJump :: AExpr -> Int -> Generator()
-genFalseJump expr target = do
-  -- |TODO: implement this.
-  emit (IBinJump target IGT 0 0)
+    Or -> do
+      genJump branch aeLeft target
+      genJump branch aeRight target
+    _ | aeBinOp `elem` [CmpGt, CmpLt] -> do
+      let cond = case aeBinOp of
+            CmpLt -> if branch then ILT else IGT
+            CmpGt -> if branch then IGT else ILT
+      (leftType, leftTemp) <- genExpr aeLeft
+      (rightType, rightTemp) <- genExpr aeRight
+      emit (IBinJump target cond leftTemp rightTemp)
+    _ -> do
+      (t, temp) <- genExpr op
+      return ()
 
 
 -- |Generates code
@@ -170,14 +193,14 @@ genStmt AVarDecl{..} = do
 
 genStmt AWhile{..} = do
   start <- (+1) . instrIdx <$> get
-  body <- genBody asBody
+  body <- isolateBody asBody
   end <- (+1) . instrIdx <$> get
-  genFalseJump asExpr end
+  genJump False asExpr end
   tell body
-  genTrueJump asExpr start
+  genJump True asExpr start
 
 genStmt ABlock{..} = do
-  body <- genBody asBody
+  body <- isolateBody asBody
   tell body
 
 genFunction :: AFunction -> IFunction

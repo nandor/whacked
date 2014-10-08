@@ -11,7 +11,7 @@ begin
 
   int a = 5;
   int b = 6;
-  while b < 10 && (a > 10 || a < 20) && b < 20 do
+  while a < a && b < a do
     print f(a, b);
     b = b + 1
   done
