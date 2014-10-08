@@ -23,7 +23,6 @@ data Options
     , optPrintIMF :: Bool
     , optPrintHelp :: Bool
     , optPrintASM :: Bool
-    , optOptimise :: Int
     , optOutput :: String
     }
   deriving (Eq, Ord, Show)
@@ -43,13 +42,6 @@ options
     , Option "h" ["help"]
         (NoArg $ \opt -> opt{ optPrintHelp = True })
         "Print the help message"
-    , Option "O" ["optimize"]
-        (OptArg
-          (\val opt -> case val >>= readMay of
-            Nothing -> opt
-            Just val -> opt{ optOptimise = val })
-          (show $ optOptimise defaultOptions))
-        "Choose an optimisation level"
     , Option "o" ["output"]
         (OptArg
           (\val opt -> case val of
@@ -67,7 +59,6 @@ defaultOptions
     , optPrintIMF = False
     , optPrintHelp = False
     , optPrintASM = False
-    , optOptimise = 1
     , optOutput = "wacc.s"
     }
 
