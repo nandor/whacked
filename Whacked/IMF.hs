@@ -34,7 +34,7 @@ data IProgram
 data IFunction
   = IFunction
     { ifName :: String
-    , ifInstr :: [(Int, IInstr)]
+    , ifInstr :: [IInstr]
     }
   deriving (Eq, Ord, Show)
 
@@ -69,5 +69,11 @@ data IInstr
     , iiCond :: ICond
     , iiLeft :: ITemp
     , iiRight :: ITemp
+    }
+  | ILabel
+    { iiIndex :: Int
+    }
+  | IPhi
+    { iiIndex :: Int
     }
   deriving (Eq, Ord, Show)

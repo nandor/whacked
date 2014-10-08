@@ -21,7 +21,7 @@ data Scope
   = Scope
     { function :: AFunction
     , tempIdx :: ITemp
-    , instrIdx :: Int
+    , labelIdx :: Int
     , vars :: [Map String ITemp]
     }
   deriving ( Eq, Ord, Show )
@@ -37,24 +37,23 @@ lookupChain _ []
 
 newtype Generator a
   = Generator
-    { run :: StateT Scope (Writer [(Int, IInstr)]) a
+    { run :: StateT Scope (Writer [IInstr]) a
     }
   deriving ( Applicative
            , Functor
            , Monad
            , MonadState Scope
-           , MonadWriter [(Int, IInstr)]
+           , MonadWriter [IInstr]
            )
 
+nextLabel :: Generator Int
+nextLabel = do
+  scope@Scope{labelIdx} <- get
+  put scope{labelIdx = labelIdx + 1}
+  return labelIdx
 
-emit :: IInstr -> Generator ()
-emit instr = do
-  scope@Scope{ instrIdx } <- get
-  put scope{ instrIdx = instrIdx + 1}
-  tell [(instrIdx, instr)]
 
-
-isolateBody :: [AStatement] -> Generator [(Int, IInstr)]
+isolateBody :: [AStatement] -> Generator [IInstr]
 isolateBody instrs = do
   scope <- get
   let scope' = scope{vars = Map.empty : vars scope}
@@ -63,7 +62,7 @@ isolateBody instrs = do
   return i
 
 
-isolateExpr :: Generator a -> Generator (a, [(Int, IInstr)])
+isolateExpr :: Generator a -> Generator (a, [IInstr])
 isolateExpr gen = do
   scope <- get
   let ((x, s), i) = runWriter . runStateT (run gen) $ scope
@@ -112,7 +111,7 @@ genJump branch op@ABinOp{..} target = do
             CmpGt -> if branch then IGT else ILT
       (leftType, leftTemp) <- genExpr aeLeft
       (rightType, rightTemp) <- genExpr aeRight
-      emit (IBinJump target cond leftTemp rightTemp)
+      tell [IBinJump target cond leftTemp rightTemp]
     _ -> do
       (t, temp) <- genExpr op
       return ()
@@ -129,7 +128,7 @@ genExpr ABinOp{..}  = do
   (rightType, rightTemp) <- genExpr aeRight
   -- TODO(nandor): check types
   temp <- genTemp
-  emit $ IBinOp IInt aeBinOp temp leftTemp rightTemp
+  tell [IBinOp IInt aeBinOp temp leftTemp rightTemp]
   return (IInt, temp)
 
 genExpr AVar{..}  = do
@@ -138,13 +137,13 @@ genExpr AVar{..}  = do
 
 genExpr AConstInt{..}  = do
   temp <- genTemp
-  emit $ IConstInt temp aeIntVal
+  tell [IConstInt temp aeIntVal]
   return (IInt, temp)
 
 genExpr ACall{..} = do
   temp <- genTemp
   args <- mapM genExpr aeArgs
-  emit $ ICall (Just (IInt, temp)) aeName (map snd args)
+  tell [ICall (Just (IInt, temp)) aeName (map snd args)]
   return (IInt, temp)
 
 
@@ -173,11 +172,11 @@ genAssign name expr = do
 genStmt :: AStatement -> Generator ()
 genStmt AReturn{..} = do
   (t, temp) <- genExpr asExpr
-  emit $ IReturn t temp
+  tell [IReturn t temp]
 
 genStmt APrint{..} = do
   (t, temp) <- genExpr asExpr
-  emit $ ICall Nothing "__print_int" [temp]
+  tell [ICall Nothing "__print_int" [temp]]
 
 genStmt AAssign{..} = do
   case asTo of
@@ -192,16 +191,19 @@ genStmt AVarDecl{..} = do
     Just expr' -> genAssign name expr'
 
 genStmt AWhile{..} = do
-  start <- (+1) . instrIdx <$> get
+  start <- nextLabel
   body <- isolateBody asBody
-  end <- (+1) . instrIdx <$> get
+  end <- nextLabel
   genJump False asExpr end
+  tell [ILabel start]
   tell body
   genJump True asExpr start
+  tell [ILabel end]
 
 genStmt ABlock{..} = do
   body <- isolateBody asBody
   tell body
+
 
 genFunction :: AFunction -> IFunction
 genFunction func@AFunction{..}
@@ -212,14 +214,14 @@ genFunction func@AFunction{..}
     scope
       = Scope
         { function = func
-        , instrIdx = 0
         , tempIdx = 0
+        , labelIdx = 0
         , vars = [Map.empty]
         }
     gen = do
       forM_ afArgs $ \AArg{..} -> do
         temp <- getVar aaName
-        emit $ IArg IInt temp
+        tell [IArg IInt temp]
       mapM_ genStmt afBody
 
 
