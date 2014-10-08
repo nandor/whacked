@@ -53,17 +53,8 @@ nextLabel = do
   return labelIdx
 
 
-isolateBody :: [AStatement] -> Generator [IInstr]
-isolateBody instrs = do
-  scope <- get
-  let scope' = scope{vars = Map.empty : vars scope}
-      ((_, s), i) = runWriter . runStateT (run $ mapM_ genStmt instrs) $ scope'
-  put s{ vars = tail (vars s) }
-  return i
-
-
-isolateExpr :: Generator a -> Generator (a, [IInstr])
-isolateExpr gen = do
+isolate :: Generator a -> Generator (a, [IInstr])
+isolate gen = do
   scope <- get
   let ((x, s), i) = runWriter . runStateT (run gen) $ scope
   put s
@@ -192,7 +183,7 @@ genStmt AVarDecl{..} = do
 
 genStmt AWhile{..} = do
   start <- nextLabel
-  body <- isolateBody asBody
+  (_, body) <- isolate (mapM genStmt asBody)
   end <- nextLabel
   genJump False asExpr end
   tell [ILabel start]
@@ -201,7 +192,7 @@ genStmt AWhile{..} = do
   tell [ILabel end]
 
 genStmt ABlock{..} = do
-  body <- isolateBody asBody
+  (_, body) <- isolate (mapM genStmt asBody)
   tell body
 
 
