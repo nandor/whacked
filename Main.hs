@@ -2,15 +2,16 @@
 module Main where
 
 
-import Control.Applicative
-import Control.Monad
-import Safe
-import System.Console.GetOpt
-import System.Directory
-import System.Environment
-import System.Exit
-import Whacked.Frontend.Parser
-import Whacked.Frontend.Generator
+import           Control.Applicative
+import           Control.Monad
+import           Safe
+import           System.Console.GetOpt
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           Whacked.Frontend.Parser
+import           Whacked.Frontend.Generator
+import qualified Whacked.Backend.ARM as ARM
 
 
 
