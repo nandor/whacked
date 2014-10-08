@@ -15,7 +15,6 @@ import           Whacked.IMF
 import           Whacked.Ops
 
 
-import Debug.Trace
 
 data Scope
   = Scope
@@ -86,16 +85,25 @@ genJump :: Bool -> AExpr -> Int -> Generator ()
 genJump branch op@ABinOp{..} target = do
   case aeBinOp of
     And | branch -> do
-      genJump False aeLeft target
+      temp <- nextLabel
+      genJump False aeLeft temp
       genJump True aeRight target
+      tell [ILabel temp]
 
     And | not branch -> do
       genJump False aeLeft target
+      genJump False aeRight target
+
+    Or | branch -> do
+      genJump True aeLeft target
       genJump True aeRight target
 
-    Or -> do
-      genJump branch aeLeft target
-      genJump branch aeRight target
+    Or | not branch -> do
+      temp <- nextLabel
+      genJump True aeLeft temp
+      genJump False aeRight target
+      tell [ILabel temp]
+
     _ | aeBinOp `elem` [CmpGt, CmpLt] -> do
       let cond = case aeBinOp of
             CmpLt -> if branch then ILT else IGT

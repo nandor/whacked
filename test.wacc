@@ -11,7 +11,7 @@ begin
 
   int a = 5;
   int b = 6;
-  while a < a && b < a do
+  while a < b || b < a do
     print f(a, b);
     b = b + 1
   done
