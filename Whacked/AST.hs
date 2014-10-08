@@ -2,6 +2,30 @@ module Whacked.AST where
 
 
 
+data AType
+  = AInt
+  | ABool
+  | AString
+  | ATuple AType AType
+  | AArray AType
+  deriving (Eq, Ord, Show)
+
+
+data ABinary
+  = AAdd
+  | ASub
+  | AMul
+  | ADiv
+  | AMod
+  deriving (Eq, Ord, Show)
+
+
+data AUnary
+  = ANeg
+  | ANot
+  deriving (Eq, Ord, Show)
+
+
 data ATag
   = ATag
     { atSource :: String
@@ -45,21 +69,6 @@ data AStatement
   deriving (Eq, Ord, Show)
 
 
-data ABinary
-  = AAdd
-  | ASub
-  | AMul
-  | ADiv
-  | AMod
-  deriving (Eq, Ord, Show)
-
-
-data AUnary
-  = ANeg
-  | ANot
-  deriving (Eq, Ord, Show)
-
-
 data AExpr
   = AUnOp
     { aeTag :: ATag
@@ -76,13 +85,13 @@ data AExpr
     { aeTag :: ATag
     , aeName :: String
     }
-  deriving (Eq, Ord, Show)
-
-
-data AType
-  = AInt
-  | ABool
-  | AString
-  | ATuple AType AType
-  | AArray AType
+  | AConstInt
+    { aeTag :: ATag
+    , aeIntVal :: Int
+    }
+  | ACall
+    { aeTag :: ATag
+    , aeName :: String
+    , aeArgs :: [AExpr]
+    }
   deriving (Eq, Ord, Show)

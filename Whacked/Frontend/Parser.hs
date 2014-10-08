@@ -5,7 +5,7 @@ module Whacked.Frontend.Parser
   ) where
 
 
-import           Control.Applicative ((*>), (<*), (<$>))
+import           Control.Applicative ((*>), (<*), (<$>), (<*>))
 import           Data.Foldable
 import           Data.Functor.Identity
 import           Text.ParserCombinators.Parsec hiding (parse)
@@ -94,7 +94,9 @@ aRValue = do
   tag <- aTag
   term <- asum $ map try
     [ parens aExpr
+    , ACall tag <$> identifier <*> parens (commaSep aExpr)
     , AVar tag <$> identifier
+    , AConstInt tag . fromIntegral <$> natural
     ]
   return term
 
@@ -156,7 +158,7 @@ aFunction = do
     argName <- identifier
     return $ AArg tag argType argName
   reserved "is"
-  body <- semiSep1 aStatement
+  body <- semiSep aStatement
   reserved "end"
   return $ AFunction args retType name [] tag
 

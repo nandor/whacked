@@ -3,5 +3,5 @@ begin
     return a * a + b
   end
 
-  print a
+  print f(4, 5)
 end
