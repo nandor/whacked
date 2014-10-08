@@ -27,9 +27,16 @@ newtype Compiler a
   deriving (Applicative, Functor, Monad, MonadState Scope, MonadWriter [ASM])
 
 
+compileFunction :: IFunction -> Compiler ()
+compileFunction IFunction{..} = do
+  tell [ARMLabel ifName]
+  return ()
+
+
 compileProgram :: IProgram -> Compiler ()
-compileProgram program
-  = return ()
+compileProgram IProgram{..} = do
+  forM_ ipFuncs $ \func -> do
+    compileFunction func
 
 
 compile :: IProgram -> [ASM]

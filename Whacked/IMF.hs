@@ -10,11 +10,14 @@ data IType
   | IBool
   deriving (Eq, Ord, Show)
 
+
 type ITemp = Int
 
 
 data IProgram
-  = IProgram [IFunction]
+  = IProgram
+    { ipFuncs :: [IFunction]
+    }
   deriving (Eq, Ord, Show)
 
 
@@ -28,8 +31,7 @@ data IFunction
 
 data IInstr
   = ICall
-    { iiType :: IType
-    , iiDest :: ITemp
+    { iiReturn :: Maybe (IType, ITemp)
     , iiFunc :: String
     , iiArgs :: [ITemp]
     }
@@ -37,11 +39,7 @@ data IInstr
     { iiType :: IType
     , iiDest :: ITemp
     }
-  | IPrint
-    { iiType :: IType
-    , iiPrint :: ITemp
-    }
-  | IRet
+  | IReturn
     { iiType :: IType
     , iiPrint :: ITemp
     }

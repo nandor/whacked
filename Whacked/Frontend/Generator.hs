@@ -71,17 +71,17 @@ genExpr AConstInt{..} = do
 genExpr ACall{..} = do
   args <- mapM genExpr aeArgs
   temp <- genTemp
-  tell [ICall IInt temp aeName (map snd args)]
+  tell [ICall (Just (IInt, temp)) aeName (map snd args)]
   return (IInt, temp)
 
 
 genStmt :: AStatement -> Generator ()
 genStmt AReturn{..} = do
   (t, temp) <- genExpr asExpr
-  tell [IRet t temp]
+  tell [IReturn t temp]
 genStmt APrint{..} = do
   (t, temp) <- genExpr asExpr
-  tell [IPrint t temp]
+  tell [ICall Nothing "__print_int" [temp]]
 
 
 genFunction :: AFunction -> IFunction

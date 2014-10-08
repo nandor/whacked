@@ -1,1 +1,1 @@
-[]
+[ARMLabel "__main",ARMLabel "f"]

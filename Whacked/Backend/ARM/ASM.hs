@@ -26,4 +26,6 @@ data ASM
   | ARMAdd ARMReg ARMReg ARMReg
   | ARMSub ARMReg ARMReg ARMReg
   | ARMMul ARMReg ARMReg ARMReg
+  | ARMSTM [ARMReg]
+  | ARMLDM [ARMReg]
   deriving (Eq, Ord, Show)
