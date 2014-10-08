@@ -1,28 +1,16 @@
 module Whacked.AST where
 
 
+import Whacked.Ops
+
 
 data AType
-  = AInt
+  = AVoid
+  | AInt
   | ABool
   | AString
   | ATuple AType AType
   | AArray AType
-  deriving (Eq, Ord, Show)
-
-
-data ABinary
-  = AAdd
-  | ASub
-  | AMul
-  | ADiv
-  | AMod
-  deriving (Eq, Ord, Show)
-
-
-data AUnary
-  = ANeg
-  | ANot
   deriving (Eq, Ord, Show)
 
 
@@ -38,7 +26,6 @@ data ATag
 data AProgram
   = AProgram
     { apFunctions :: [AFunction]
-    , apMain :: [AStatement]
     }
   deriving (Eq, Ord, Show)
 
@@ -64,20 +51,26 @@ data AArg
 
 
 data AStatement
-  = AReturn ATag AExpr
-  | APrint ATag AExpr
+  = AReturn
+    { asTag :: ATag
+    , asExpr :: AExpr
+    }
+  | APrint
+    { asTag :: ATag
+    , asExpr :: AExpr
+    }
   deriving (Eq, Ord, Show)
 
 
 data AExpr
   = AUnOp
     { aeTag :: ATag
-    , aeUnOp :: AUnary
+    , aeUnOp :: UnaryOp
     , aeArg :: AExpr
     }
   | ABinOp
     { aeTag :: ATag
-    , aeBinOp :: ABinary
+    , aeBinOp :: BinaryOp
     , aeLeft :: AExpr
     , aeRight :: AExpr
     }

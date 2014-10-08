@@ -82,6 +82,8 @@ main
         Right ast -> do
           when optPrintAST $ print ast
 
-          -- |TODO: The rest.
+          let imf = generate ast
+          when optPrintIMF $ print imf
+
 
     (_, _, errs) -> usage

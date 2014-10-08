@@ -15,6 +15,7 @@ import           Text.ParserCombinators.Parsec.Pos
 import           Text.ParserCombinators.Parsec.Token (TokenParser)
 import qualified Text.ParserCombinators.Parsec.Token as Token
 import           Whacked.AST
+import           Whacked.Ops
 
 
 -- |Definition of the language.
@@ -103,17 +104,17 @@ aRValue = do
 
 aExprOp :: OperatorTable Char st AExpr
 aExprOp
-  = [ [ Infix  (tagBinApp "*"  AMul) AssocLeft
-      , Infix  (tagBinApp "/"  ADiv) AssocLeft
-      , Infix  (tagBinApp "%"  AMod) AssocLeft
+  = [ [ Infix  (tagBin "*"  Mul) AssocLeft
+      , Infix  (tagBin "/"  Div) AssocLeft
+      , Infix  (tagBin "%"  Mod) AssocLeft
       ]
-    , [ Infix  (tagBinApp "+"  AAdd) AssocLeft
-      , Infix  (tagBinApp "-"  ASub) AssocLeft
+    , [ Infix  (tagBin "+"  Add) AssocLeft
+      , Infix  (tagBin "-"  Sub) AssocLeft
       ]
     ]
   where
-    tagBinApp :: String -> ABinary -> GenParser Char u (AExpr -> AExpr -> AExpr)
-    tagBinApp op name = do
+    tagBin :: String -> BinaryOp -> GenParser Char u (AExpr -> AExpr -> AExpr)
+    tagBin op name = do
       tag <- aTag
       reservedOp op
       return $ \lhs rhs -> ABinOp tag name lhs rhs
@@ -160,16 +161,17 @@ aFunction = do
   reserved "is"
   body <- semiSep aStatement
   reserved "end"
-  return $ AFunction args retType name [] tag
+  return $ AFunction args retType name body tag
 
 
 aProgram :: GenParser Char st AProgram
 aProgram = do
   reserved "begin"
   functions <- many aFunction
+  tag <- aTag
   body <- semiSep aStatement
   reserved "end"
-  return $ AProgram functions body
+  return $ AProgram (AFunction [] AVoid "__main" body tag : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram
