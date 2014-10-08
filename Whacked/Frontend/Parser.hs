@@ -171,7 +171,7 @@ aProgram = do
   tag <- aTag
   body <- semiSep aStatement
   reserved "end"
-  return $ AProgram (AFunction [] AVoid "__main" body tag : functions)
+  return $ AProgram (AFunction [] AVoid "main" body tag : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram

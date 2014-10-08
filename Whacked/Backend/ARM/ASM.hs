@@ -28,4 +28,6 @@ data ASM
   | ARMMul ARMReg ARMReg ARMReg
   | ARMSTM [ARMReg]
   | ARMLDM [ARMReg]
+  | ARMMov ARMReg ARMReg
+  | ARMLDR ARMReg Int
   deriving (Eq, Ord, Show)

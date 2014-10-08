@@ -1,1 +1,1 @@
-[ARMLabel "__main",ARMLabel "f"]
+[ARMLabel "main",ARMLDR R0 4,ARMLDR R0 5,ARMLabel "f",ARMAdd R0 R1 R2,ARMAdd R0 R1 R2,ARMLDM [PC]]

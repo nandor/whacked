@@ -27,20 +27,31 @@ newtype Compiler a
   deriving (Applicative, Functor, Monad, MonadState Scope, MonadWriter [ASM])
 
 
-compileFunction :: IFunction -> Compiler ()
-compileFunction IFunction{..} = do
-  tell [ARMLabel ifName]
+compileInstr :: IInstr -> Compiler ()
+compileInstr IConstInt{..} = do
+  tell [ARMLDR R0 iiIntVal]
+compileInstr IBinOp{..} = do
+  tell [ARMAdd R0 R1 R2]
+compileInstr IReturn{..} = do
+  tell [ARMLDM [PC]]
+compileInstr _ = do
   return ()
 
 
-compileProgram :: IProgram -> Compiler ()
-compileProgram IProgram{..} = do
+compileFunc :: IFunction -> Compiler ()
+compileFunc IFunction{..} = do
+  tell [ARMLabel ifName]
+  forM_ ifInstr compileInstr
+
+
+compileProg :: IProgram -> Compiler ()
+compileProg IProgram{..} = do
   forM_ ipFuncs $ \func -> do
-    compileFunction func
+    compileFunc func
 
 
 compile :: IProgram -> [ASM]
 compile program
-  = execWriter . evalStateT (run $ compileProgram program) $ scope
+  = execWriter . evalStateT (run $ compileProg program) $ scope
   where
     scope = Scope
