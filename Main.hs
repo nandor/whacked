@@ -20,6 +20,7 @@ data Options
     { optPrintAST :: Bool
     , optPrintIMF :: Bool
     , optPrintHelp :: Bool
+    , optPrintASM :: Bool
     , optOptimise :: Int
     , optOutput :: String
     }
@@ -34,6 +35,9 @@ options
     , Option "I" ["print-imf"]
         (NoArg $ \opt -> opt{ optPrintIMF = True })
         "Print the intermediate code"
+    , Option "P" ["print-asm"]
+        (NoArg $ \opt -> opt{ optPrintASM = True })
+        "Print the generated assembly"
     , Option "h" ["help"]
         (NoArg $ \opt -> opt{ optPrintHelp = True })
         "Print the help message"
@@ -60,6 +64,7 @@ defaultOptions
     { optPrintAST = False
     , optPrintIMF = False
     , optPrintHelp = False
+    , optPrintASM = False
     , optOptimise = 1
     , optOutput = "wacc.s"
     }
@@ -97,5 +102,9 @@ main
           let imf = generate ast
           when optPrintIMF $ print imf
 
+          let asm = ARM.compile imf
+          when optPrintASM $ print asm
+
+          writeFile optOutput (show asm)
 
     (_, _, errs) -> usage
