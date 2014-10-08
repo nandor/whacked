@@ -59,6 +59,11 @@ data AStatement
     { asTag :: ATag
     , asExpr :: AExpr
     }
+  | AAssign
+    { asTag :: ATag
+    , asTo :: ALValue
+    , asExpr :: AExpr
+    }
   deriving (Eq, Ord, Show)
 
 
@@ -86,5 +91,13 @@ data AExpr
     { aeTag :: ATag
     , aeName :: String
     , aeArgs :: [AExpr]
+    }
+  deriving (Eq, Ord, Show)
+
+
+data ALValue
+  = ALVar
+    { alTag :: ATag
+    , alName :: String
     }
   deriving (Eq, Ord, Show)

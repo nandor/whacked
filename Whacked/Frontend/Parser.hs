@@ -32,7 +32,7 @@ whacked
       , Token.identLetter     = alphaNum <|> char '_'
       , Token.opStart         = Token.opLetter whacked'
       , Token.opLetter        = oneOf "!%&*+./<=>?^|-~"
-      , Token.reservedOpNames = []
+      , Token.reservedOpNames = ["="]
       , Token.reservedNames   =
           [ "begin"
           , "end"
@@ -90,16 +90,23 @@ aType
     ]
 
 
+aLValue :: GenParser Char st ALValue
+aLValue = do
+  tag <- aTag
+  asum $ map try
+    [ ALVar tag <$> identifier
+    ]
+
+
 aRValue :: GenParser Char st AExpr
 aRValue = do
   tag <- aTag
-  term <- asum $ map try
+  asum $ map try
     [ parens aExpr
     , ACall tag <$> identifier <*> parens (commaSep aExpr)
     , AVar tag <$> identifier
     , AConstInt tag . fromIntegral <$> natural
     ]
-  return term
 
 
 aExprOp :: OperatorTable Char st AExpr
@@ -130,22 +137,27 @@ aStatement
   = asum
     [ aReturn
     , aPrint
+    , aAssign
     ]
   where
-    aReturn :: GenParser Char st AStatement
     aReturn = do
       tag <- aTag
       reserved "return"
       expr <- aExpr
       return $ AReturn tag expr
 
-
-    aPrint :: GenParser Char st AStatement
     aPrint = do
       tag <- aTag
       reserved "print"
       expr <- aExpr
       return $ APrint tag expr
+
+    aAssign = do
+      tag <- aTag
+      lval <- aLValue
+      reservedOp "="
+      expr <- aExpr
+      return $ AAssign tag lval expr
 
 
 aFunction :: GenParser Char st AFunction

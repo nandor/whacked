@@ -1,5 +1,7 @@
 begin
   int f(int a, int b) is
+    a = 5;
+    b = a + a + a;
     return a * a + b
   end
 

@@ -39,9 +39,14 @@ data IInstr
     { iiType :: IType
     , iiDest :: ITemp
     }
+  | IMov
+    { iiType :: IType
+    , iiDest :: ITemp
+    , iiSource :: ITemp
+    }
   | IReturn
     { iiType :: IType
-    , iiPrint :: ITemp
+    , iiDest :: ITemp
     }
   | IConstInt
     { iiDest :: ITemp
