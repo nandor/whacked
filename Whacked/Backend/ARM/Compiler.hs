@@ -8,14 +8,16 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Writer
+import           Data.Map (Map)
+import qualified Data.Map as Map
 import           Whacked.Backend.ARM.ASM
+import           Whacked.Backend.ARM.Allocator
 import           Whacked.IMF
-
 
 
 data Scope
   = Scope
-    {
+    { varAlloc :: Map ITemp Storage
     }
   deriving (Eq, Ord, Show)
 
@@ -39,7 +41,8 @@ compileInstr _ = do
 
 
 compileFunc :: IFunction -> Compiler ()
-compileFunc IFunction{..} = do
+compileFunc func@IFunction{..} = do
+  get >>= \scope -> put scope{ varAlloc = allocate func }
   tell [ARMLabel ifName]
   forM_ ifInstr compileInstr
 
@@ -55,3 +58,5 @@ compile program
   = execWriter . evalStateT (run $ compileProg program) $ scope
   where
     scope = Scope
+      { varAlloc = Map.empty
+      }
