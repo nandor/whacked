@@ -10,12 +10,18 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.State
+import           Control.Monad.ST
 import           Control.Monad.Writer
+import           Data.List ((\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Data.STRef
+import           Data.Vector (Vector, (!))
+import qualified Data.Vector as Vector
+import qualified Data.Vector.Mutable as MVector
 import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
@@ -57,7 +63,7 @@ genFunc IFunction{..}
     -- labels and end with jump statements or normal statements. groups will be
     -- a map of individual blocks, while target will map label indices to the
     -- blocks they are in.
-    (groups, target, _, next) = group Map.empty Map.empty [] 0 ifBody
+    (groups, target, _, count) = group Map.empty Map.empty [] 0 ifBody
 
     group :: Map Int [IInstr] -> Map Int Int -> [IInstr] -> Int -> [IInstr] ->
       (Map Int [IInstr], Map Int Int, [IInstr], Int)
@@ -107,7 +113,7 @@ genFunc IFunction{..}
     graph = Map.mapWithKey forwardLink groups
     forwardLink index []
       = Set.empty
-    forwardLink index group = Set.filter (< next) $ case last group of
+    forwardLink index group = Set.filter (< count) $ case last group of
         IUJump{..} -> Set.singleton (fromJust . Map.lookup iiWhere $ target)
         IJump{..} -> Set.fromList
           [ fromJust . Map.lookup iiWhere $ target
@@ -129,6 +135,7 @@ genFunc IFunction{..}
     -- their successors, except the cases when they are reaching through
     -- backwards edges.
     (order, _) = dfs 0 [] Set.empty
+    index = Vector.fromList order
     dfs node acc viz
       | Set.member node viz = (acc, viz)
       | Just neighbours <- Map.lookup node graph =
@@ -141,24 +148,59 @@ genFunc IFunction{..}
 
     -- Compute the set of dominators of a node. This function is based on the
     -- paper "A Simple, Fast Dominance Algorithm" by Keith D. Cooper,
-    -- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2)
+    -- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2).
+    -- If you have any doubts about this functions, RTFM.
     dominators
-      = findDominators (Map.fromList [(i, Set.fromList order) | i <- order])
-    findDominators dom
-      | dom == dom' = dom
-      | otherwise = findDominators dom'
-      where
-        dom' = Map.fromList (map update order)
-        update node
-          = case Map.lookup node graph' of
-            Nothing -> (node, Set.singleton node)
-            Just prev ->
-              let sets = map (\x -> case Map.lookup x dom of
-                    Nothing -> Set.singleton x
-                    Just x -> x) (Set.toList prev)
-              in ( node
-                 , Set.insert node $
-                    foldl Set.intersection (Set.fromList order) sets)
+      = runST $ do
+          dom <- MVector.new count
+
+          MVector.write dom 0 (Just 0)
+          forM_ [1..count - 1] $ \i -> do
+            MVector.write dom i Nothing
+
+          let findDominators = do
+                changed <- forM order $ \i -> case Map.lookup i graph' of
+                  Nothing -> return False
+                  Just prev -> do
+                    let prevl = Set.toList prev
+                    prev' <- zip prevl <$> mapM (MVector.read dom) prevl
+                    case dropWhile (isNothing . snd) prev' of
+                      [] -> return False
+                      (first, _):_ -> do
+                        idom' <- foldM
+                          (\idom p -> MVector.read dom p >>= \case
+                              Nothing -> return idom
+                              Just _ -> intersect p idom)
+                          first (prevl \\ [first])
+
+                        previousDom <- MVector.read dom i
+                        if Just idom' /= previousDom
+                          then do
+                            MVector.write dom i (Just idom')
+                            return True
+                          else return False
+                return (or changed)
+
+              intersect x y
+                = case xi `compare` yi of
+                    EQ -> return x
+                    GT -> do
+                      x' <- fromJust <$> MVector.read dom x
+                      intersect x' y
+                    LT -> do
+                      y' <- fromJust <$> MVector.read dom y
+                      intersect x y'
+                where
+                  xi = index ! x
+                  yi = index ! y
+
+              findDominators' = do
+                changed <- findDominators
+                when changed $ findDominators'
+
+          findDominators'
+          dom <- forM [0..count - 1] $ (MVector.read dom)
+          return (Vector.fromList . map fromJust $ dom)
 
 
 generateS :: IProgram -> SProgram
