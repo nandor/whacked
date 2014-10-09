@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
 module Whacked.Itch where
 
 -- |Itch is the first intermediary language employed by whacked. It is converted
@@ -89,4 +90,12 @@ data IInstr
   | ILabel
     { iiIndex :: Int
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
+
+instance Show IInstr where
+  show IReturn{..} = "IReturn"
+  show IJump{..} = "IJump " ++ show iiWhere
+  show IUJump{..} = "IUJump " ++ show iiWhere
+  show IWriteVar{..} = "IWriteVar"
+  show IPrint{..} = "IPrint"
+  show ILabel{..} = "ILabel " ++ show iiIndex

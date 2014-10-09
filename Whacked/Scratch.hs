@@ -1,60 +1,59 @@
-module Wahacked.Scratch where
+module Whacked.Scratch where
 
 -- |The last intermediary form. Optimizations such as inlining, constant
 -- folding, dead code elimination and sparse conditional constant propagation
 -- are applied on this form.
 
 
-data IProgram
-  = IProgram
-    { ipFuncs :: [IFunction]
+
+data SProgram
+  = SProgram
+    { spFuncs :: [SFunction]
     }
   deriving ( Eq, Ord, Show )
 
 
-data IFunction
-  = IFunction
-    { ifName :: String
-    , ifInstr :: [IInstr]
-    }
+data SFunction
+  = SFunction
   deriving ( Eq, Ord, Show )
 
+{-
 
-data IInstr
-  = ICall
-    { iiReturn :: Maybe (IType, ITemp)
+data SInstr
+  = SCall
+    { iiReturn :: Maybe (IType, STemp)
     , iiFunc :: String
     , iiArgs :: [ITemp]
     }
-  | IArg
-    { iiType :: IType
-    , iiDest :: ITemp
+  | SArg
+    { iiType :: SType
+    , iiDest :: STemp
     }
-  | IReturn
-    { iiType :: IType
-    , iiDest :: ITemp
+  | SReturn
+    { iiType :: SType
+    , iiDest :: STemp
     }
-  | IConstInt
-    { iiDest :: ITemp
-    , iiIntVal :: Int
+  | SConstInt
+    { iiDest :: STemp
+    , iiIntVal :: Snt
     }
-  | IBinOp
-    { iiType :: IType
+  | SBinOp
+    { iiType :: SType
     , iiBinOp :: BinaryOp
-    , iiDest :: ITemp
-    , iiLeft :: ITemp
-    , iiRight :: ITemp
+    , iiDest :: STemp
+    , iiLeft :: STemp
+    , iiRight :: STemp
     }
-  | IBinJump
-    { iiWhere :: Int
-    , iiCond :: ICond
-    , iiLeft :: ITemp
-    , iiRight :: ITemp
+  | SBinJump
+    { iiWhere :: Snt
+    , iiCond :: SCond
+    , iiLeft :: STemp
+    , iiRight :: STemp
     }
-  | ILabel
-    { iiIndex :: Int
+  | SLabel
+    { iiIndex :: Snt
     }
-  | IPhi
-    { iiIndex :: Int
+  | SPhi
+    { iiIndex :: Snt
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord, Show )-}

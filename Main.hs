@@ -11,10 +11,10 @@ import           System.Environment
 import           System.Exit
 import           Whacked.Tree
 import           Whacked.Itch
---import           Whacked.Scratch
+import           Whacked.Scratch
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
---import qualified Whacked.Backend.ARM as ARM
+import           Whacked.Optimizer.Generator
 
 
 
@@ -99,6 +99,10 @@ main
                 forM_ (ipFuncs itch) $ \IFunction{..} -> do
                   putStrLn (ifName ++ show ifArgs)
                   mapM_ (putStrLn . show) ifBody
+
+              let scratch = generateS itch
+              print scratch
+
 
           {-let asm = ARM.compile imf
           when optPrintASM $ mapM_ (putStrLn . show) asm

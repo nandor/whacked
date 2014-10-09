@@ -251,7 +251,7 @@ aProgram = do
   cons <- AFunction <$> aTag
   body <- semiSep aStatement
   reserved "end"
-  return $ AProgram (cons [] Void "main" body : functions)
+  return $ AProgram (cons [] Int "main" body : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram
