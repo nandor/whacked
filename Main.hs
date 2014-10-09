@@ -9,11 +9,12 @@ import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
 import           System.Exit
-import           Whacked.AST
-import           Whacked.IMF
+import           Whacked.Tree
+import           Whacked.Itch
+--import           Whacked.Scratch
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
-import qualified Whacked.Backend.ARM as ARM
+--import qualified Whacked.Backend.ARM as ARM
 
 
 
@@ -88,21 +89,20 @@ main
 
       -- |Get the AST.
       readFile sourceName >>= \source -> case parse sourceName source of
-        Left err -> print err
+        Left err -> putStrLn (show err)
         Right ast -> do
           when optPrintAST $ print ast
+          case generate ast of
+            Left err -> putStrLn err
+            Right itch -> do
+              when optPrintIMF $ do
+                forM_ (ipFuncs itch) $ \IFunction{..} -> do
+                  putStrLn (ifName ++ show ifArgs)
+                  mapM_ (putStrLn . show) ifBody
 
-          -- |TODO: Proper print for AST.
-          let imf = generate ast
-          when optPrintIMF $ do
-            forM_ (ipFuncs imf) $ \IFunction{..} -> do
-              putStrLn ifName
-              mapM_ (putStrLn . show) ifInstr
-
-          -- |TOOD: Proper print for IMF.
-          let asm = ARM.compile imf
+          {-let asm = ARM.compile imf
           when optPrintASM $ mapM_ (putStrLn . show) asm
 
-          writeFile optOutput (show asm)
+          writeFile optOutput (show asm)-}
 
     (_, _, errs) -> usage

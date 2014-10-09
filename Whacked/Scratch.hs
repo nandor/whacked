@@ -1,34 +1,15 @@
-module Whacked.IMF where
+module Wahacked.Scratch where
 
-
-import Whacked.Ops
-
-
-
-data IType
-  = IInt
-  | IBool
-  deriving (Eq, Ord, Show)
-
-
-data ICond
-  = ILT
-  | IGT
-  | ILTE
-  | IGTE
-  | IEQ
-  | INEQ
-  deriving (Eq, Ord, Show)
-
-
-type ITemp = Int
+-- |The last intermediary form. Optimizations such as inlining, constant
+-- folding, dead code elimination and sparse conditional constant propagation
+-- are applied on this form.
 
 
 data IProgram
   = IProgram
     { ipFuncs :: [IFunction]
     }
-  deriving (Eq, Ord, Show)
+  deriving ( Eq, Ord, Show )
 
 
 data IFunction
@@ -36,7 +17,7 @@ data IFunction
     { ifName :: String
     , ifInstr :: [IInstr]
     }
-  deriving (Eq, Ord, Show)
+  deriving ( Eq, Ord, Show )
 
 
 data IInstr
@@ -76,4 +57,4 @@ data IInstr
   | IPhi
     { iiIndex :: Int
     }
-  deriving (Eq, Ord, Show)
+  deriving ( Eq, Ord, Show )

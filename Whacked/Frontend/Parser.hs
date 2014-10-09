@@ -14,8 +14,8 @@ import           Text.ParserCombinators.Parsec.Expr
 import           Text.ParserCombinators.Parsec.Pos
 import           Text.ParserCombinators.Parsec.Token (TokenParser)
 import qualified Text.ParserCombinators.Parsec.Token as Token
-import           Whacked.AST
-import           Whacked.Ops
+import           Whacked.Tree
+import           Whacked.Types
 
 
 -- |Definition of the language.
@@ -46,6 +46,7 @@ whacked
           , "while"
           , "do"
           , "done"
+          , "void"
           ]
       , Token.caseSensitive   = True
       }
@@ -89,19 +90,19 @@ aTag = do
   return $ ATag (sourceName pos) (sourceLine pos) (sourceColumn pos)
 
 
-aType :: GenParser Char st AType
+aType :: GenParser Char st Type
 aType
   = asum
-    [ reserved "int" *> return AInt
-    , reserved "bool" *> return ABool
+    [ reserved "int" *> return Int
+    , reserved "bool" *> return Bool
+    , reserved "void" *> return Void
     ]
 
 
 aLValue :: GenParser Char st ALValue
-aLValue = do
-  tag <- aTag
-  asum $ map try
-    [ ALVar tag <$> identifier
+aLValue
+  = asum $ map try
+    [ ALVar <$> aTag <*> identifier
     ]
 
 
@@ -204,7 +205,7 @@ aStatement
 
 aFunction :: GenParser Char st AFunction
 aFunction = do
-  tag <- aTag
+  cons <- AFunction<$> aTag
   retType <- aType
   name <- identifier
   args <- parens . commaSep $ do
@@ -215,17 +216,17 @@ aFunction = do
   reserved "is"
   body <- semiSep aStatement
   reserved "end"
-  return $ AFunction args retType name body tag
+  return $ cons args retType name body
 
 
 aProgram :: GenParser Char st AProgram
 aProgram = do
   reserved "begin"
   functions <- many (try aFunction)
-  tag <- aTag
+  cons <- AFunction <$> aTag
   body <- semiSep aStatement
   reserved "end"
-  return $ AProgram (AFunction [] AVoid "main" body tag : functions)
+  return $ AProgram (cons [] Void "main" body : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram

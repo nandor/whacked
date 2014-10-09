@@ -1,86 +1,247 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving,
+             LambdaCase,
+             NamedFieldPuns,
+             RecordWildCards #-}
 module Whacked.Frontend.Generator
   (generate
   ) where
 
-
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.Except
 import           Control.Monad.State
 import           Control.Monad.Writer
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Whacked.AST
-import           Whacked.IMF
-import           Whacked.Ops
+import           Data.Set (Set)
+import qualified Data.Set as Set
+import           Whacked.Itch
+import           Whacked.Tree
+import           Whacked.Types
 
 
+import           Debug.Trace
 
+
+-- |The scope keeps information about declared variables, functions return
+-- types, label counters and scope counters. It is wrapped into a state monad
+-- for easy access.
 data Scope
   = Scope
-    { function :: AFunction
-    , tempIdx :: ITemp
-    , labelIdx :: Int
-    , vars :: [Map String ITemp]
+    { function  :: String
+    , functions :: Map String AFunction
+    , nextScope :: Int
+    , nextLabel :: Int
+    , variables :: [(Int, Map String Type)]
     }
   deriving ( Eq, Ord, Show )
 
 
-lookupChain :: String -> [Map String ITemp] -> Maybe ITemp
-lookupChain name (x:xs)
-  = let var = Map.lookup name x
-    in if var == Nothing then lookupChain name xs else var
-lookupChain _ []
-  = Nothing
-
-
+-- |The generator monad obtained by stacking a state, a writer and an exception
+-- monad. The state monad keeps information about variable counters and scope,
+-- the writer monad emits instructions and the exception monad is use to
+-- report semantic errors.
 newtype Generator a
-  = Generator
-    { run :: StateT Scope (Writer [IInstr]) a
-    }
+  = Generator (StateT Scope (WriterT [IInstr] (Except String)) a)
   deriving ( Applicative
            , Functor
            , Monad
+           , MonadError String
            , MonadState Scope
            , MonadWriter [IInstr]
            )
 
-nextLabel :: Generator Int
-nextLabel = do
-  scope@Scope{labelIdx} <- get
-  put scope{labelIdx = labelIdx + 1}
-  return labelIdx
+
+-- |This function is a wrapper which takes a generator and a scope and returns
+-- either the error message produced by running the generator or the generated
+-- value, the new scope and the emitted instructions.
+runGenerator :: Generator a -> Scope -> Either String (a, Scope, [IInstr])
+runGenerator (Generator gen) scope = do
+  ((a, scope'), instr) <- runExcept . runWriterT . runStateT gen $ scope
+  return (a, scope', instr)
 
 
-isolate :: Generator a -> Generator (a, [IInstr])
-isolate gen = do
-  scope <- get
-  let ((x, s), i) = runWriter . runStateT (run gen) $ scope
-  put s
-  return (x, i)
-
-
-genTemp :: Generator ITemp
-genTemp = do
-  scope@Scope{ tempIdx } <- get
-  put scope{ tempIdx = tempIdx + 1}
-  return tempIdx
-
-
-getVar :: String -> Generator ITemp
-getVar name = do
-  scope@Scope{ tempIdx, vars } <- get
-  case lookupChain name vars of
-    Nothing -> do
-      let (var:vars') = vars
-      put scope
-        { tempIdx = tempIdx + 1
-        , vars = Map.insert name tempIdx var:vars'
+-- |This function executes a generator in an isolated scope. It returns the
+-- sequence of instructions generated. It also increments the nextScope value.
+-- The effect of this function is that the generated code will correctly
+-- increment all the counters, but variables declared in the isolated scope
+-- will be restricted to that scope.
+scope :: Generator a -> Generator (a, [IInstr])
+scope gen = do
+  -- Create a new variable scope by incrementing the scope counter.
+  scope@Scope{ nextScope, variables } <- get
+  let scope' = scope
+        { nextScope = nextScope + 1
+        , variables = (nextScope + 1, Map.empty) : variables
         }
-      return tempIdx
-    Just loc -> return loc
+  put scope'
+
+  -- Run the isolated generator & propagate errors and scopes.
+  case runGenerator gen scope' of
+    Left err -> fail err
+    Right (a, scope''@Scope{ variables }, instr) -> do
+      put scope''{ variables = tail variables }
+      return (a, instr)
 
 
+-- |Finds a variable in the scope. Returns the variable from the scope
+-- that is closes to the current scope.
+findVar :: String -> Generator (Maybe (Int, Type))
+findVar name
+  = get >>= \scope@Scope{ variables } -> return $ findVar' variables
+  where
+    findVar' []
+      = Nothing
+    findVar' ((idx, x):xs)
+      | Just x' <- Map.lookup name x = Just (idx, x')
+      | otherwise = findVar' xs
+
+
+-- |Returns the index of the next available label. Indices are guaranteed to
+-- be unique, but they are not necessarily continous.
+getLabel :: Generator Int
+getLabel = do
+  scope@Scope{ nextLabel } <- get
+  put scope{ nextLabel = nextLabel + 1 }
+  return nextLabel
+
+
+-- |Reports a formatted error message, including the tag of the token.
+genError :: ATag -> String -> Generator a
+genError ATag{..} msg
+  = throwError $
+      show atSource ++
+      " (line " ++ show atLine ++ ", " ++ show atChar ++ "):\n" ++
+      msg
+
+
+-- |Transforms the AST expression to IMF expressions, checking types and
+-- removing tags.
+genExpr :: AExpr -> Generator (Type, IExpr)
+genExpr ABinOp{..}  = do
+  (lt, le) <- genExpr aeLeft
+  (rt, re) <- genExpr aeRight
+  when (lt /= rt) $ do
+    genError aeTag "type error"
+  return (if isComparison aeBinOp then Bool else lt, IBinOp aeBinOp le re)
+genExpr AVar{..} = do
+  findVar aeName >>= \case
+    Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"
+    Just (idx, t) -> return (t, IVar t aeName idx)
+genExpr AConstInt{..} = do
+  return (Int, IConstInt aeIntVal)
+genExpr ACall{..} = do
+  get >>= \Scope{ functions } -> case Map.lookup aeName functions of
+    Nothing -> genError aeTag $ "undefined function '" ++ aeName ++ "'"
+    Just AFunction{ afType, afArgs } -> do
+      args <- forM (zip afArgs aeArgs) $ \(AArg{ aaType }, arg) -> do
+        (t, expr) <- genExpr arg
+        when (t /= aaType) $
+          genError aeTag $ "type error"
+        return expr
+      return (afType, ICall afType aeName args)
+
+
+-- |Generates code for a statement.
+genStmt :: AStatement -> Generator ()
+genStmt AReturn{..} = do
+  scope@Scope{ function, functions } <- get
+  case Map.lookup function functions of
+    Nothing -> genError asTag "function not found"
+    Just AFunction{ afType } -> do
+      (t, expr) <- genExpr asExpr
+      when (t /= afType) $ do
+        genError asTag "invalid return type"
+      tell [IReturn t expr]
+genStmt APrint{..} = do
+  (t, expr) <- genExpr asExpr
+  tell [IPrint t expr]
+genStmt AAssign{..}
+  = case asTo of
+      ALVar{..} -> do
+        findVar alName >>= \case
+          Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
+          Just (idx, t) -> do
+            (t', expr) <- genExpr asExpr
+            when (t /= t') $
+              genError alTag $ "type error"
+            tell [IWriteVar t alName idx expr]
+genStmt AVarDecl{..} = do
+  forM_ asVars $ \(tag, name, expr) -> do
+    scope@Scope{ nextScope, variables = (_, x):xs } <- get
+    findVar name >>= \case
+      Just (idx, _) ->
+        when (idx == nextScope) $
+          genError asTag $ "duplicate variable '" ++ name ++ "'"
+      Nothing -> do
+        when (expr /= Nothing) $ do
+          let Just expr' = expr
+          (t, expr'') <- genExpr expr'
+          when (t /= asType) $
+            genError asTag $ "type error"
+          tell [IWriteVar t name nextScope expr'']
+        put scope{ variables = (nextScope, Map.insert name asType x) : xs}
+genStmt AWhile{..} = do
+  (t, expr) <- genExpr asExpr
+  when (t /= Bool) $ do
+    genError asTag $ "boolean expected"
+
+  start <- getLabel
+  (_, body) <- scope (mapM_ genStmt asBody)
+  end <- getLabel
+
+  tell [IJump end False expr]
+  tell [ILabel start]
+  tell body
+  tell [IJump start True expr]
+  tell [ILabel end]
+
+
+-- |Generates code for a function body.
+genFunc :: AFunction -> Generator ()
+genFunc AFunction{..} = do
+  -- |Put all arguments into the scope.
+  scope@Scope{ nextScope, variables } <- get
+  args <- foldM (\args AArg{..} ->
+    case Map.lookup aaName args of
+      Nothing -> return $ Map.insert aaName aaType args
+      Just _ -> genError aaTag $ "duplicate argument '" ++ aaName ++ "'")
+    Map.empty afArgs
+  put scope{ variables = (nextScope, args) : variables }
+
+  -- |Encode statements.
+  mapM_ genStmt afBody
+
+
+-- |Generates code for all the functions in the program. If type checking fails,
+-- an error message is returned.
+generate :: AProgram -> Either String IProgram
+generate (AProgram functions)
+  = IProgram <$> mapM generate' functions
+  where
+    generate' func = do
+      (_, _, body) <- runGenerator (genFunc func) scope
+      return $ IFunction (afName func) (afType func) args body
+      where
+        -- |All functions, used to check types.
+        functions'
+          = Map.fromList . map (\func -> (afName func, func) ) $ functions
+
+        -- |All arguments, returned in the structure.
+        args
+          = map (\(AArg _ t name) -> (t, name)) (afArgs func)
+
+        -- |Initial scope.
+        scope
+          = Scope
+            { function  = afName func
+            , functions = functions'
+            , nextScope = 0
+            , nextLabel = 0
+            , variables = []
+            }
+
+{-
 genJump :: Bool -> AExpr -> Int -> Generator ()
 genJump branch op@ABinOp{..} target = do
   case aeBinOp of
@@ -114,116 +275,4 @@ genJump branch op@ABinOp{..} target = do
     _ -> do
       (t, temp) <- genExpr op
       return ()
-
-
--- |Generates code
-genExpr :: AExpr -> Generator (IType, ITemp)
-genExpr AUnOp{..}  = do
-  temp <- genTemp
-  return (IInt, temp)
-
-genExpr ABinOp{..}  = do
-  (leftType, leftTemp) <- genExpr aeLeft
-  (rightType, rightTemp) <- genExpr aeRight
-  -- TODO(nandor): check types
-  temp <- genTemp
-  tell [IBinOp IInt aeBinOp temp leftTemp rightTemp]
-  return (IInt, temp)
-
-genExpr AVar{..}  = do
-  temp <- getVar aeName
-  return (IInt, temp)
-
-genExpr AConstInt{..}  = do
-  temp <- genTemp
-  tell [IConstInt temp aeIntVal]
-  return (IInt, temp)
-
-genExpr ACall{..} = do
-  temp <- genTemp
-  args <- mapM genExpr aeArgs
-  tell [ICall (Just (IInt, temp)) aeName (map snd args)]
-  return (IInt, temp)
-
-
-genAssign :: String -> AExpr -> Generator ()
-genAssign name expr = do
-  -- Increment temp count to create a new version for the variable.
-  -- TODO: Check type.
-  (t, temp') <- genExpr expr
-
-  -- Update the variable's version.
-  -- If the expression was a simple variable reference, then genExpr
-  -- returned the ID of that variable. In this case, the variable name
-  -- will point to the ID of the source value. Otherwise, the name
-  -- of the new variable will be the ID of the result of the expression.
-  -- Since variables are declared beforehand the name is guaranteed to be
-  -- in the scope chain.
-  scope@Scope{ vars } <- get
-  let updateChain (x:xs)
-        | Map.member name x = Map.insert name temp' x : xs
-        | otherwise = x : updateChain xs
-      updateChain []
-        = []
-  put scope{ vars = updateChain vars }
-
-
-genStmt :: AStatement -> Generator ()
-genStmt AReturn{..} = do
-  (t, temp) <- genExpr asExpr
-  tell [IReturn t temp]
-
-genStmt APrint{..} = do
-  (t, temp) <- genExpr asExpr
-  tell [ICall Nothing "__print_int" [temp]]
-
-genStmt AAssign{..} = do
-  case asTo of
-    ALVar{..} -> genAssign alName asExpr
-
-genStmt AVarDecl{..} = do
-  forM_ asVars $ \(tag, name, expr) -> do
-  scope@Scope{ tempIdx, vars = var:vars' } <- get
-  put scope{ tempIdx = tempIdx + 1, vars = Map.insert name tempIdx var : vars'}
-  case expr of
-    Nothing -> return ()
-    Just expr' -> genAssign name expr'
-
-genStmt AWhile{..} = do
-  start <- nextLabel
-  (_, body) <- isolate (mapM genStmt asBody)
-  end <- nextLabel
-  genJump False asExpr end
-  tell [ILabel start]
-  tell body
-  genJump True asExpr start
-  tell [ILabel end]
-
-genStmt ABlock{..} = do
-  (_, body) <- isolate (mapM genStmt asBody)
-  tell body
-
-
-genFunction :: AFunction -> IFunction
-genFunction func@AFunction{..}
-  = IFunction afName instrs
-  where
-    instrs
-      = execWriter . evalStateT (run gen) $ scope
-    scope
-      = Scope
-        { function = func
-        , tempIdx = 0
-        , labelIdx = 0
-        , vars = [Map.empty]
-        }
-    gen = do
-      forM_ afArgs $ \AArg{..} -> do
-        temp <- getVar aaName
-        tell [IArg IInt temp]
-      mapM_ genStmt afBody
-
-
-generate :: AProgram -> IProgram
-generate (AProgram functions)
-  = IProgram $ map genFunction functions
+-}

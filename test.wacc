@@ -1,5 +1,6 @@
 begin
   int f(int a, int b) is
+    int c = 5;
     a = 5;
     a = 6;
     a = 7;
@@ -9,10 +10,19 @@ begin
     return a * b * c
   end
 
-  int a = 5;
-  int b = 6;
-  while a < b || b < a do
-    print f(a, b);
-    b = b + 1
+  int b = 0;
+  while b < 10 do
+    if b < 5 then
+      print f(4, b)
+    elif b < 7
+      print f(5, b)
+    else
+      print f(6, b)
+    fi;
+    if b < 2 then
+      b = b + 2
+    else
+      b = b + 1
+    fi
   done
 end
