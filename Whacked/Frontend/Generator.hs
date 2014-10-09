@@ -3,7 +3,7 @@
              NamedFieldPuns,
              RecordWildCards #-}
 module Whacked.Frontend.Generator
-  (generate
+  ( generateI
   ) where
 
 import           Control.Applicative
@@ -195,6 +195,30 @@ genStmt AWhile{..} = do
   tell body
   tell [IJump start True expr]
   tell [ILabel end]
+genStmt AIf{..} = do
+  (t, expr) <- genExpr asExpr
+  when (t /= Bool) $ do
+    genError asTag $ "boolean expected"
+
+  if asFalse == []
+    then do
+      end <- getLabel
+      tell [IJump end False expr]
+      (_, true') <- scope (mapM_ genStmt asTrue)
+      tell [ILabel end]
+    else do
+      [false, end] <- replicateM 2 getLabel
+      (_, true') <- scope (mapM_ genStmt asTrue)
+      (_, false') <- scope (mapM_ genStmt asFalse)
+
+      tell [IJump false False expr]
+      tell true'
+      tell [IUJump end]
+      tell [ILabel false]
+      tell false'
+      tell [ILabel end]
+
+
 
 
 -- |Generates code for a function body.
@@ -215,8 +239,8 @@ genFunc AFunction{..} = do
 
 -- |Generates code for all the functions in the program. If type checking fails,
 -- an error message is returned.
-generate :: AProgram -> Either String IProgram
-generate (AProgram functions)
+generateI :: AProgram -> Either String IProgram
+generateI (AProgram functions)
   = IProgram <$> mapM generate' functions
   where
     generate' func = do
@@ -240,39 +264,3 @@ generate (AProgram functions)
             , nextLabel = 0
             , variables = []
             }
-
-{-
-genJump :: Bool -> AExpr -> Int -> Generator ()
-genJump branch op@ABinOp{..} target = do
-  case aeBinOp of
-    And | branch -> do
-      temp <- nextLabel
-      genJump False aeLeft temp
-      genJump True aeRight target
-      tell [ILabel temp]
-
-    And | not branch -> do
-      genJump False aeLeft target
-      genJump False aeRight target
-
-    Or | branch -> do
-      genJump True aeLeft target
-      genJump True aeRight target
-
-    Or | not branch -> do
-      temp <- nextLabel
-      genJump True aeLeft temp
-      genJump False aeRight target
-      tell [ILabel temp]
-
-    _ | aeBinOp `elem` [CmpGt, CmpLt] -> do
-      let cond = case aeBinOp of
-            CmpLt -> if branch then ILT else IGT
-            CmpGt -> if branch then IGT else ILT
-      (leftType, leftTemp) <- genExpr aeLeft
-      (rightType, rightTemp) <- genExpr aeRight
-      tell [IBinJump target cond leftTemp rightTemp]
-    _ -> do
-      (t, temp) <- genExpr op
-      return ()
--}

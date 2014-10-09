@@ -42,6 +42,11 @@ whacked
           , "end"
           , "int"
           , "is"
+          , "if"
+          , "then"
+          , "else"
+          , "fi"
+          , "elif"
           , "return"
           , "while"
           , "do"
@@ -155,6 +160,7 @@ aStatement
     , aVarDecl
     , aWhile
     , aBlock
+    , aIf
     ]
   where
     aReturn = do
@@ -202,10 +208,29 @@ aStatement
       reserved "end"
       return $ ABlock tag body
 
+    aIf = do
+      tag <- aTag
+      reserved "if"
+      cond <- aExpr
+      reserved "then"
+      true <- semiSep1 aStatement
+      asum
+        [ reserved "fi" *> return (AIf tag cond true [])
+        , reserved "else" *> asum
+          [ try $ do
+              false <- aIf
+              return $ AIf tag cond true [false]
+          , try $ do
+              false <- semiSep aStatement
+              reserved "fi"
+              return $ AIf tag cond true false
+          ]
+        ]
+
 
 aFunction :: GenParser Char st AFunction
 aFunction = do
-  cons <- AFunction<$> aTag
+  tag <- aTag
   retType <- aType
   name <- identifier
   args <- parens . commaSep $ do
@@ -216,7 +241,7 @@ aFunction = do
   reserved "is"
   body <- semiSep aStatement
   reserved "end"
-  return $ cons args retType name body
+  return $ AFunction tag args retType name body
 
 
 aProgram :: GenParser Char st AProgram

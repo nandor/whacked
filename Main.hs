@@ -92,7 +92,7 @@ main
         Left err -> putStrLn (show err)
         Right ast -> do
           when optPrintAST $ print ast
-          case generate ast of
+          case generateI ast of
             Left err -> putStrLn err
             Right itch -> do
               when optPrintIMF $ do

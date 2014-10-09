@@ -73,6 +73,9 @@ data IInstr
     , iiWhen  :: Bool
     , iiCond  :: IExpr
     }
+  | IUJump
+    { iiWhere :: Int
+    }
   | IWriteVar
     { iiType  :: Type
     , iiVar   :: String
