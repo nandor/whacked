@@ -57,7 +57,7 @@ newtype Generator a
 
 genFunc :: IFunction -> SFunction
 genFunc IFunction{..}
-  = traceShow (dominators) SFunction
+  = traceShow (frontier) SFunction
   where
     -- First step is to group statements into blocks. Blocks start with
     -- labels and end with jump statements or normal statements. groups will be
@@ -201,6 +201,21 @@ genFunc IFunction{..}
           findDominators'
           dom <- forM [0..count - 1] $ (MVector.read dom)
           return (Vector.fromList . map fromJust $ dom)
+
+    -- Computes the dominance frontier.
+    frontier = foldl findFrontier Map.empty [0..count - 1]
+    findFrontier ms node
+      = case Map.lookup node graph' of
+          Just prev | Set.size prev > 1 -> Set.foldl run ms prev
+          _ -> Map.insert node Set.empty ms
+      where
+        run ms runner
+          | runner == dominators ! node = ms
+          | otherwise = case Map.lookup runner ms of
+            Nothing -> run (Map.insert runner (Set.singleton node) ms) next
+            Just set -> run (Map.insert runner (Set.insert node set) ms) next
+          where
+            next = dominators ! runner
 
 
 generateS :: IProgram -> SProgram
