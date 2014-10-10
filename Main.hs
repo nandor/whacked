@@ -14,7 +14,7 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
-import           Whacked.Optimizer.Generator
+import           Whacked.Optimizer.Translator
 
 
 

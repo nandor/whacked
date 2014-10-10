@@ -2,7 +2,7 @@
              LambdaCase,
              NamedFieldPuns,
              RecordWildCards #-}
-module Whacked.Optimizer.Generator
+module Whacked.Optimizer.Translator
   ( generateS
   ) where
 
