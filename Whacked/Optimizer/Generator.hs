@@ -244,28 +244,32 @@ data Scope
   = Scope
     { nextTemp  :: Int
     , nextInstr :: Int
+    , block     :: Int
     , vars      :: Map (String, Int) (Type, SVar)
+    , vars'     :: Map SVar (String, Int)
     }
   deriving ( Eq, Ord, Show )
 
 
 -- |Monads stack out of a state and a writer.
 newtype Generator a
-  = Generator { run :: StateT Scope (Writer [SInstr]) a }
+  = Generator { run :: StateT Scope (Writer [(Int, SInstr)]) a }
   deriving ( Applicative
            , Functor
            , Monad
            , MonadState Scope
-           , MonadWriter [SInstr]
+           , MonadWriter [(Int, SInstr)]
            )
 
 -- | Runs the generator monad.
-runGenerator :: Generator a -> (a, Scope, [SInstr])
+runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
 runGenerator gen
   = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
           { nextTemp = 0
           , nextInstr = 0
+          , block = 0
           , vars = Map.empty
+          , vars' = Map.empty
           }
     in (a, scope, instrs)
 
@@ -279,9 +283,9 @@ genTemp = do
 
 emit :: SInstr -> Generator ()
 emit instr = do
-  scope@Scope{ nextInstr } <- get
+  scope@Scope{ nextInstr, block } <- get
   put scope{ nextInstr = nextInstr + 1 }
-  tell [instr]
+  tell [(block, instr)]
 
 
 genExpr :: IExpr -> SVar -> Generator (Type, SVar)
@@ -338,26 +342,6 @@ genInstr IPrint{..} = do
   emit $ SCall Void SVoid func [expr]
 
 
-relabel :: [(Int, SInstr)] -> Map Int Int -> Map Int Int -> [(Int, SInstr)]
-relabel instrs instrTarget blockTarget
-  = map relabel' instrs
-  where
-    relabel' (idx, jump@SBinJump{..})
-      = (idx, jump{ siWhere = replace siWhere})
-    relabel' (idx, jump@SUnJump{..})
-      = (idx, jump{ siWhere = replace siWhere})
-    relabel' (idx, jump@SJump{..})
-      = (idx, jump{ siWhere = replace siWhere})
-    relabel' x
-      = x
-
-    replace i
-      = fromJust $ do
-        block <- Map.lookup i blockTarget
-        Map.lookup block instrTarget
-
-
-
 -- | Generates code for a function.
 genFunc :: IFunction
         -> SFunction
@@ -370,22 +354,63 @@ genFunc func@IFunction{..}
     frontier = getFrontier graph graph' dominators
     phi = getPhiNodes ifVars blocks frontier
 
-    (indices, _, instrs) = runGenerator $ do
-      forM (Map.toList blocks) $ \(idx, instrs) -> do
-        blockStart <- nextInstr <$> get
+    ((indices, vars'), _, instrs) = runGenerator $ do
+      indices <- forM (Map.toList blocks) $ \(idx, instrs) -> do
+        scope <- get
+        let blockStart = nextInstr scope
+        put scope{ block = idx}
         let phi' = Map.lookup idx phi
         when (phi' /= Nothing) $
           forM_ (fromJust phi') $ \(var, idx, t) -> do
             expr <- genTemp
-            scope@Scope{vars} <- get
-            put scope{ vars = Map.insert (var, idx) (t, expr) vars }
+            scope@Scope{ vars, vars' } <- get
+            put scope
+              { vars = Map.insert (var, idx) (t, expr) vars
+              , vars' = Map.insert expr (var, idx) vars'
+              }
             emit $ SPhi t expr []
 
         mapM_ genInstr instrs
-        return (idx, blockStart)
+        Scope{ vars } <- get
+        return (idx, (blockStart, vars))
+      Scope{ vars' } <- get
+      return (indices, vars')
 
+    target' = Map.fromList indices
+    instrs' = zip [0..] $ map (fillPhi . relabel') instrs
 
-    instrs' = relabel (zip [0..] instrs) (Map.fromList indices) target
+    relabel' (block, jump@SBinJump{..})
+      = (block, jump{ siWhere = lookupLabel siWhere})
+    relabel' (block, jump@SUnJump{..})
+      = (block, jump{ siWhere = lookupLabel siWhere})
+    relabel' (block, jump@SJump{..})
+      = (block, jump{ siWhere = lookupLabel siWhere})
+    relabel' x
+      = x
+
+    fillPhi (block, phi@SPhi{..})
+      = case Map.lookup siDest vars' of
+          Nothing -> phi
+          Just var -> phi{ siMerge = getVersions . map (findVar var) $ prev }
+      where
+        prev
+          = fromMaybe [] (Set.toList <$> Map.lookup block graph')
+        findVar var block = do
+          block <- Map.lookup block target
+          (_, vars) <- Map.lookup block target'
+          var <- Map.lookup var vars
+          return var
+        getVersions
+          = map  (snd . fromJust ) . filter (/= Nothing)
+
+    fillPhi (_, x)
+      = x
+
+    lookupLabel i
+      = fromJust $ do
+        block <- Map.lookup i target
+        (instr, _) <- Map.lookup block target'
+        return instr
 
 
 
