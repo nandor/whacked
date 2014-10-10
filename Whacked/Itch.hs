@@ -33,17 +33,19 @@ data IFunction
 
 data IExpr
   = IUnOp
-    { ieUnOp :: UnaryOp
+    { ieType :: Type
+    , ieUnOp :: UnaryOp
     , ieArg  :: IExpr
     }
   | IBinOp
-    { ieBinOp :: BinaryOp
+    { ieType  :: Type
+    , ieBinOp :: BinaryOp
     , ieLeft  :: IExpr
     , ieRight :: IExpr
     }
   | IVar
-    { ieType :: Type
-    , ieName :: String
+    { ieType  :: Type
+    , ieName  :: String
     , ieScope :: Int
     }
   | IConstInt
@@ -68,10 +70,9 @@ data IExpr
 
 data IInstr
   = IReturn
-    { iiType :: Type
-    , iiExpr :: IExpr
+    { iiExpr :: IExpr
     }
-  | IJump
+  | ICJump
     { iiWhere :: Int
     , iiWhen  :: Bool
     , iiCond  :: IExpr
@@ -80,14 +81,12 @@ data IInstr
     { iiWhere :: Int
     }
   | IWriteVar
-    { iiType  :: Type
-    , iiVar   :: String
+    { iiVar   :: String
     , iiScope :: Int
     , iiExpr  :: IExpr
     }
   | IPrint
-    { iiType :: Type
-    , iiExpr :: IExpr
+    { iiExpr :: IExpr
     }
   | ILabel
     { iiIndex :: Int
@@ -96,8 +95,8 @@ data IInstr
 
 instance Show IInstr where
   show IReturn{..} = "IReturn"
-  show IJump{..} = "IJump " ++ show iiWhere
+  show ICJump{..} = "ICJump " ++ show iiWhere
   show IUJump{..} = "IUJump " ++ show iiWhere
-  show IWriteVar{..} = "IWriteVar"
+  show IWriteVar{..} = "IWriteVar" ++ show iiVar
   show IPrint{..} = "IPrint"
   show ILabel{..} = "ILabel " ++ show iiIndex

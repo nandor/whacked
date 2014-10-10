@@ -122,7 +122,7 @@ genExpr ABinOp{..}  = do
   (rt, re) <- genExpr aeRight
   when (lt /= rt) $ do
     genError aeTag "type error"
-  return (if isComparison aeBinOp then Bool else lt, IBinOp aeBinOp le re)
+  return (if isComparison aeBinOp then Bool else lt, IBinOp lt aeBinOp le re)
 genExpr AVar{..} = do
   findVar aeName >>= \case
     Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"
@@ -151,10 +151,10 @@ genStmt AReturn{..} = do
       (t, expr) <- genExpr asExpr
       when (t /= afType) $ do
         genError asTag "invalid return type"
-      tell [IReturn t expr]
+      tell [IReturn expr]
 genStmt APrint{..} = do
   (t, expr) <- genExpr asExpr
-  tell [IPrint t expr]
+  tell [IPrint expr]
 genStmt AAssign{..}
   = case asTo of
       ALVar{..} -> do
@@ -164,7 +164,7 @@ genStmt AAssign{..}
             (t', expr) <- genExpr asExpr
             when (t /= t') $
               genError alTag $ "type error"
-            tell [IWriteVar t alName idx expr]
+            tell [IWriteVar alName idx expr]
 genStmt AVarDecl{..} = do
   forM_ asVars $ \(tag, name, expr) -> do
     scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
@@ -178,7 +178,7 @@ genStmt AVarDecl{..} = do
           (t, expr'') <- genExpr expr'
           when (t /= asType) $
             genError asTag $ "type error"
-          tell [IWriteVar t name nextScope expr'']
+          tell [IWriteVar name nextScope expr'']
         put scope
           { variables = (nextScope, Map.insert name asType x) : xs
           , declarations = Set.insert (name, nextScope, asType) declarations
@@ -192,10 +192,10 @@ genStmt AWhile{..} = do
   (_, body) <- scope (mapM_ genStmt asBody)
   end <- getLabel
 
-  tell [IJump end False expr]
+  tell [ICJump end False expr]
   tell [ILabel start]
   tell body
-  tell [IJump start True expr]
+  tell [ICJump start True expr]
   tell [ILabel end]
 genStmt AIf{..} = do
   (t, expr) <- genExpr asExpr
@@ -205,7 +205,7 @@ genStmt AIf{..} = do
   if asFalse == []
     then do
       end <- getLabel
-      tell [IJump end False expr]
+      tell [ICJump end False expr]
       (_, true') <- scope (mapM_ genStmt asTrue)
       tell [ILabel end]
     else do
@@ -213,7 +213,7 @@ genStmt AIf{..} = do
       (_, true') <- scope (mapM_ genStmt asTrue)
       (_, false') <- scope (mapM_ genStmt asFalse)
 
-      tell [IJump false False expr]
+      tell [ICJump false False expr]
       tell true'
       tell [IUJump end]
       tell [ILabel false]

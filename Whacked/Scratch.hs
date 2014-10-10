@@ -4,6 +4,18 @@ module Whacked.Scratch where
 -- folding, dead code elimination and sparse conditional constant propagation
 -- are applied on this form.
 
+import Data.Map
+import Whacked.Types
+
+
+
+-- |Variables get unique indices inside their respective blocks. The combination
+-- of a unique block index and a unique index in a block can distinguish all
+-- variable versions.
+data SVar
+  = SVar Int
+  | SVoid
+  deriving ( Eq, Ord, Show )
 
 
 data SProgram
@@ -15,45 +27,50 @@ data SProgram
 
 data SFunction
   = SFunction
+    { sfBody :: [(Int, SInstr)]
+    }
   deriving ( Eq, Ord, Show )
 
-{-
 
 data SInstr
-  = SCall
-    { iiReturn :: Maybe (IType, STemp)
-    , iiFunc :: String
-    , iiArgs :: [ITemp]
+  = SBinOp
+    { siType  :: Type
+    , siDest  :: SVar
+    , siBinOp :: BinaryOp
+    , siLeft  :: SVar
+    , siRight :: SVar
     }
-  | SArg
-    { iiType :: SType
-    , iiDest :: STemp
-    }
-  | SReturn
-    { iiType :: SType
-    , iiDest :: STemp
+  | SCall
+    { siType :: Type
+    , siDest :: SVar
+    , siFunc :: String
+    , siArgs :: [SVar]
     }
   | SConstInt
-    { iiDest :: STemp
-    , iiIntVal :: Snt
-    }
-  | SBinOp
-    { iiType :: SType
-    , iiBinOp :: BinaryOp
-    , iiDest :: STemp
-    , iiLeft :: STemp
-    , iiRight :: STemp
-    }
-  | SBinJump
-    { iiWhere :: Snt
-    , iiCond :: SCond
-    , iiLeft :: STemp
-    , iiRight :: STemp
-    }
-  | SLabel
-    { iiIndex :: Snt
+    { siDest   :: SVar
+    , siIntVal :: Int
     }
   | SPhi
-    { iiIndex :: Snt
+    { siDest  :: SVar
+    , siMerge :: [SVar]
     }
-  deriving ( Eq, Ord, Show )-}
+  | SReturn
+    { siType :: Type
+    , siVal  :: SVar
+    }
+  | SCBinJump
+    { siWhere :: Int
+    , siWhen  :: Bool
+    , siCond  :: CondOp
+    , siLeft  :: SVar
+    , siRight :: SVar
+    }
+  | SCUnJump
+    { siWhere :: Int
+    , siWhen  :: Bool
+    , siVal   :: SVar
+    }
+  | SUJump
+    { siWhere :: Int
+    }
+  deriving (Eq, Ord, Show)

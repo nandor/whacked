@@ -101,7 +101,9 @@ main
                   mapM_ (putStrLn . show) ifBody
 
               let scratch = generateS itch
-              print scratch
+              when optPrintIMF $ do
+                forM_ (spFuncs scratch) $ \SFunction{..} -> do
+                  mapM_ (putStrLn . show) sfBody
 
 
           {-let asm = ARM.compile imf

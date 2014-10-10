@@ -8,7 +8,6 @@ module Whacked.Optimizer.Generator
 
 import           Control.Applicative
 import           Control.Monad
-import           Control.Monad.Except
 import           Control.Monad.State
 import           Control.Monad.ST
 import           Control.Monad.Writer
@@ -26,47 +25,25 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-
 import Debug.Trace
 
 
--- |The scope keeps information about declared variables, functions return
--- types, label counters and scope counters. It is wrapped into a state monad
--- for easy access.
-data Scope
-  = Scope
-    { function  :: String
-    , functions :: Map String IFunction
-    , nextScope :: Int
-    , nextLabel :: Int
-    , variables :: [(Int, Map String Type)]
-    }
-  deriving ( Eq, Ord, Show )
+
+-- | Control flow graph structure.
+type FlowGraph
+  = Map Int (Set Int)
 
 
--- |The generator monad obtained by stacking a state and a writer.
-newtype Generator a
-  = Generator (StateT Scope (Writer [IInstr]) a)
-  deriving ( Applicative
-           , Functor
-           , Monad
-           , MonadState Scope
-           , MonadWriter [IInstr]
-           )
-
-
-genFunc :: IFunction -> SFunction
-genFunc IFunction{..}
-  = traceShow (frontier) SFunction
+-- | First step is to group statements into blocks. Blocks start with
+-- labels and end with jump statements or normal statements. groups will be
+-- a map of individual blocks, while target will map label indices to the
+-- blocks they are in.
+getBlocks :: [IInstr]
+          -> (Map Int [IInstr], Map Int Int)
+getBlocks body
+  = (blocks, target)
   where
-    -- First step is to group statements into blocks. Blocks start with
-    -- labels and end with jump statements or normal statements. groups will be
-    -- a map of individual blocks, while target will map label indices to the
-    -- blocks they are in.
-    (blocks, target, _, count) = group Map.empty Map.empty [] 0 ifBody
-
-    group :: Map Int [IInstr] -> Map Int Int -> [IInstr] -> Int -> [IInstr] ->
-      (Map Int [IInstr], Map Int Int, [IInstr], Int)
+    (blocks, target, _, _) = group Map.empty Map.empty [] 0 body
     group blocks target block next (instr:instrs) = case instr of
       ILabel{..} | block == [] ->
         group
@@ -83,7 +60,7 @@ genFunc IFunction{..}
           (next + 1)
           instrs
       IReturn{..} -> group'
-      IJump{..} -> group'
+      ICJump{..} -> group'
       IUJump{..} -> group'
       _ -> group blocks target (instr:block) next instrs
       where
@@ -108,19 +85,28 @@ genFunc IFunction{..}
           , next + 1
           )
 
-    -- Build up the flow graph and the reverse flow graph which is going to
-    -- be used to compute dominance frontiers.
+
+-- | Build up the flow graph and the reverse flow graph which is going to
+-- be used to compute dominance frontiers.
+getGraph :: Map Int [IInstr]
+         -> Map Int Int
+         -> (FlowGraph, FlowGraph)
+getGraph blocks target
+  = (graph, graph')
+  where
     graph = Map.mapWithKey forwardLink blocks
     forwardLink index []
       = Set.empty
-    forwardLink index group = Set.filter (< count) $ case last group of
+    forwardLink index group
+      = Set.filter (`Map.member` blocks) $ case last group of
         IUJump{..} -> Set.singleton (fromJust . Map.lookup iiWhere $ target)
-        IJump{..} -> Set.fromList
+        ICJump{..} -> Set.fromList
           [ fromJust . Map.lookup iiWhere $ target
           , index + 1
           ]
         IReturn{..} -> Set.empty
         _ -> Set.singleton (index + 1)
+
     graph' = Map.foldlWithKey backLink Map.empty graph
     backLink graph index out
       = Set.foldl backLink' graph out
@@ -130,81 +116,70 @@ genFunc IFunction{..}
             Nothing -> Map.insert out' (Set.singleton index) graph
             Just s -> Map.insert out' (Set.insert index s) graph
 
-    -- Computes the reverse postorder by doing a reverse topological sort.
-    -- The reverse postorder has the property that all nodes are visited before
-    -- their successors, except the cases when they are reaching through
-    -- backwards edges.
-    (order, _) = dfs 0 [] Set.empty
-    index = Vector.fromList order
-    dfs node acc viz
-      | Set.member node viz = (acc, viz)
-      | Just neighbours <- Map.lookup node graph =
-        let (acc', viz') = Set.foldl next (acc, Set.insert node viz) neighbours
-        in (node:acc', viz')
-      | otherwise = (acc, viz)
-      where
-        next (acc, viz) node
-          = dfs node acc viz
 
-    -- Compute the set of dominators of a node. This function is based on the
-    -- paper "A Simple, Fast Dominance Algorithm" by Keith D. Cooper,
-    -- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2).
-    -- If you have any doubts about this functions, RTFM.
-    dominators
-      = runST $ do
-          dom <- MVector.new count
+-- | Computes the set of dominators of a node. This function is based on the
+-- paper "A Simple, Fast Dominance Algorithm" by Keith D. Cooper,
+-- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2).
+-- If you have any doubts about this functions, RTFM.
+-- This function runs in the ST monad for performance reasons.
+getDominators :: FlowGraph
+              -> FlowGraph
+              -> Vector Int
+getDominators graph graph' = runST $ do
+  let (count, _) = Map.findMax graph
+  dom <- MVector.new count
 
-          MVector.write dom 0 (Just 0)
-          forM_ [1..count - 1] $ \i -> do
-            MVector.write dom i Nothing
+  MVector.write dom 0 (Just 0)
+  forM_ [1..count - 1] $ \i -> do
+    MVector.write dom i Nothing
 
-          let findDominators = do
-                changed <- forM order $ \i -> case Map.lookup i graph' of
-                  Nothing -> return False
-                  Just prev -> do
-                    let prevl = Set.toList prev
-                    prev' <- zip prevl <$> mapM (MVector.read dom) prevl
-                    case dropWhile (isNothing . snd) prev' of
-                      [] -> return False
-                      (first, _):_ -> do
-                        idom' <- foldM
-                          (\idom p -> MVector.read dom p >>= \case
-                              Nothing -> return idom
-                              Just _ -> intersect p idom)
-                          first (prevl \\ [first])
+  let findDominators = do
+        changed <- forM [0..count - 1] $ \i -> case Map.lookup i graph' of
+          Nothing -> return False
+          Just prev -> do
+            let prevl = Set.toList prev
+            prev' <- zip prevl <$> mapM (MVector.read dom) prevl
+            case dropWhile (isNothing . snd) prev' of
+              [] -> return False
+              (first, _):_ -> do
+                idom' <- foldM
+                  (\idom p -> MVector.read dom p >>= \case
+                      Nothing -> return idom
+                      Just _ -> intersect p idom)
+                  first (prevl \\ [first])
 
-                        previousDom <- MVector.read dom i
-                        if Just idom' /= previousDom
-                          then do
-                            MVector.write dom i (Just idom')
-                            return True
-                          else return False
-                return (or changed)
+                previousDom <- MVector.read dom i
+                if Just idom' /= previousDom
+                  then do
+                    MVector.write dom i (Just idom')
+                    return True
+                  else return False
+        when (or changed) findDominators
 
-              intersect x y
-                = case xi `compare` yi of
-                    EQ -> return x
-                    GT -> do
-                      x' <- fromJust <$> MVector.read dom x
-                      intersect x' y
-                    LT -> do
-                      y' <- fromJust <$> MVector.read dom y
-                      intersect x y'
-                where
-                  xi = index ! x
-                  yi = index ! y
+      intersect x y
+        | x == y = return x
+        | x > y = do
+          x' <- fromJust <$> MVector.read dom x
+          intersect x' y
+        | x < y = do
+          y' <- fromJust <$> MVector.read dom y
+          intersect x y'
 
-              findDominators' = do
-                changed <- findDominators
-                when changed $ findDominators'
+  findDominators
+  dom <- forM [0..count - 1] $ (MVector.read dom)
+  return (Vector.fromList . map fromJust $ dom)
 
-          findDominators'
-          dom <- forM [0..count - 1] $ (MVector.read dom)
-          return (Vector.fromList . map fromJust $ dom)
 
-    -- Computes the dominance frontier. The dominance frontier of a node is
-    -- the list of nodes that are not directly dominated by it.
-    frontier = foldl findFrontier Map.empty [0..count - 1]
+-- | Computes the dominance frontier. The dominance frontier of a node is
+-- the list of nodes that are not directly dominated by it.
+getFrontier :: FlowGraph
+            -> FlowGraph
+            -> Vector Int
+            -> Map Int (Set Int)
+getFrontier graph graph' dominators
+  = foldl findFrontier Map.empty [0..count - 1]
+  where
+    (count, _) = Map.findMax graph
     findFrontier ms node
       = case Map.lookup node graph' of
           Just prev | Set.size prev > 1 -> Set.foldl run ms prev
@@ -219,6 +194,172 @@ genFunc IFunction{..}
             next = dominators ! runner
 
 
-generateS :: IProgram -> SProgram
+
+-- | For each block, computes which variables require PHI nodes. Starting from
+-- blocks that define a variable, the variable is propagated into the phi sets
+-- of the nodes that are at the dominance frontier.
+getPhiNodes :: Set (String, Int, Type)
+            -> Map Int [IInstr]
+            -> Map Int (Set Int)
+            -> Map Int [(String, Int, Type)]
+getPhiNodes vars blocks frontier
+  = foldl findPhiNodes Map.empty . Set.toList $ vars
+  where
+    findPhiNodes mp var@(name, scope, t)
+      = visits mp queue Set.empty Set.empty
+      where
+        queue = map fst . Map.toList . Map.filter (any assignsTo) $ blocks
+        assignsTo IWriteVar{..}
+          = iiVar == name
+        assignsTo _
+          = False
+
+        visits mp [] inserted added
+          = mp
+        visits mp (q:qs) inserted added
+          = case Set.toList <$> Map.lookup q frontier of
+              Just dom ->
+                let insert (inserted, added, mp, qs) node
+                      | Set.member node inserted = (inserted, added, mp, qs)
+                      | otherwise =
+                        ( Set.insert node inserted
+                        , Set.insert node added
+                        , Map.insertWith (++) node [var] mp
+                        , if Set.member node added then qs else node : qs
+                        )
+                    (inserted', added', mp', qs')
+                      = foldl insert (inserted, added, mp, qs) dom
+                in visits mp' qs' inserted' added'
+              Nothing -> visits mp qs inserted added
+
+
+-- | Scope used to track the next unique instruction labels and version numbers
+-- for variables.
+data Scope
+  = Scope
+    { next :: Int
+    , node :: Int
+    , vars :: Map (String, Int) (Type, SVar)
+    }
+  deriving ( Eq, Ord, Show )
+
+
+-- |Monads stack out of a state and a writer.
+newtype Generator a
+  = Generator { run :: StateT Scope (Writer [(Int, SInstr)]) a }
+  deriving ( Applicative
+           , Functor
+           , Monad
+           , MonadState Scope
+           , MonadWriter [(Int, SInstr)]
+           )
+
+-- | Runs the generator monad.
+runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
+runGenerator gen
+  = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
+          { next = 0
+          , node = 0
+          , vars = Map.empty
+          }
+    in (a, scope, instrs)
+
+
+emit :: SInstr -> Generator ()
+emit instr = do
+  Scope{ node } <- get
+  tell [( node, instr )]
+
+
+genTemp :: Generator SVar
+genTemp = do
+  scope@Scope{ next } <- get
+  put scope{ next = next + 1 }
+  return $ SVar next
+
+
+genExpr :: IExpr -> SVar -> Generator (Type, SVar)
+genExpr IBinOp{..} dest = do
+  (lt, le) <- genTemp >>= genExpr ieLeft
+  (rt, re) <- genTemp >>= genExpr ieRight
+  emit $ SBinOp lt dest ieBinOp le re
+  return (lt, dest)
+genExpr IVar{..} dest = do
+  Scope{ vars } <- get
+  return . fromJust $ Map.lookup (ieName, ieScope) vars
+genExpr IConstInt{..} dest = do
+  emit $ SConstInt dest ieIntVal
+  return (Int, dest)
+
+genExpr IUnOp{..} dest
+  = undefined
+genExpr ICall{..} dest
+  = undefined
+genExpr IConstReal{..} dest
+  = undefined
+genExpr IConstChar{..} dest
+  = undefined
+genExpr IConstString{..} dest
+  = undefined
+
+
+-- | Generates Scratchy intermediate code out of Itchy expressions.
+genInstr :: IInstr -> Generator ()
+genInstr ILabel{..} = do
+  return ()
+
+genInstr IReturn{..} = do
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  emit $ SReturn t expr
+
+genInstr ICJump{..} = do
+  return ()
+
+genInstr IUJump{..} = do
+  emit $ SUJump iiWhere
+
+genInstr IWriteVar{..} = do
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  scope@Scope{ vars } <- get
+  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
+
+genInstr IPrint{..} = do
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  let func = case t of
+        Int  -> "__print_int"
+  emit $ SCall Void SVoid func [expr]
+
+
+
+-- | Generates code for a function.
+genFunc :: IFunction
+        -> SFunction
+genFunc func@IFunction{..}
+  = trace (concatMap (\x -> show x ++ "\n") instrs) $ SFunction []
+  where
+    (blocks, target) = getBlocks ifBody
+    (graph, graph') = getGraph blocks target
+    dominators = getDominators graph graph'
+    frontier = getFrontier graph graph' dominators
+    phi = getPhiNodes ifVars blocks frontier
+
+    (_, _, instrs) = runGenerator $ do
+      forM_ (Map.toList blocks) $ \(node, instrs) -> do
+        let phi' = Map.lookup node phi
+        when (phi' /= Nothing) $
+          forM_ (fromJust phi') $ \(var, idx, t) -> do
+            expr <- genTemp
+            scope@Scope{vars} <- get
+            put scope{ vars = Map.insert (var, idx) (t, expr) vars }
+            emit $ SPhi expr []
+
+        get >>= \scope -> put scope{ node = node }
+        mapM_ genInstr instrs
+
+
+
+-- | Generates unoptimised Scratchy code for a program.
+generateS :: IProgram
+          -> SProgram
 generateS IProgram{..}
   = SProgram (map genFunc ipFuncs)

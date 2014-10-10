@@ -34,7 +34,9 @@ data UnaryOp
 
 data CondOp
   = CLT
+  | CLTE
   | CGT
+  | CGTE
   | CEQ
   | CNEQ
   deriving ( Eq, Ord, Show )
