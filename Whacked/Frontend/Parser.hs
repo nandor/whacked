@@ -131,8 +131,8 @@ aExprOp
     , [ Infix (tagBin "+"  Add) AssocLeft
       , Infix (tagBin "-"  Sub) AssocLeft
       ]
-    , [ Infix (tagBin "<" CmpLt) AssocNone
-      , Infix (tagBin ">" CmpLt) AssocNone
+    , [ Infix (tagBin "<" $ Cmp CLT) AssocNone
+      , Infix (tagBin ">" $ Cmp CGT) AssocNone
       ]
     , [ Infix (tagBin "&&" And) AssocRight
       ]

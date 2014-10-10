@@ -122,7 +122,9 @@ genExpr ABinOp{..}  = do
   (rt, re) <- genExpr aeRight
   when (lt /= rt) $ do
     genError aeTag "type error"
-  return (if isComparison aeBinOp then Bool else lt, IBinOp lt aeBinOp le re)
+  case aeBinOp of
+    Cmp _ -> return ( Bool, IBinOp lt aeBinOp le re )
+    _ -> return ( lt, IBinOp lt aeBinOp le re )
 genExpr AVar{..} = do
   findVar aeName >>= \case
     Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"
@@ -139,6 +141,30 @@ genExpr ACall{..} = do
           genError aeTag $ "type error"
         return expr
       return (afType, ICall afType aeName args)
+
+-- |Generates a jump statement.
+genJump :: Int -> Bool -> IExpr -> Generator ()
+genJump target branch expr@IBinOp{..}
+  = case ieBinOp of
+      And | branch -> do
+        end <- getLabel
+        genJump end False ieLeft
+        genJump target True ieRight
+        tell [ ILabel end ]
+      And -> do
+        genJump target False ieLeft
+        genJump target False ieRight
+      Or | branch -> do
+        genJump target True ieLeft
+        genJump target True ieRight
+      Or -> do
+        end <- getLabel
+        genJump end True ieLeft
+        genJump target False ieRight
+        tell [ ILabel end ]
+      Cmp op -> do
+        tell [ IBinJump target branch op ieLeft ieRight ]
+      op -> tell [ IUnJump target branch expr ]
 
 
 -- |Generates code for a statement.
@@ -192,10 +218,10 @@ genStmt AWhile{..} = do
   (_, body) <- scope (mapM_ genStmt asBody)
   end <- getLabel
 
-  tell [ICJump end False expr]
+  genJump end False expr
   tell [ILabel start]
   tell body
-  tell [ICJump start True expr]
+  genJump start True expr
   tell [ILabel end]
 genStmt AIf{..} = do
   (t, expr) <- genExpr asExpr
@@ -205,7 +231,7 @@ genStmt AIf{..} = do
   if asFalse == []
     then do
       end <- getLabel
-      tell [ICJump end False expr]
+      genJump end False expr
       (_, true') <- scope (mapM_ genStmt asTrue)
       tell [ILabel end]
     else do
@@ -213,9 +239,9 @@ genStmt AIf{..} = do
       (_, true') <- scope (mapM_ genStmt asTrue)
       (_, false') <- scope (mapM_ genStmt asFalse)
 
-      tell [ICJump false False expr]
+      genJump false False expr
       tell true'
-      tell [IUJump end]
+      tell [IJump end]
       tell [ILabel false]
       tell false'
       tell [ILabel end]

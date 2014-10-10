@@ -12,18 +12,8 @@ data BinaryOp
   | Mod
   | And
   | Or
-  | CmpLt
-  | CmpGt
-  | CmpLte
-  | CmpGte
-  | CmpEq
-  | CmpNeq
+  | Cmp CondOp
   deriving ( Eq, Ord, Show )
-
-
-isComparison :: BinaryOp -> Bool
-isComparison x
-  = x `elem` [CmpLt, CmpGt, CmpLte, CmpGte, CmpEq, CmpNeq]
 
 
 data UnaryOp

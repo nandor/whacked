@@ -60,8 +60,9 @@ getBlocks body
           (next + 1)
           instrs
       IReturn{..} -> group'
-      ICJump{..} -> group'
-      IUJump{..} -> group'
+      IBinJump{..} -> group'
+      IUnJump{..} -> group'
+      IJump{..} -> group'
       _ -> group blocks target (instr:block) next instrs
       where
         group'
@@ -99,8 +100,12 @@ getGraph blocks target
       = Set.empty
     forwardLink index group
       = Set.filter (`Map.member` blocks) $ case last group of
-        IUJump{..} -> Set.singleton (fromJust . Map.lookup iiWhere $ target)
-        ICJump{..} -> Set.fromList
+        IJump{..} -> Set.singleton (fromJust . Map.lookup iiWhere $ target)
+        IBinJump{..} -> Set.fromList
+          [ fromJust . Map.lookup iiWhere $ target
+          , index + 1
+          ]
+        IUnJump{..} -> Set.fromList
           [ fromJust . Map.lookup iiWhere $ target
           , index + 1
           ]
@@ -237,45 +242,46 @@ getPhiNodes vars blocks frontier
 -- for variables.
 data Scope
   = Scope
-    { next :: Int
-    , node :: Int
-    , vars :: Map (String, Int) (Type, SVar)
+    { nextTemp  :: Int
+    , nextInstr :: Int
+    , vars      :: Map (String, Int) (Type, SVar)
     }
   deriving ( Eq, Ord, Show )
 
 
 -- |Monads stack out of a state and a writer.
 newtype Generator a
-  = Generator { run :: StateT Scope (Writer [(Int, SInstr)]) a }
+  = Generator { run :: StateT Scope (Writer [SInstr]) a }
   deriving ( Applicative
            , Functor
            , Monad
            , MonadState Scope
-           , MonadWriter [(Int, SInstr)]
+           , MonadWriter [SInstr]
            )
 
 -- | Runs the generator monad.
-runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
+runGenerator :: Generator a -> (a, Scope, [SInstr])
 runGenerator gen
   = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
-          { next = 0
-          , node = 0
+          { nextTemp = 0
+          , nextInstr = 0
           , vars = Map.empty
           }
     in (a, scope, instrs)
 
 
-emit :: SInstr -> Generator ()
-emit instr = do
-  Scope{ node } <- get
-  tell [( node, instr )]
-
-
 genTemp :: Generator SVar
 genTemp = do
-  scope@Scope{ next } <- get
-  put scope{ next = next + 1 }
-  return $ SVar next
+  scope@Scope{ nextTemp } <- get
+  put scope{ nextTemp = nextTemp + 1 }
+  return $ SVar nextTemp
+
+
+emit :: SInstr -> Generator ()
+emit instr = do
+  scope@Scope{ nextInstr } <- get
+  put scope{ nextInstr = nextInstr + 1 }
+  tell [instr]
 
 
 genExpr :: IExpr -> SVar -> Generator (Type, SVar)
@@ -312,11 +318,13 @@ genInstr IReturn{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SReturn t expr
 
-genInstr ICJump{..} = do
-  return ()
+genInstr IBinJump{..} = do
+  (lt, le) <- genTemp >>= genExpr iiLeft
+  (rt, re) <- genTemp >>= genExpr iiRight
+  emit $ SBinJump lt iiWhere iiWhen iiCond le re
 
-genInstr IUJump{..} = do
-  emit $ SUJump iiWhere
+genInstr IJump{..} = do
+  emit $ SJump iiWhere
 
 genInstr IWriteVar{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
@@ -330,12 +338,31 @@ genInstr IPrint{..} = do
   emit $ SCall Void SVoid func [expr]
 
 
+relabel :: [(Int, SInstr)] -> Map Int Int -> Map Int Int -> [(Int, SInstr)]
+relabel instrs instrTarget blockTarget
+  = map relabel' instrs
+  where
+    relabel' (idx, jump@SBinJump{..})
+      = (idx, jump{ siWhere = replace siWhere})
+    relabel' (idx, jump@SUnJump{..})
+      = (idx, jump{ siWhere = replace siWhere})
+    relabel' (idx, jump@SJump{..})
+      = (idx, jump{ siWhere = replace siWhere})
+    relabel' x
+      = x
+
+    replace i
+      = fromJust $ do
+        block <- Map.lookup i blockTarget
+        Map.lookup block instrTarget
+
+
 
 -- | Generates code for a function.
 genFunc :: IFunction
         -> SFunction
 genFunc func@IFunction{..}
-  = trace (concatMap (\x -> show x ++ "\n") instrs) $ SFunction []
+  = trace (concatMap (\x -> show x ++ "\n") instrs') $ SFunction []
   where
     (blocks, target) = getBlocks ifBody
     (graph, graph') = getGraph blocks target
@@ -343,18 +370,22 @@ genFunc func@IFunction{..}
     frontier = getFrontier graph graph' dominators
     phi = getPhiNodes ifVars blocks frontier
 
-    (_, _, instrs) = runGenerator $ do
-      forM_ (Map.toList blocks) $ \(node, instrs) -> do
-        let phi' = Map.lookup node phi
+    (indices, _, instrs) = runGenerator $ do
+      forM (Map.toList blocks) $ \(idx, instrs) -> do
+        blockStart <- nextInstr <$> get
+        let phi' = Map.lookup idx phi
         when (phi' /= Nothing) $
           forM_ (fromJust phi') $ \(var, idx, t) -> do
             expr <- genTemp
             scope@Scope{vars} <- get
             put scope{ vars = Map.insert (var, idx) (t, expr) vars }
-            emit $ SPhi expr []
+            emit $ SPhi t expr []
 
-        get >>= \scope -> put scope{ node = node }
         mapM_ genInstr instrs
+        return (idx, blockStart)
+
+
+    instrs' = relabel (zip [0..] instrs) (Map.fromList indices) target
 
 
 

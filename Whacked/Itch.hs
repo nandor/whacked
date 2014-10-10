@@ -72,12 +72,19 @@ data IInstr
   = IReturn
     { iiExpr :: IExpr
     }
-  | ICJump
+  | IBinJump
     { iiWhere :: Int
     , iiWhen  :: Bool
-    , iiCond  :: IExpr
+    , iiCond  :: CondOp
+    , iiLeft  :: IExpr
+    , iiRight :: IExpr
     }
-  | IUJump
+  | IUnJump
+    { iiWhere :: Int
+    , iiWhen  :: Bool
+    , iiVal   :: IExpr
+    }
+  | IJump
     { iiWhere :: Int
     }
   | IWriteVar
@@ -95,8 +102,9 @@ data IInstr
 
 instance Show IInstr where
   show IReturn{..} = "IReturn"
-  show ICJump{..} = "ICJump " ++ show iiWhere
-  show IUJump{..} = "IUJump " ++ show iiWhere
+  show IBinJump{..} = "IBinJump " ++ show iiWhere
+  show IUnJump{..} = "IUnJump " ++ show iiWhere
+  show IJump{..} = "IJump " ++ show iiWhere
   show IWriteVar{..} = "IWriteVar" ++ show iiVar
   show IPrint{..} = "IPrint"
   show ILabel{..} = "ILabel " ++ show iiIndex

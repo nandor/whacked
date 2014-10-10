@@ -51,26 +51,29 @@ data SInstr
     , siIntVal :: Int
     }
   | SPhi
-    { siDest  :: SVar
+    { siType  :: Type
+    , siDest  :: SVar
     , siMerge :: [SVar]
     }
   | SReturn
     { siType :: Type
     , siVal  :: SVar
     }
-  | SCBinJump
-    { siWhere :: Int
+  | SBinJump
+    { siType  :: Type
+    , siWhere :: Int
     , siWhen  :: Bool
     , siCond  :: CondOp
     , siLeft  :: SVar
     , siRight :: SVar
     }
-  | SCUnJump
-    { siWhere :: Int
+  | SUnJump
+    { siType :: Type
+    , siWhere :: Int
     , siWhen  :: Bool
     , siVal   :: SVar
     }
-  | SUJump
+  | SJump
     { siWhere :: Int
     }
   deriving (Eq, Ord, Show)
