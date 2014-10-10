@@ -132,14 +132,14 @@ getDominators :: FlowGraph
               -> Vector Int
 getDominators graph graph' = runST $ do
   let (count, _) = Map.findMax graph
-  dom <- MVector.new count
+  dom <- MVector.new (count + 1)
 
   MVector.write dom 0 (Just 0)
-  forM_ [1..count - 1] $ \i -> do
+  forM_ [1..count] $ \i -> do
     MVector.write dom i Nothing
 
   let findDominators = do
-        changed <- forM [0..count - 1] $ \i -> case Map.lookup i graph' of
+        changed <- forM [0..count] $ \i -> case Map.lookup i graph' of
           Nothing -> return False
           Just prev -> do
             let prevl = Set.toList prev
@@ -171,7 +171,7 @@ getDominators graph graph' = runST $ do
           intersect x y'
 
   findDominators
-  dom <- forM [0..count - 1] $ (MVector.read dom)
+  dom <- forM [0..count] $ (MVector.read dom)
   return (Vector.fromList . map fromJust $ dom)
 
 
@@ -182,7 +182,7 @@ getFrontier :: FlowGraph
             -> Vector Int
             -> Map Int (Set Int)
 getFrontier graph graph' dominators
-  = foldl findFrontier Map.empty [0..count - 1]
+  = foldl findFrontier Map.empty [0..count]
   where
     (count, _) = Map.findMax graph
     findFrontier ms node
@@ -346,7 +346,7 @@ genInstr IPrint{..} = do
 genFunc :: IFunction
         -> SFunction
 genFunc func@IFunction{..}
-  = trace (concatMap (\x -> show x ++ "\n") instrs') $ SFunction []
+  = SFunction instrs'
   where
     (blocks, target) = getBlocks ifBody
     (graph, graph') = getGraph blocks target
@@ -396,10 +396,9 @@ genFunc func@IFunction{..}
         prev
           = fromMaybe [] (Set.toList <$> Map.lookup block graph')
         findVar var block = do
-          block <- Map.lookup block target
           (_, vars) <- Map.lookup block target'
-          var <- Map.lookup var vars
-          return var
+          var' <- Map.lookup var vars
+          return var'
         getVersions
           = map  (snd . fromJust ) . filter (/= Nothing)
 
