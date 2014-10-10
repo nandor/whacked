@@ -25,8 +25,6 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
-
 
 
 -- | Control flow graph structure.
@@ -197,7 +195,6 @@ getFrontier graph graph' dominators
             Just set -> run (Map.insert runner (Set.insert node set) ms) next
           where
             next = dominators ! runner
-
 
 
 -- | For each block, computes which variables require PHI nodes. Starting from
@@ -410,7 +407,6 @@ genFunc func@IFunction{..}
         block <- Map.lookup i target
         (instr, _) <- Map.lookup block target'
         return instr
-
 
 
 -- | Generates unoptimised Scratchy code for a program.
