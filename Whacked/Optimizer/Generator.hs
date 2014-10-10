@@ -63,21 +63,21 @@ genFunc IFunction{..}
     -- labels and end with jump statements or normal statements. groups will be
     -- a map of individual blocks, while target will map label indices to the
     -- blocks they are in.
-    (groups, target, _, count) = group Map.empty Map.empty [] 0 ifBody
+    (blocks, target, _, count) = group Map.empty Map.empty [] 0 ifBody
 
     group :: Map Int [IInstr] -> Map Int Int -> [IInstr] -> Int -> [IInstr] ->
       (Map Int [IInstr], Map Int Int, [IInstr], Int)
-    group groups target block next (instr:instrs) = case instr of
+    group blocks target block next (instr:instrs) = case instr of
       ILabel{..} | block == [] ->
         group
-          groups
+          blocks
           (Map.insert iiIndex next target)
           [instr]
           next
           instrs
       ILabel{..} ->
         group
-          (Map.insert next (reverse block) groups)
+          (Map.insert next (reverse block) blocks)
           (Map.insert iiIndex (next + 1) target)
           [instr]
           (next + 1)
@@ -85,24 +85,24 @@ genFunc IFunction{..}
       IReturn{..} -> group'
       IJump{..} -> group'
       IUJump{..} -> group'
-      _ -> group groups target (instr:block) next instrs
+      _ -> group blocks target (instr:block) next instrs
       where
         group'
           = group
-            (Map.insert next (reverse $ instr:block) groups)
+            (Map.insert next (reverse $ instr:block) blocks)
             target
             []
             (next + 1)
             instrs
-    group groups target block next []
+    group blocks target block next []
       | block == [] =
-        ( groups
+        ( blocks
         , target
         , block
         , next
         )
       | otherwise =
-          ( Map.insert next (reverse block) groups
+          ( Map.insert next (reverse block) blocks
           , target
           , []
           , next + 1
@@ -110,7 +110,7 @@ genFunc IFunction{..}
 
     -- Build up the flow graph and the reverse flow graph which is going to
     -- be used to compute dominance frontiers.
-    graph = Map.mapWithKey forwardLink groups
+    graph = Map.mapWithKey forwardLink blocks
     forwardLink index []
       = Set.empty
     forwardLink index group = Set.filter (< count) $ case last group of
@@ -202,7 +202,8 @@ genFunc IFunction{..}
           dom <- forM [0..count - 1] $ (MVector.read dom)
           return (Vector.fromList . map fromJust $ dom)
 
-    -- Computes the dominance frontier.
+    -- Computes the dominance frontier. The dominance frontier of a node is
+    -- the list of nodes that are not directly dominated by it.
     frontier = foldl findFrontier Map.empty [0..count - 1]
     findFrontier ms node
       = case Map.lookup node graph' of

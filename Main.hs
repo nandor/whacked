@@ -97,7 +97,7 @@ main
             Right itch -> do
               when optPrintIMF $ do
                 forM_ (ipFuncs itch) $ \IFunction{..} -> do
-                  putStrLn (ifName ++ show ifArgs)
+                  putStrLn (ifName ++ show ifArgs ++ show ifVars)
                   mapM_ (putStrLn . show) ifBody
 
               let scratch = generateS itch

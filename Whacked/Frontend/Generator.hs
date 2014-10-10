@@ -26,11 +26,12 @@ import           Whacked.Types
 -- for easy access.
 data Scope
   = Scope
-    { function  :: String
-    , functions :: Map String AFunction
-    , nextScope :: Int
-    , nextLabel :: Int
-    , variables :: [(Int, Map String Type)]
+    { function     :: String
+    , functions    :: Map String AFunction
+    , nextScope    :: Int
+    , nextLabel    :: Int
+    , variables    :: [(Int, Map String Type)]
+    , declarations :: Set (String, Int, Type)
     }
   deriving ( Eq, Ord, Show )
 
@@ -166,7 +167,7 @@ genStmt AAssign{..}
             tell [IWriteVar t alName idx expr]
 genStmt AVarDecl{..} = do
   forM_ asVars $ \(tag, name, expr) -> do
-    scope@Scope{ nextScope, variables = (_, x):xs } <- get
+    scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
     findVar name >>= \case
       Just (idx, _) ->
         when (idx == nextScope) $
@@ -178,7 +179,10 @@ genStmt AVarDecl{..} = do
           when (t /= asType) $
             genError asTag $ "type error"
           tell [IWriteVar t name nextScope expr'']
-        put scope{ variables = (nextScope, Map.insert name asType x) : xs}
+        put scope
+          { variables = (nextScope, Map.insert name asType x) : xs
+          , declarations = Set.insert (name, nextScope, asType) declarations
+          }
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
   when (t /= Bool) $ do
@@ -223,12 +227,18 @@ genFunc :: AFunction -> Generator ()
 genFunc AFunction{..} = do
   -- |Put all arguments into the scope.
   scope@Scope{ nextScope, variables } <- get
-  args <- foldM (\args AArg{..} ->
+  (args, decls) <- foldM (\(args, decls) AArg{..} ->
     case Map.lookup aaName args of
-      Nothing -> return $ Map.insert aaName aaType args
+      Nothing -> return
+        ( Map.insert aaName aaType args
+        , Set.insert (aaName, nextScope, aaType) decls
+        )
       Just _ -> genError aaTag $ "duplicate argument '" ++ aaName ++ "'")
-    Map.empty afArgs
-  put scope{ variables = (nextScope, args) : variables }
+    (Map.empty, Set.empty) afArgs
+  put scope
+    { variables = (nextScope, args) : variables
+    , declarations = decls
+    }
 
   -- |Encode statements.
   mapM_ genStmt afBody
@@ -241,8 +251,8 @@ generateI (AProgram functions)
   = IProgram <$> mapM generate' functions
   where
     generate' func = do
-      (_, _, body) <- runGenerator (genFunc func) scope
-      return $ IFunction (afName func) (afType func) args body
+      (_, Scope{ declarations }, body) <- runGenerator (genFunc func) scope
+      return $ IFunction (afName func) (afType func) args body declarations
       where
         -- |All functions, used to check types.
         functions'
@@ -255,9 +265,10 @@ generateI (AProgram functions)
         -- |Initial scope.
         scope
           = Scope
-            { function  = afName func
-            , functions = functions'
-            , nextScope = 0
-            , nextLabel = 0
-            , variables = []
+            { function     = afName func
+            , functions    = functions'
+            , nextScope    = 0
+            , nextLabel    = 0
+            , variables    = []
+            , declarations = Set.empty
             }

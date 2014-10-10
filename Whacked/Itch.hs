@@ -8,6 +8,7 @@ module Whacked.Itch where
 -- are flattened and all variables are removed and replaced by version numbers.
 -- Type information is kept in the instructions themselved.
 
+import Data.Set (Set)
 import Whacked.Types
 
 
@@ -25,6 +26,7 @@ data IFunction
     , ifType :: Type
     , ifArgs :: [(Type, String)]
     , ifBody :: [IInstr]
+    , ifVars :: Set (String, Int, Type)
     }
   deriving ( Eq, Ord, Show )
 
