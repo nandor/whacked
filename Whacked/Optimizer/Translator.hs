@@ -259,7 +259,8 @@ newtype Generator a
            )
 
 -- | Runs the generator monad.
-runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
+runGenerator :: Generator a
+             -> (a, Scope, [(Int, SInstr)])
 runGenerator gen
   = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
           { nextTemp = 0
@@ -278,14 +279,17 @@ genTemp = do
   return $ SVar nextTemp
 
 
-emit :: SInstr -> Generator ()
+emit :: SInstr
+     -> Generator ()
 emit instr = do
   scope@Scope{ nextInstr, block } <- get
   put scope{ nextInstr = nextInstr + 1 }
   tell [(block, instr)]
 
 
-genExpr :: IExpr -> SVar -> Generator (Type, SVar)
+genExpr :: IExpr
+        -> SVar
+        -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
   (lt, le) <- genTemp >>= genExpr ieLeft
   (rt, re) <- genTemp >>= genExpr ieRight
@@ -311,7 +315,8 @@ genExpr IConstString{..} dest
 
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
-genInstr :: IInstr -> Generator ()
+genInstr :: IInstr
+         -> Generator ()
 genInstr ILabel{..} = do
   return ()
 

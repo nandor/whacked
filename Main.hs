@@ -15,6 +15,7 @@ import           Whacked.Scratch
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
+import           Whacked.Optimizer.SCCP
 
 
 
@@ -103,6 +104,11 @@ main
               let scratch = generateS itch
               when optPrintIMF $ do
                 forM_ (spFuncs scratch) $ \SFunction{..} -> do
+                  mapM_ (putStrLn . show) sfBody
+
+              let scratch' = sccp scratch
+              when optPrintIMF $ do
+                forM_ (spFuncs scratch') $ \SFunction{..} -> do
                   mapM_ (putStrLn . show) sfBody
 
 
