@@ -16,6 +16,7 @@ import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
 import           Whacked.Optimizer.SCCP
+import           Whacked.Optimizer.Jumps
 
 
 
@@ -101,14 +102,9 @@ main
                   putStrLn (ifName ++ show ifArgs ++ show ifVars)
                   mapM_ (putStrLn . show) ifBody
 
-              let scratch = generateS itch
+              let scratch = reduceJumps . sccp . generateS $ itch
               when optPrintIMF $ do
                 forM_ (spFuncs scratch) $ \SFunction{..} -> do
-                  mapM_ (putStrLn . show) sfBody
-
-              let scratch' = sccp scratch
-              when optPrintIMF $ do
-                forM_ (spFuncs scratch') $ \SFunction{..} -> do
                   mapM_ (putStrLn . show) sfBody
 
 
