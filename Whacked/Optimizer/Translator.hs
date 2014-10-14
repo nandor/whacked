@@ -395,7 +395,7 @@ genFunc func@IFunction{..}
       = phi{ siVars = map fill siVars }
       where
         fill var@SPhiVar{..}
-          = traceShow var $ var
+          = var
             { spMerge = fromMaybe [] $ do
               x <- Map.lookup spVar vars'
               prev <- Set.toList <$> Map.lookup block graph'

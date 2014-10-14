@@ -148,101 +148,112 @@ optimise SFunction{..}
     next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
 
     (start, _) = Map.findMin cfg
-    (mark, vars') = work
+    (mark, vars') = traverse
       [(start, start)]
       []
       Set.empty
       (Map.fromList . zip vars . repeat $ Top)
 
-    work (edge@(start, end):xs) ys mark vars
-      | Set.member edge mark = work xs ys mark vars
-      | otherwise = case Map.lookup end code of
-          -- Evaluate a phi node. When evaluating a phi node, we take into
-          -- consideration the edges that come into the node and are marked
-          -- executable. The meet function is then applied over those values.
-          Just (node@SPhi{..}) ->
-            let (ys', vars') = updatePhi node end ys vars
-            in work (xs ++ cfgNext end) ys' mark' vars'
 
-          -- | If any other edges are marked as executed, skip.
-          _ | anyOtherExecuted mark start end ->
-            work xs ys mark' vars
+    traverse (edge@(start, end):xs) ys mark vars
+      = case Map.lookup end code of
+        -- If the edge was already executed, stop propagation and continue
+        -- with other avilable edges.
+        _ | Set.member edge mark ->
+          traverse xs ys mark' vars
 
-          -- | Evaluate assignments.
-          Just (node@SBinOp{..}) ->
-            let (ys', vars') = updateAssign node end ys vars
-            in work (xs ++ cfgNext end) ys' mark' vars'
-          Just (node@SCall{..}) ->
-            work xs ys mark' vars
-          Just (node@SConstInt{..}) ->
-            let vars' = (Map.insert siDest (ConstInt siIntVal) vars)
-            in work (xs ++ cfgNext end) (ys ++ ssaNext end) mark' vars'
+        -- Evaluate phi nodes & propagate to the next node.
+        Just node@SPhi{..} ->
+          let (xs', ys', var') = traverse' node next edge mark vars
+          in traverse (xs' ++ xs) (ys' ++ ys) (Set.insert edge mark) var'
 
-          -- | Evaluate conditionals.
-          Just (node@SBinJump{..}) ->
-            work (updateBinJump node end xs vars) ys mark' vars
-          Just (node@SJump{..}) ->
-            work (xs ++ cfgNext end) ys mark' vars
+        -- If any other edges were executed and the node is not a phi node,
+        -- skip this node and continue on with others.
+        _ | anyOtherExecuted mark start end ->
+          traverse xs ys mark' vars
+
+        -- Otherwise, evaluate the new node and continue.
+        Just node ->
+          let (xs', ys', var') = traverse' node next edge mark vars
+          in traverse (xs' ++ xs) (ys' ++ ys) (Set.insert edge mark) var'
       where
         mark' = Set.insert edge mark
+        next = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
 
-    work [] (edge@(start, end):ys) mark vars
-      | anyExecuted mark end = case Map.lookup end code of
-        Just node@SPhi{..} ->
-          let (ys', vars') = updatePhi node end ys vars
-          in work [] ys' mark vars'
-        Just node@SBinJump{..} ->
-          work (updateBinJump node end [] vars) ys mark vars
-        Just node@SBinOp{..} ->
-          let (ys', vars') = updateAssign node end ys vars
-          in work [] ys' mark vars'
-        Just node@SCall{..} ->
-          work [] ys mark vars
+    traverse [] (edge@(start, end):ys) mark vars
+      = case Map.lookup end code of
+          -- If none of the incoming edges were executed, postpone evaluation.
+          _ | not $ anyExecuted mark end ->
+            traverse [] ys mark vars
+          Just node ->
+            let (xs', ys', var') = traverse' node [] edge mark vars
+            in traverse xs' (ys' ++ ys) mark vars
 
-        _ -> work [] ys mark vars
-      | otherwise = work [] ys mark vars
-
-    work [] [] mark vars
+    traverse [] [] mark vars
       = (mark, vars)
 
-    updatePhi SPhi{..} end ys vars
-      = foldl updateVar ( ys, vars) siVars
+    traverse' node xs (start, end) mark vars = case node of
+      -- Evaluate a phi node. When evaluating a phi node, we take into
+      -- consideration the edges that come into the node and are marked
+      -- executable. The meet function is then applied over those values.
+      node@SPhi{..} ->
+        let updatePhi (xs, ys, vars) SPhiVar{..}
+              | (fromJust $ Map.lookup spVar vars) == newValue = (xs, ys, vars)
+              | otherwise =
+                  ( xs
+                  , ys ++ ssaNext
+                  , Map.insert spVar newValue vars
+                  )
+              where
+                newValue = mconcat
+                  [fromMaybe Top (Map.lookup x vars)
+                  | (_, x) <- spMerge]
+        in foldl updatePhi (xs, [], vars) siVars
+
+      -- Evaluate a binary operation.
+      node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do
+        left <- getValue siLeft
+        right <- getValue siRight
+        return $ case siBinOp of
+          Add -> (xs, ssaNext, Map.insert siDest (left + right) vars)
+
+      -- Results of function calls are always variable.
+      node@SCall{..} ->
+        ( xs
+        , []
+        , Map.insert siDest Top vars
+        )
+
+      -- Constants are marked and propagated.
+      node@SConstInt{..} ->
+        ( xs
+        , ssaNext
+        , Map.insert siDest (ConstInt siIntVal) vars
+        )
+
+      -- | Evaluate conditionals.
+      node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
+        left <- getValue siLeft
+        right <- getValue siRight
+        case compareValue siCond left right of
+          Nothing ->
+            return (cfgNext, [], vars)
+          Just x | x == siWhen ->
+            return ([(end, siWhere)], [], vars)
+          Just x | x /= siWhen ->
+            return ([(end, fromJust $ Map.lookup end next)], [], vars)
+
+      -- Add the unique branch target to the cfg worklist.
+      node@SJump{..} -> ( xs, [], vars )
       where
-        updateVar (ys, vars) SPhiVar{..}
-          | (fromJust $ Map.lookup spVar vars) == newValue = (ys, vars)
-          | otherwise =
-              ( ys ++ ssaNext end
-              , Map.insert spVar newValue vars
-              )
-          where
-            newValue = mconcat
-              [fromMaybe Top (Map.lookup x vars)
-              | (_, x) <- spMerge]
+        ssaNext = zip (repeat end) $ fromMaybe [] (Map.lookup end ssa)
+        cfgNext = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
 
-    updateBinJump SBinJump{..} end xs vars = fromMaybe xs $ do
-      left <- getValue siLeft vars
-      right <- getValue siRight vars
-      case compareValue siCond left right of
-        Nothing ->
-          return $ cfgNext end ++ xs
-        Just x | x == siWhen ->
-          return $ ((end, siWhere):xs)
-        Just x | x /= siWhen ->
-          return $ ((end, fromJust $ Map.lookup end next):xs)
-
-    updateAssign SBinOp{..} end ys vars = fromMaybe (ys, vars) $ do
-      left <- getValue siLeft vars
-      right <- getValue siRight vars
-      return $ case siBinOp of
-        Add -> (ys ++ ssaNext end, Map.insert siDest (left + right) vars)
-
-    ssaNext end = zip (repeat end) $ fromMaybe [] (Map.lookup end ssa)
-    cfgNext end = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
-
-    getValue var vars
-      = Map.lookup var vars >>= \case
-        Top -> Nothing
-        x -> Just x
+        -- Looks up a value in the variable mapping.
+        getValue var
+          = Map.lookup var vars >>= \case
+            Top -> Nothing
+            x -> Just x
 
     anyOtherExecuted mark start end
       = case Map.lookup end cfg' of
