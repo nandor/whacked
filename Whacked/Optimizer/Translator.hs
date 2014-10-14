@@ -36,8 +36,7 @@ type FlowGraph
 -- labels and end with jump statements or normal statements. groups will be
 -- a map of individual blocks, while target will map label indices to the
 -- blocks they are in.
-getBlocks :: [IInstr]
-          -> (Map Int [IInstr], Map Int Int)
+getBlocks :: [IInstr] -> (Map Int [IInstr], Map Int Int)
 getBlocks body
   = (blocks, target)
   where
@@ -87,9 +86,7 @@ getBlocks body
 
 -- | Build up the flow graph and the reverse flow graph which is going to
 -- be used to compute dominance frontiers.
-getGraph :: Map Int [IInstr]
-         -> Map Int Int
-         -> (FlowGraph, FlowGraph)
+getGraph :: Map Int [IInstr] -> Map Int Int -> (FlowGraph, FlowGraph)
 getGraph blocks target
   = (graph, graph')
   where
@@ -125,9 +122,7 @@ getGraph blocks target
 -- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2).
 -- If you have any doubts about this functions, RTFM.
 -- This function runs in the ST monad for performance reasons.
-getDominators :: FlowGraph
-              -> FlowGraph
-              -> Vector Int
+getDominators :: FlowGraph -> FlowGraph -> Vector Int
 getDominators graph graph' = runST $ do
   let (count, _) = Map.findMax graph
   dom <- MVector.new (count + 1)
@@ -175,10 +170,7 @@ getDominators graph graph' = runST $ do
 
 -- | Computes the dominance frontier. The dominance frontier of a node is
 -- the list of nodes that are not directly dominated by it.
-getFrontier :: FlowGraph
-            -> FlowGraph
-            -> Vector Int
-            -> Map Int (Set Int)
+getFrontier :: FlowGraph -> FlowGraph -> Vector Int -> Map Int (Set Int)
 getFrontier graph graph' dominators
   = foldl findFrontier Map.empty [0..count]
   where
@@ -242,7 +234,7 @@ data Scope
     { nextTemp  :: Int
     , nextInstr :: Int
     , block     :: Int
-    , vars      :: Map (String, Int) (Type, SVar)
+    , vars      :: Map (String, Int) (Type, SVar, Int)
     , vars'     :: Map SVar (String, Int)
     }
   deriving ( Eq, Ord, Show )
@@ -280,27 +272,28 @@ genTemp = do
 
 
 emit :: SInstr
-     -> Generator ()
+     -> Generator Int
 emit instr = do
   scope@Scope{ nextInstr, block } <- get
   put scope{ nextInstr = nextInstr + 1 }
   tell [(block, instr)]
+  return nextInstr
 
 
 genExpr :: IExpr
         -> SVar
-        -> Generator (Type, SVar)
+        -> Generator (Type, SVar, Int)
 genExpr IBinOp{..} dest = do
-  (lt, le) <- genTemp >>= genExpr ieLeft
-  (rt, re) <- genTemp >>= genExpr ieRight
-  emit $ SBinOp lt dest ieBinOp le re
-  return (lt, dest)
+  (lt, le, _) <- genTemp >>= genExpr ieLeft
+  (rt, re, _) <- genTemp >>= genExpr ieRight
+  instr <- emit $ SBinOp lt dest ieBinOp le re
+  return (lt, dest, instr)
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
 genExpr IConstInt{..} dest = do
-  emit $ SConstInt dest ieIntVal
-  return (Int, dest)
+  instr <- emit $ SConstInt dest ieIntVal
+  return (Int, dest, instr)
 
 genExpr IUnOp{..} dest
   = undefined
@@ -321,27 +314,27 @@ genInstr ILabel{..} = do
   return ()
 
 genInstr IReturn{..} = do
-  (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SReturn t expr
+  (t, expr, _) <- genTemp >>= genExpr iiExpr
+  void . emit $ SReturn t expr
 
 genInstr IBinJump{..} = do
-  (lt, le) <- genTemp >>= genExpr iiLeft
-  (rt, re) <- genTemp >>= genExpr iiRight
-  emit $ SBinJump lt iiWhere iiWhen iiCond le re
+  (lt, le, _) <- genTemp >>= genExpr iiLeft
+  (rt, re, _) <- genTemp >>= genExpr iiRight
+  void . emit $ SBinJump lt iiWhere iiWhen iiCond le re
 
 genInstr IJump{..} = do
-  emit $ SJump iiWhere
+  void . emit $ SJump iiWhere
 
 genInstr IWriteVar{..} = do
-  (t, expr) <- genTemp >>= genExpr iiExpr
+  (t, expr, instr) <- genTemp >>= genExpr iiExpr
   scope@Scope{ vars } <- get
-  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
+  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr, instr) vars }
 
 genInstr IPrint{..} = do
-  (t, expr) <- genTemp >>= genExpr iiExpr
+  (t, expr, _) <- genTemp >>= genExpr iiExpr
   let func = case t of
         Int  -> "__print_int"
-  emit $ SCall Void SVoid func [expr]
+  void . emit $ SCall Void SVoid func [expr]
 
 
 -- | Generates code for a function.
@@ -358,60 +351,68 @@ genFunc func@IFunction{..}
 
     ((indices, vars'), _, instrs) = runGenerator $ do
       indices <- forM (Map.toList blocks) $ \(idx, instrs) -> do
-        scope <- get
-        let blockStart = nextInstr scope
-        put scope{ block = idx}
-        let phi' = Map.lookup idx phi
-        when (phi' /= Nothing) $
-          forM_ (fromJust phi') $ \(var, idx, t) -> do
-            expr <- genTemp
-            scope@Scope{ vars, vars' } <- get
-            put scope
-              { vars = Map.insert (var, idx) (t, expr) vars
-              , vars' = Map.insert expr (var, idx) vars'
-              }
-            emit $ SPhi t expr []
+        -- Update the block index & get start index of block.
+        blockStart <- get >>= \scope@Scope{ nextInstr } -> do
+          put scope{ block = idx }
+          return nextInstr
 
+        -- Place phi nodes for all affected variables.
+        case Map.lookup idx phi of
+          Nothing -> return ()
+          Just phi' -> do
+            phis <- forM phi' $ \(var, idx, t) -> do
+              expr <- genTemp
+              scope@Scope{ vars, vars', nextInstr } <- get
+              put scope
+                { vars = Map.insert (var, idx) (t, expr, nextInstr) vars
+                , vars' = Map.insert expr (var, idx) vars'
+                }
+              return $ SPhiVar expr t []
+            void . emit $ SPhi phis
+
+        -- Generate code.
         mapM_ genInstr instrs
+
+        -- Return information about the variables.
         Scope{ vars } <- get
         return (idx, (blockStart, vars))
+
       Scope{ vars' } <- get
       return (indices, vars')
 
     target' = Map.fromList indices
-    instrs' = zip [0..] $ map (fillPhi . relabel') instrs
+    instrs' = zip [0..] $ map relabel instrs
 
-    relabel' (block, jump@SBinJump{..})
-      = (block, jump{ siWhere = lookupLabel siWhere})
-    relabel' (block, jump@SUnJump{..})
-      = (block, jump{ siWhere = lookupLabel siWhere})
-    relabel' (block, jump@SJump{..})
-      = (block, jump{ siWhere = lookupLabel siWhere})
-    relabel' x
-      = x
-
-    fillPhi (block, phi@SPhi{..})
-      = case Map.lookup siDest vars' of
-          Nothing -> phi
-          Just var -> phi{ siMerge = getVersions . map (findVar var) $ prev }
+    -- The previous pass writes block IDs to jump instructions, so those
+    -- targets are replaced with instruction IDs in this pass.
+    relabel (block, jump@SBinJump{..})
+      = jump{ siWhere = lookupLabel siWhere}
+    relabel (block, jump@SUnJump{..})
+      = jump{ siWhere = lookupLabel siWhere}
+    relabel (block, jump@SJump{..})
+      = jump{ siWhere = lookupLabel siWhere}
+    relabel (block, phi@SPhi{..})
+      = phi{ siVars = map fill siVars }
       where
-        prev
-          = fromMaybe [] (Set.toList <$> Map.lookup block graph')
-        findVar var block = do
-          (_, vars) <- Map.lookup block target'
-          var' <- Map.lookup var vars
-          return var'
-        getVersions
-          = map  (snd . fromJust ) . filter (/= Nothing)
-
-    fillPhi (_, x)
+        fill var@SPhiVar{..}
+          = traceShow var $ var
+            { spMerge = fromMaybe [] $ do
+              x <- Map.lookup spVar vars'
+              prev <- Set.toList <$> Map.lookup block graph'
+              return [y | Just y <- map (lookupVar x) prev]
+            }
+    relabel (_, x)
       = x
 
-    lookupLabel i
-      = fromJust $ do
-        block <- Map.lookup i target
-        (instr, _) <- Map.lookup block target'
-        return instr
+    lookupVar var block = do
+      (_, vars) <- Map.lookup block target'
+      (_, var', idx) <- Map.lookup var vars
+      return (idx, var')
+
+    lookupLabel i = fromJust $ do
+      block <- Map.lookup i target
+      (instr, _) <- Map.lookup block target'
+      return instr
 
 
 -- | Generates unoptimised Scratchy code for a program.

@@ -32,6 +32,15 @@ data SFunction
   deriving ( Eq, Ord, Show )
 
 
+data SPhiVar
+  = SPhiVar
+    { spVar   :: SVar
+    , spType  :: Type
+    , spMerge :: [(Int, SVar)]
+    }
+  deriving (Eq, Ord, Show)
+
+
 data SInstr
   = SBinOp
     { siType  :: Type
@@ -51,9 +60,7 @@ data SInstr
     , siIntVal :: Int
     }
   | SPhi
-    { siType  :: Type
-    , siDest  :: SVar
-    , siMerge :: [SVar]
+    { siVars  :: [SPhiVar]
     }
   | SReturn
     { siType :: Type

@@ -1,21 +1,22 @@
 begin
   int b = 0, c = 5, d = 7;
   int q = 0;
-  if b < 5 then
-    c = 4;
-    d = 2
-  else if b < 7 then
-    c = 2;
-    q = q + 1
-  else
-    d = 5
-  fi;
-  if b < 2 then
-    b = b + 2;
-    b = q;
-    q = q + 2
-  else
-    b = b + 1
-  fi;
+  while b < 10 do
+    if b < 5 then
+      c = 4;
+      d = 2
+    else if b < 7 then
+      c = 2;
+      q = q + 1
+    else
+      d = 5
+    fi;
+    if b < 2 then
+      b = b + 2;
+      q = q + 2
+    else
+      b = b + 1
+    fi
+  done;
   print b + c + d + q
 end

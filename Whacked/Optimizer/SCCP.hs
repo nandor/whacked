@@ -1,9 +1,15 @@
-{-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
+{-# LANGUAGE LambdaCase, NamedFieldPuns, RecordWildCards #-}
 module Whacked.Optimizer.SCCP where
 
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Whacked.Scratch
+import           Whacked.Types
+
 
 
 import Debug.Trace
@@ -16,21 +22,65 @@ data Value
   deriving ( Eq, Ord, Show )
 
 
-combine :: Value -> Value -> Value
-combine Top x
-  = x
-combine x Top
-  = x
-combine x y
-  | x == y = x
-  | otherwise = Bot
+instance Monoid Value where
+  mappend Top x = x
+  mappend x Top = x
+  mappend x y
+    | x == y = x
+    | otherwise = Bot
+
+  mempty
+    = Top
+
+
+instance Num Value where
+  -- addition
+  ConstInt x + ConstInt y = ConstInt (x + y)
+  Bot + _ = Bot
+  _ + Bot = Bot
+
+  -- multiplication
+  ConstInt x * ConstInt y = ConstInt (x * y)
+  ConstInt 0 * _ = ConstInt 0
+  _ * ConstInt 0 = ConstInt 0
+  Bot * _ = Bot
+  _ * Bot = Bot
+
+  -- subtraction
+  ConstInt x - ConstInt y = ConstInt (x - y)
+  Bot - _ = Bot
+  _ - Bot = Bot
+
+  -- Signum
+  signum (ConstInt x) = ConstInt (signum x)
+  signum x = x
+
+  -- abs
+  abs (ConstInt x) = ConstInt (abs x)
+  abs x = x
+
+  -- creation from an integer
+  fromInteger = ConstInt . fromInteger
+
+
+-- | Compares two values.
+compareValue :: CondOp -> Value -> Value -> Maybe Bool
+compareValue _ Bot _
+  = Nothing
+compareValue _ _ Bot
+  = Nothing
+compareValue op (ConstInt x) (ConstInt y)
+  = Just $ (getComparator op) x y
 
 
 -- | Builds the control flow graph.
-buildCFGGraph :: [(Int, SInstr)] -> Map Int [Int]
+buildCFGGraph :: [(Int, SInstr)] -> (Map Int [Int], Map Int [Int])
 buildCFGGraph block
-  = Map.fromList . zip (map fst block) . map build $ block
+  = (cfg, cfg')
   where
+    cfg = Map.fromList . zip (map fst block) . map build $ block
+    cfg' = Map.foldlWithKey rev Map.empty cfg
+
     (count, _) = last block
 
     build (idx, SReturn{..})
@@ -47,19 +97,23 @@ buildCFGGraph block
       | idx < count = [idx + 1]
       | otherwise = []
 
+    rev cfg' node out
+      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+
 
 -- | Builds the SSA graph.
-buildSSAGraph :: [(Int, SInstr)] -> Map Int [Int]
+buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
 buildSSAGraph block
-  = foldl linkDefs Map.empty $ block
+  = (map fst . Map.toList $ defs, foldl linkDefs Map.empty $ block)
   where
     defs = foldl findDefs Map.empty block
+
     findDefs mp (idx, SBinOp{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SConstInt{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SPhi{..})
-      = Map.insert siDest idx mp
+      = foldl (\mp SPhiVar{..} -> Map.insert spVar idx mp) mp siVars
     findDefs mp _
       = mp
 
@@ -68,7 +122,7 @@ buildSSAGraph block
     linkDefs mp (idx, SCall{..})
       = foldl (linkTo idx) mp siArgs
     linkDefs mp (idx, SPhi{..})
-      = foldl (linkTo idx) mp siMerge
+      = foldl (linkTo idx) mp (concatMap (map snd . spMerge) siVars)
     linkDefs mp (idx, SReturn{..})
       = foldl (linkTo idx) mp [siVal]
     linkDefs mp (idx, SBinJump{..})
@@ -86,10 +140,121 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise SFunction{..}
-  = traceShow (ssaGraph) . SFunction $ sfBody
+  = traceShow (mark, vars') . SFunction $ sfBody
   where
-    cfgGraph = buildCFGGraph sfBody
-    ssaGraph = buildSSAGraph sfBody
+    (cfg, cfg') = buildCFGGraph sfBody
+    (vars, ssa) = buildSSAGraph sfBody
+    code = Map.fromList sfBody
+    next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
+
+    (start, _) = Map.findMin cfg
+    (mark, vars') = work
+      [(start, start)]
+      []
+      Set.empty
+      (Map.fromList . zip vars . repeat $ Top)
+
+    work (edge@(start, end):xs) ys mark vars
+      | Set.member edge mark = work xs ys mark vars
+      | otherwise = case Map.lookup end code of
+          -- Evaluate a phi node. When evaluating a phi node, we take into
+          -- consideration the edges that come into the node and are marked
+          -- executable. The meet function is then applied over those values.
+          Just (node@SPhi{..}) ->
+            let (ys', vars') = updatePhi node end ys vars
+            in work (xs ++ cfgNext end) ys' mark' vars'
+
+          -- | If any other edges are marked as executed, skip.
+          _ | anyOtherExecuted mark start end ->
+            work xs ys mark' vars
+
+          -- | Evaluate assignments.
+          Just (node@SBinOp{..}) ->
+            let (ys', vars') = updateAssign node end ys vars
+            in work (xs ++ cfgNext end) ys' mark' vars'
+          Just (node@SCall{..}) ->
+            work xs ys mark' vars
+          Just (node@SConstInt{..}) ->
+            let vars' = (Map.insert siDest (ConstInt siIntVal) vars)
+            in work (xs ++ cfgNext end) (ys ++ ssaNext end) mark' vars'
+
+          -- | Evaluate conditionals.
+          Just (node@SBinJump{..}) ->
+            work (updateBinJump node end xs vars) ys mark' vars
+          Just (node@SJump{..}) ->
+            work (xs ++ cfgNext end) ys mark' vars
+      where
+        mark' = Set.insert edge mark
+
+    work [] (edge@(start, end):ys) mark vars
+      | anyExecuted mark end = case Map.lookup end code of
+        Just node@SPhi{..} ->
+          let (ys', vars') = updatePhi node end ys vars
+          in work [] ys' mark vars'
+        Just node@SBinJump{..} ->
+          work (updateBinJump node end [] vars) ys mark vars
+        Just node@SBinOp{..} ->
+          let (ys', vars') = updateAssign node end ys vars
+          in work [] ys' mark vars'
+        Just node@SCall{..} ->
+          work [] ys mark vars
+
+        _ -> work [] ys mark vars
+      | otherwise = work [] ys mark vars
+
+    work [] [] mark vars
+      = (mark, vars)
+
+    updatePhi SPhi{..} end ys vars
+      = foldl updateVar ( ys, vars) siVars
+      where
+        updateVar (ys, vars) SPhiVar{..}
+          | (fromJust $ Map.lookup spVar vars) == newValue = (ys, vars)
+          | otherwise =
+              ( ys ++ ssaNext end
+              , Map.insert spVar newValue vars
+              )
+          where
+            newValue = mconcat
+              [fromMaybe Top (Map.lookup x vars)
+              | (_, x) <- spMerge]
+
+    updateBinJump SBinJump{..} end xs vars = fromMaybe xs $ do
+      left <- getValue siLeft vars
+      right <- getValue siRight vars
+      case compareValue siCond left right of
+        Nothing ->
+          return $ cfgNext end ++ xs
+        Just x | x == siWhen ->
+          return $ ((end, siWhere):xs)
+        Just x | x /= siWhen ->
+          return $ ((end, fromJust $ Map.lookup end next):xs)
+
+    updateAssign SBinOp{..} end ys vars = fromMaybe (ys, vars) $ do
+      left <- getValue siLeft vars
+      right <- getValue siRight vars
+      return $ case siBinOp of
+        Add -> (ys ++ ssaNext end, Map.insert siDest (left + right) vars)
+
+    ssaNext end = zip (repeat end) $ fromMaybe [] (Map.lookup end ssa)
+    cfgNext end = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
+
+    getValue var vars
+      = Map.lookup var vars >>= \case
+        Top -> Nothing
+        x -> Just x
+
+    anyOtherExecuted mark start end
+      = case Map.lookup end cfg' of
+        Nothing -> False
+        Just nodes ->
+          let marked x = x /= (start, end) && Set.member x mark
+          in any marked . zip nodes $ repeat end
+
+    anyExecuted mark end
+      = case Map.lookup end cfg' of
+        Nothing -> False
+        Just nodes -> any (\x -> Set.member (x, end) mark) nodes
 
 
 sccp :: SProgram -> SProgram

@@ -32,6 +32,17 @@ data CondOp
   deriving ( Eq, Ord, Show )
 
 
+getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)
+getComparator op
+  = \x y -> (x `compare` y) `elem` case op of
+    CLT  -> [LT]
+    CLTE -> [LT, EQ]
+    CGT  -> [GT]
+    CGTE -> [GT, EQ]
+    CEQ  -> [EQ]
+    CNEQ -> [LT, GT]
+
+
 data Type
   = Void
   | Int
