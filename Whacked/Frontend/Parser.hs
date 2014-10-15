@@ -36,6 +36,7 @@ whacked
           [ "="
           , "&&"
           , "||"
+          , "=="
           ]
       , Token.reservedNames   =
           [ "begin"
@@ -133,6 +134,7 @@ aExprOp
       ]
     , [ Infix (tagBin "<" $ Cmp CLT) AssocNone
       , Infix (tagBin ">" $ Cmp CGT) AssocNone
+      , Infix (tagBin "==" $ Cmp CEQ) AssocNone
       ]
     , [ Infix (tagBin "&&" And) AssocRight
       ]

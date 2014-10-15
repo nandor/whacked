@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase, NamedFieldPuns, RecordWildCards #-}
 module Whacked.Optimizer.SCCP where
 
+import           Control.Applicative
+import           Control.Monad
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe
@@ -9,6 +11,7 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Whacked.Scratch
 import           Whacked.Types
+import           Whacked.Optimizer.FlowGraph
 
 
 
@@ -72,33 +75,15 @@ compareValue _ _ Bot
 compareValue op (ConstInt x) (ConstInt y)
   = Just $ (getComparator op) x y
 
-
--- | Builds the control flow graph.
-buildCFGGraph :: [(Int, SInstr)] -> (Map Int [Int], Map Int [Int])
-buildCFGGraph block
-  = (cfg, cfg')
-  where
-    cfg = Map.fromList . zip (map fst block) . map build $ block
-    cfg' = Map.foldlWithKey rev Map.empty cfg
-
-    (count, _) = last block
-
-    build (idx, SReturn{..})
-      = []
-    build (idx, SJump{..})
-      = [siWhere]
-    build (idx, SBinJump{..})
-      | idx < count = [siWhere, idx + 1]
-      | otherwise = [siWhere]
-    build (idx, SUnJump{..})
-      | idx < count = [siWhere, idx + 1]
-      | otherwise = [siWhere]
-    build (idx, _)
-      | idx < count = [idx + 1]
-      | otherwise = []
-
-    rev cfg' node out
-      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+-- | Evaluates an operation.
+evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
+evalBinOp _ Bot _
+  = Nothing
+evalBinOp _ _ Bot
+  = Nothing
+evalBinOp op (ConstInt x) (ConstInt y)
+  = return $ case op of
+    Add -> ConstInt $ x + y
 
 
 -- | Builds the SSA graph.
@@ -113,7 +98,7 @@ buildSSAGraph block
     findDefs mp (idx, SConstInt{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SPhi{..})
-      = foldl (\mp SPhiVar{..} -> Map.insert spVar idx mp) mp siVars
+      = Map.insert siDest idx mp
     findDefs mp _
       = mp
 
@@ -122,7 +107,7 @@ buildSSAGraph block
     linkDefs mp (idx, SCall{..})
       = foldl (linkTo idx) mp siArgs
     linkDefs mp (idx, SPhi{..})
-      = foldl (linkTo idx) mp (concatMap (map snd . spMerge) siVars)
+      = foldl (linkTo idx) mp siMerge
     linkDefs mp (idx, SReturn{..})
       = foldl (linkTo idx) mp [siVal]
     linkDefs mp (idx, SBinJump{..})
@@ -140,9 +125,9 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise SFunction{..}
-  = traceShow (mark, vars') . SFunction $ sfBody
+  = SFunction [(i, reduce i x) | (i, x) <- sfBody, Set.member i mark' ]
   where
-    (cfg, cfg') = buildCFGGraph sfBody
+    (cfg, cfg') = buildFlowGraph sfBody
     (vars, ssa) = buildSSAGraph sfBody
     code = Map.fromList sfBody
     next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
@@ -153,7 +138,38 @@ optimise SFunction{..}
       []
       Set.empty
       (Map.fromList . zip vars . repeat $ Top)
+    mark' = Set.map snd mark
 
+    reduce node jmp@SBinJump{..} = fromMaybe jmp $ do
+      left <- evalValue siLeft
+      right <- evalValue siRight
+      return $ case compareValue siCond left right of
+        Nothing -> jmp
+        Just x | x == siWhen -> SJump siWhere
+        _ -> SJump . fromJust . Map.lookup node $ next
+
+    reduce node phi@SPhi{..} = fromMaybe phi $ do
+      result <- mconcat <$> mapM evalValue siMerge
+      case result of
+        ConstInt x -> return $ SConstInt siDest x
+        _ -> Nothing
+
+    reduce node bin@SBinOp{..} = fromMaybe bin $ do
+      left <- evalValue siLeft
+      right <- evalValue siRight
+      result <- evalBinOp siBinOp left right
+      case result of
+        ConstInt x -> return $ SConstInt siDest x
+        _ -> Nothing
+
+    reduce node x
+      = x
+
+    -- Used in the reduction step to evaluate a value.
+    evalValue var
+      = case Map.lookup var vars' of
+          Just Bot -> Nothing
+          x -> x
 
     traverse (edge@(start, end):xs) ys mark vars
       = case Map.lookup end code of
@@ -186,8 +202,8 @@ optimise SFunction{..}
           _ | not $ anyExecuted mark end ->
             traverse [] ys mark vars
           Just node ->
-            let (xs', ys', var') = traverse' node [] edge mark vars
-            in traverse xs' (ys' ++ ys) mark vars
+            let (xs', ys', vars') = traverse' node [] edge mark vars
+            in traverse xs' (ys' ++ ys) mark vars'
 
     traverse [] [] mark vars
       = (mark, vars)
@@ -197,18 +213,15 @@ optimise SFunction{..}
       -- consideration the edges that come into the node and are marked
       -- executable. The meet function is then applied over those values.
       node@SPhi{..} ->
-        let updatePhi (xs, ys, vars) SPhiVar{..}
-              | (fromJust $ Map.lookup spVar vars) == newValue = (xs, ys, vars)
-              | otherwise =
-                  ( xs
-                  , ys ++ ssaNext
-                  , Map.insert spVar newValue vars
-                  )
-              where
-                newValue = mconcat
-                  [fromMaybe Top (Map.lookup x vars)
-                  | (_, x) <- spMerge]
-        in foldl updatePhi (xs, [], vars) siVars
+        let new = mconcat [fromMaybe Top (Map.lookup x vars) | x <- siMerge]
+        in if new == (fromJust $ Map.lookup siDest vars)
+            then
+              ( xs, [], vars )
+            else
+              ( xs
+              , ssaNext
+              , Map.insert siDest new vars
+              )
 
       -- Evaluate a binary operation.
       node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do

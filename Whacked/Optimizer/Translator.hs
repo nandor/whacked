@@ -234,7 +234,7 @@ data Scope
     { nextTemp  :: Int
     , nextInstr :: Int
     , block     :: Int
-    , vars      :: Map (String, Int) (Type, SVar, Int)
+    , vars      :: Map (String, Int) (Type, SVar)
     , vars'     :: Map SVar (String, Int)
     }
   deriving ( Eq, Ord, Show )
@@ -271,29 +271,27 @@ genTemp = do
   return $ SVar nextTemp
 
 
-emit :: SInstr
-     -> Generator Int
+emit :: SInstr -> Generator ()
 emit instr = do
   scope@Scope{ nextInstr, block } <- get
   put scope{ nextInstr = nextInstr + 1 }
   tell [(block, instr)]
-  return nextInstr
 
 
 genExpr :: IExpr
         -> SVar
-        -> Generator (Type, SVar, Int)
+        -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
-  (lt, le, _) <- genTemp >>= genExpr ieLeft
-  (rt, re, _) <- genTemp >>= genExpr ieRight
-  instr <- emit $ SBinOp lt dest ieBinOp le re
-  return (lt, dest, instr)
+  (lt, le) <- genTemp >>= genExpr ieLeft
+  (rt, re) <- genTemp >>= genExpr ieRight
+  emit $ SBinOp lt dest ieBinOp le re
+  return (lt, dest)
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
 genExpr IConstInt{..} dest = do
-  instr <- emit $ SConstInt dest ieIntVal
-  return (Int, dest, instr)
+  emit $ SConstInt dest ieIntVal
+  return (Int, dest)
 
 genExpr IUnOp{..} dest
   = undefined
@@ -314,27 +312,27 @@ genInstr ILabel{..} = do
   return ()
 
 genInstr IReturn{..} = do
-  (t, expr, _) <- genTemp >>= genExpr iiExpr
-  void . emit $ SReturn t expr
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  emit $ SReturn t expr
 
 genInstr IBinJump{..} = do
-  (lt, le, _) <- genTemp >>= genExpr iiLeft
-  (rt, re, _) <- genTemp >>= genExpr iiRight
-  void . emit $ SBinJump lt iiWhere iiWhen iiCond le re
+  (lt, le) <- genTemp >>= genExpr iiLeft
+  (rt, re) <- genTemp >>= genExpr iiRight
+  emit $ SBinJump lt iiWhere iiWhen iiCond le re
 
 genInstr IJump{..} = do
-  void . emit $ SJump iiWhere
+  emit $ SJump iiWhere
 
 genInstr IWriteVar{..} = do
-  (t, expr, instr) <- genTemp >>= genExpr iiExpr
+  (t, expr) <- genTemp >>= genExpr iiExpr
   scope@Scope{ vars } <- get
-  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr, instr) vars }
+  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
 
 genInstr IPrint{..} = do
-  (t, expr, _) <- genTemp >>= genExpr iiExpr
+  (t, expr) <- genTemp >>= genExpr iiExpr
   let func = case t of
         Int  -> "__print_int"
-  void . emit $ SCall Void SVoid func [expr]
+  emit $ SCall Void SVoid func [expr]
 
 
 -- | Generates code for a function.
@@ -359,16 +357,14 @@ genFunc func@IFunction{..}
         -- Place phi nodes for all affected variables.
         case Map.lookup idx phi of
           Nothing -> return ()
-          Just phi' -> do
-            phis <- forM phi' $ \(var, idx, t) -> do
-              expr <- genTemp
-              scope@Scope{ vars, vars', nextInstr } <- get
-              put scope
-                { vars = Map.insert (var, idx) (t, expr, nextInstr) vars
-                , vars' = Map.insert expr (var, idx) vars'
-                }
-              return $ SPhiVar expr t []
-            void . emit $ SPhi phis
+          Just phi' -> forM_ phi' $ \(var, idx, t) -> do
+            expr <- genTemp
+            scope@Scope{ vars, vars' } <- get
+            put scope
+              { vars = Map.insert (var, idx) (t, expr) vars
+              , vars' = Map.insert expr (var, idx) vars'
+              }
+            emit $ SPhi expr t []
 
         -- Generate code.
         mapM_ genInstr instrs
@@ -392,22 +388,19 @@ genFunc func@IFunction{..}
     relabel (block, jump@SJump{..})
       = jump{ siWhere = lookupLabel siWhere}
     relabel (block, phi@SPhi{..})
-      = phi{ siVars = map fill siVars }
-      where
-        fill var@SPhiVar{..}
-          = var
-            { spMerge = fromMaybe [] $ do
-              x <- Map.lookup spVar vars'
-              prev <- Set.toList <$> Map.lookup block graph'
-              return [y | Just y <- map (lookupVar x) prev]
-            }
+      = phi
+        { siMerge = fromMaybe [] $ do
+          x <- Map.lookup siDest vars'
+          prev <- Set.toList <$> Map.lookup block graph'
+          return [y | Just y <- map (lookupVar x) prev]
+        }
     relabel (_, x)
       = x
 
     lookupVar var block = do
       (_, vars) <- Map.lookup block target'
-      (_, var', idx) <- Map.lookup var vars
-      return (idx, var')
+      (_, var') <- Map.lookup var vars
+      return var'
 
     lookupLabel i = fromJust $ do
       block <- Map.lookup i target

@@ -1,8 +1,14 @@
 begin
-  int b = 0;
-  if b < 0 then
-    print 5
-  else
-    print 6
-  fi
+  int a = 0, b = 1, c = 1, d = 0;
+
+  while a < 20 do
+    a = a + 1;
+    b = b + c;
+    if d == 0 then
+      c = c + 2
+    else
+      c = c + 3
+    fi
+  done;
+  print a
 end
