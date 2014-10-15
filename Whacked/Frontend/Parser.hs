@@ -53,6 +53,7 @@ whacked
           , "do"
           , "done"
           , "void"
+          , "read"
           ]
       , Token.caseSensitive   = True
       }
@@ -159,6 +160,7 @@ aStatement
     [ aReturn
     , aPrint
     , aAssign
+    , aRead
     , aVarDecl
     , aWhile
     , aBlock
@@ -183,6 +185,12 @@ aStatement
       reservedOp "="
       expr <- aExpr
       return $ AAssign tag lval expr
+
+    aRead = do
+      tag <- aTag
+      reserved "read"
+      lval <- aLValue
+      return $ ARead tag lval
 
     aVarDecl = do
       tag <- aTag

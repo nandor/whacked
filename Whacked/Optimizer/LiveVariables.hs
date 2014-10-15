@@ -53,7 +53,7 @@ framework (cfg, cfg') labels killGen
 
 reduceFunc :: SFunction -> SFunction
 reduceFunc func@SFunction{..}
-  = func
+  = trace (concatMap (\x -> show x ++ "\n") (Map.toList $ (framework (buildFlowGraph sfBody) labels vars))) func
   where
     labels = map fst sfBody
     vars = Map.fromList . map findKillGen $ sfBody

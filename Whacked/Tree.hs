@@ -63,6 +63,10 @@ data AStatement
     , asTo   :: ALValue
     , asExpr :: AExpr
     }
+  | ARead
+    { asTag  :: ATag
+    , asTo   :: ALValue
+    }
   | AVarDecl
     { asTag  :: ATag
     , asType :: Type

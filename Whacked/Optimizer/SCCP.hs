@@ -231,7 +231,7 @@ optimise func@SFunction{..}
       node@SCall{..} ->
         ( xs
         , []
-        , Map.insert siDest Top vars
+        , Map.insert siDest Bot vars
         )
 
       -- Returns do nothing.

@@ -330,11 +330,18 @@ genInstr IWriteVar{..} = do
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
 
+genInstr IReadVar{..} = do
+  expr <- genTemp
+  case iiType of
+    Int -> emit $ SCall iiType expr "__read_int" []
+  scope@Scope{ vars } <- get
+  put scope{ vars = Map.insert (iiVar, iiScope) (iiType, expr) vars }
+
+
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  let func = case t of
-        Int  -> "__print_int"
-  emit $ SCall Void SVoid func [expr]
+  case t of
+    Int -> emit $ SCall Void SVoid "__print_int" [expr]
 
 
 -- | Generates code for a function.

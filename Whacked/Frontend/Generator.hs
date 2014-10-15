@@ -183,14 +183,20 @@ genStmt APrint{..} = do
   tell [IPrint expr]
 genStmt AAssign{..}
   = case asTo of
-      ALVar{..} -> do
-        findVar alName >>= \case
-          Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-          Just (idx, t) -> do
-            (t', expr) <- genExpr asExpr
-            when (t /= t') $
-              genError alTag $ "type error"
-            tell [IWriteVar alName idx expr]
+      ALVar{..} -> findVar alName >>= \case
+        Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
+        Just (idx, t) -> do
+          (t', expr) <- genExpr asExpr
+          when (t /= t') $
+            genError alTag $ "type error"
+          tell [IWriteVar alName idx expr]
+genStmt ARead{..}
+  = case asTo of
+      ALVar{..} -> findVar alName >>= \case
+        Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
+        Just (idx, t) ->
+          tell [IReadVar alName idx t]
+
 genStmt AVarDecl{..} = do
   forM_ asVars $ \(tag, name, expr) -> do
     scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
@@ -199,12 +205,17 @@ genStmt AVarDecl{..} = do
         when (idx == nextScope) $
           genError asTag $ "duplicate variable '" ++ name ++ "'"
       Nothing -> do
-        when (expr /= Nothing) $ do
-          let Just expr' = expr
-          (t, expr'') <- genExpr expr'
-          when (t /= asType) $
-            genError asTag $ "type error"
-          tell [IWriteVar name nextScope expr'']
+        if expr /= Nothing
+          then do
+            let Just expr' = expr
+            (t, expr'') <- genExpr expr'
+            when (t /= asType) $
+              genError asTag $ "type error"
+            tell [IWriteVar name nextScope expr'']
+          else
+            case asType of
+              Int -> tell [ IWriteVar name nextScope (IConstInt 0)]
+
         put scope
           { variables = (nextScope, Map.insert name asType x) : xs
           , declarations = Set.insert (name, nextScope, asType) declarations

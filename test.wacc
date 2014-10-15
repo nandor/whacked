@@ -1,7 +1,7 @@
 begin
   int a, b, c, d, e, f;
 
-  a = 0;
+  read a;
   if a < 10 then
     if a + 5 > 4 then
       f = 2
