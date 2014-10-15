@@ -17,7 +17,7 @@ import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
 import           Whacked.Optimizer.SCCP
 import           Whacked.Optimizer.Jumps
-
+import           Whacked.Optimizer.LiveVariables
 
 
 data Options
@@ -102,9 +102,14 @@ main
                   putStrLn (ifName ++ show ifArgs ++ show ifVars)
                   mapM_ (putStrLn . show) ifBody
 
-              let scratch = reduceJumps . sccp . generateS $ itch
+              let scratch =
+                    removeDeadVars .
+                    reduceJumps .
+                    sccp .
+                    generateS $ itch
               when optPrintIMF $ do
                 forM_ (spFuncs scratch) $ \SFunction{..} -> do
+                  putStrLn (show sfArgs)
                   mapM_ (putStrLn . show) sfBody
 
 

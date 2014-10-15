@@ -28,6 +28,7 @@ data SProgram
 data SFunction
   = SFunction
     { sfBody :: [(Int, SInstr)]
+    , sfArgs :: [SVar]
     }
   deriving ( Eq, Ord, Show )
 

@@ -11,11 +11,8 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Whacked.Scratch
 import           Whacked.Types
-import           Whacked.Optimizer.FlowGraph
+import           Whacked.FlowGraph
 
-
-
-import Debug.Trace
 
 
 data Value
@@ -124,8 +121,8 @@ buildSSAGraph block
 
 
 optimise :: SFunction -> SFunction
-optimise SFunction{..}
-  = SFunction [(i, reduce i x) | (i, x) <- sfBody, Set.member i mark' ]
+optimise func@SFunction{..}
+  = func{ sfBody = [(i, reduce i x) | (i, x) <- sfBody, Set.member i mark' ] }
   where
     (cfg, cfg') = buildFlowGraph sfBody
     (vars, ssa) = buildSSAGraph sfBody
@@ -236,6 +233,10 @@ optimise SFunction{..}
         , []
         , Map.insert siDest Top vars
         )
+
+      -- Returns do nothing.
+      node@SReturn{..} ->
+        ( xs, [], vars)
 
       -- Constants are marked and propagated.
       node@SConstInt{..} ->

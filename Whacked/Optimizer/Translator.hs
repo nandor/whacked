@@ -295,8 +295,11 @@ genExpr IConstInt{..} dest = do
 
 genExpr IUnOp{..} dest
   = undefined
-genExpr ICall{..} dest
-  = undefined
+genExpr ICall{..} dest = do
+  args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
+  dest <- genTemp
+  emit $ SCall ieType dest ieName (map snd args)
+  return (ieType, dest)
 genExpr IConstReal{..} dest
   = undefined
 genExpr IConstChar{..} dest
@@ -306,8 +309,7 @@ genExpr IConstString{..} dest
 
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
-genInstr :: IInstr
-         -> Generator ()
+genInstr :: IInstr -> Generator ()
 genInstr ILabel{..} = do
   return ()
 
@@ -339,7 +341,7 @@ genInstr IPrint{..} = do
 genFunc :: IFunction
         -> SFunction
 genFunc func@IFunction{..}
-  = SFunction instrs'
+  = SFunction instrs' args
   where
     (blocks, target) = getBlocks ifBody
     (graph, graph') = getGraph blocks target
@@ -347,7 +349,13 @@ genFunc func@IFunction{..}
     frontier = getFrontier graph graph' dominators
     phi = getPhiNodes ifVars blocks frontier
 
-    ((indices, vars'), _, instrs) = runGenerator $ do
+    ((indices, vars', vars, args), _, instrs) = runGenerator $ do
+      args <- forM ifArgs $ \(t, name) -> do
+        expr <- genTemp
+        scope@Scope{ vars } <- get
+        put scope{ vars = Map.insert (name, 0) (t, expr) vars }
+        return expr
+
       indices <- forM (Map.toList blocks) $ \(idx, instrs) -> do
         -- Update the block index & get start index of block.
         blockStart <- get >>= \scope@Scope{ nextInstr } -> do
@@ -373,8 +381,8 @@ genFunc func@IFunction{..}
         Scope{ vars } <- get
         return (idx, (blockStart, vars))
 
-      Scope{ vars' } <- get
-      return (indices, vars')
+      Scope{ vars', vars } <- get
+      return (indices, vars', vars, args)
 
     target' = Map.fromList indices
     instrs' = zip [0..] $ map relabel instrs
@@ -409,7 +417,6 @@ genFunc func@IFunction{..}
 
 
 -- | Generates unoptimised Scratchy code for a program.
-generateS :: IProgram
-          -> SProgram
+generateS :: IProgram -> SProgram
 generateS IProgram{..}
   = SProgram (map genFunc ipFuncs)

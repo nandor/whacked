@@ -1,14 +1,15 @@
 begin
-  int a = 0, b = 1, c = 1, d = 0;
+  int a, b, c, d, e, f;
 
-  while a < 20 do
-    a = a + 1;
-    b = b + c;
-    if d == 0 then
-      c = c + 2
+  a = 0;
+  if a < 10 then
+    if a + 5 > 4 then
+      f = 2
     else
-      c = c + 3
+      f = 3
     fi
-  done;
-  print a
+  else
+    f = 7
+  fi;
+  print f
 end

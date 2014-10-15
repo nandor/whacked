@@ -13,8 +13,8 @@ import           Whacked.Types
 -- | Simplifies jumps. Performs jump threading, then removes jumps to
 -- consecutive locations.
 reduceFunc :: SFunction -> SFunction
-reduceFunc SFunction{..}
-  = SFunction . filter (not . isNext) $ sfBody
+reduceFunc func@SFunction{..}
+  = func{ sfBody = filter (not . isNext) $ sfBody }
   where
     next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
 

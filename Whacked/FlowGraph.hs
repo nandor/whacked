@@ -1,5 +1,5 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
-module Whacked.Optimizer.FlowGraph
+module Whacked.FlowGraph
   ( FlowGraph
   , buildFlowGraph
   ) where
@@ -7,6 +7,7 @@ module Whacked.Optimizer.FlowGraph
 
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Maybe
 import           Whacked.Scratch
 import           Whacked.Types
 
@@ -23,6 +24,8 @@ buildFlowGraph block
   where
     cfg = Map.fromList . zip (map fst block) . map build $ block
     cfg' = Map.foldlWithKey rev Map.empty cfg
+    next
+      = Map.fromList $ zip (map fst block) (tail . map (\(x, _) -> [x]) $ block)
 
     (count, _) = last block
 
@@ -31,13 +34,13 @@ buildFlowGraph block
     build (idx, SJump{..})
       = [siWhere]
     build (idx, SBinJump{..})
-      | idx < count = [siWhere, idx + 1]
+      | idx < count = siWhere : fromMaybe [] (Map.lookup idx next)
       | otherwise = [siWhere]
     build (idx, SUnJump{..})
-      | idx < count = [siWhere, idx + 1]
+      | idx < count = siWhere : fromMaybe [] (Map.lookup idx next)
       | otherwise = [siWhere]
     build (idx, _)
-      | idx < count = [idx + 1]
+      | idx < count = fromMaybe [] (Map.lookup idx next)
       | otherwise = []
 
     rev cfg' node out
