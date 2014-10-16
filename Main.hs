@@ -16,7 +16,7 @@ import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
 import           Whacked.Optimizer.SCCP
-import           Whacked.Optimizer.LiveVariables
+import           Whacked.Backend.ARM as ARM
 
 
 data Options
@@ -101,18 +101,16 @@ main
                   putStrLn (ifName ++ show ifArgs ++ show ifVars)
                   mapM_ (putStrLn . show) ifBody
 
-              let scratch =
-                    sccp .
-                    generateS $ itch
+              let scratch = sccp . generateS $ itch
               when optPrintIMF $ do
                 forM_ (spFuncs scratch) $ \SFunction{..} -> do
                   putStrLn (show sfArgs)
                   mapM_ (putStrLn . show) sfBody
 
+              let asm = ARM.compile scratch
+              when optPrintASM $ do
+                  mapM_ (putStrLn . show) asm
 
-          {-let asm = ARM.compile imf
-          when optPrintASM $ mapM_ (putStrLn . show) asm
-
-          writeFile optOutput (show asm)-}
+              writeFile optOutput (show asm)
 
     (_, _, errs) -> usage

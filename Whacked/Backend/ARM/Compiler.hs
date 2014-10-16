@@ -11,13 +11,13 @@ import           Control.Monad.Writer
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Whacked.Backend.ARM.ASM
-import           Whacked.Backend.ARM.Allocator
-import           Whacked.IMF
+import           Whacked.Scratch
+import           Whacked.Types
 
 
 data Scope
   = Scope
-    { varAlloc :: Map ITemp Storage
+    {
     }
   deriving (Eq, Ord, Show)
 
@@ -29,34 +29,26 @@ newtype Compiler a
   deriving (Applicative, Functor, Monad, MonadState Scope, MonadWriter [ASM])
 
 
-compileInstr :: IInstr -> Compiler ()
-compileInstr IConstInt{..} = do
-  tell [ARMLDR R0 iiIntVal]
-compileInstr IBinOp{..} = do
-  tell [ARMAdd R0 R1 R2]
-compileInstr IReturn{..} = do
-  tell [ARMLDM [PC]]
-compileInstr _ = do
-  return ()
+compileInstr :: (Int, SInstr) -> Compiler ()
+compileInstr instr = return ()
 
 
-compileFunc :: IFunction -> Compiler ()
-compileFunc func@IFunction{..} = do
-  get >>= \scope -> put scope{ varAlloc = allocate func }
-  tell [ARMLabel ifName]
-  forM_ ifInstr compileInstr
+compileFunc :: SFunction -> Compiler ()
+compileFunc func@SFunction{..} = do
+  tell [ARMLabel sfName]
+  forM_ sfBody compileInstr
 
 
-compileProg :: IProgram -> Compiler ()
-compileProg IProgram{..} = do
-  forM_ ipFuncs $ \func -> do
+compileProg :: SProgram -> Compiler ()
+compileProg SProgram{..} = do
+  forM_ spFuncs $ \func -> do
     compileFunc func
 
 
-compile :: IProgram -> [ASM]
+compile :: SProgram -> [ASM]
 compile program
   = execWriter . evalStateT (run $ compileProg program) $ scope
   where
     scope = Scope
-      { varAlloc = Map.empty
+      {
       }

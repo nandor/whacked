@@ -21,11 +21,11 @@ data ARMReg
   deriving (Eq, Ord, Show)
 
 
+
+
 data ASM
   = ARMLabel String
   | ARMAdd ARMReg ARMReg ARMReg
-  | ARMSub ARMReg ARMReg ARMReg
-  | ARMMul ARMReg ARMReg ARMReg
   | ARMSTM [ARMReg]
   | ARMLDM [ARMReg]
   | ARMMov ARMReg ARMReg

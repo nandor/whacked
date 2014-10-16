@@ -348,7 +348,7 @@ genInstr IPrint{..} = do
 genFunc :: IFunction
         -> SFunction
 genFunc func@IFunction{..}
-  = SFunction instrs' args
+  = SFunction instrs' args ifName
   where
     (blocks, target) = getBlocks ifBody
     (graph, graph') = getGraph blocks target

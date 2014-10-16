@@ -30,6 +30,7 @@ data SFunction
   = SFunction
     { sfBody :: [(Int, SInstr)]
     , sfArgs :: [SVar]
+    , sfName :: String
     }
   deriving ( Eq, Ord, Show )
 
