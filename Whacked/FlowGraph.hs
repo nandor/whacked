@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
 module Whacked.FlowGraph
   ( FlowGraph
+  , relabel
   , buildFlowGraph
   ) where
 
@@ -12,9 +13,33 @@ import           Whacked.Scratch
 import           Whacked.Types
 
 
+import Debug.Trace
 
 type FlowGraph
   = Map Int [Int]
+
+
+-- | Relabels the instructions after eliminating nodes.
+relabel :: [(Int, SInstr)] -> [(Int, SInstr)]
+relabel code
+  = map relabel' code
+  where
+    labels = Map.fromList (genLabels 0 0 (map fst code))
+    genLabels n cnt (x:xs)
+      = zip [n..] (replicate (x - n + 1) cnt) ++ genLabels (x + 1) (cnt + 1) xs
+    genLabels n _ []
+      = []
+
+    update x = fromJust $ Map.lookup x labels
+
+    relabel' (i, jmp@SBinJump{..})
+      = (update i, jmp{ siWhere = update siWhere })
+    relabel' (i, jmp@SUnJump{..})
+      = (update i, jmp{ siWhere = update siWhere })
+    relabel' (i, jmp@SJump{..})
+      = (update i, jmp{ siWhere = update siWhere })
+    relabel' (i, x)
+      = (update i, x)
 
 
 -- | Builds the control flow graph.

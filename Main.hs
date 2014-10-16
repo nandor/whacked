@@ -16,7 +16,6 @@ import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
 import           Whacked.Optimizer.SCCP
-import           Whacked.Optimizer.Jumps
 import           Whacked.Optimizer.LiveVariables
 
 
@@ -103,8 +102,6 @@ main
                   mapM_ (putStrLn . show) ifBody
 
               let scratch =
-                    removeDeadVars .
-                    reduceJumps .
                     sccp .
                     generateS $ itch
               when optPrintIMF $ do

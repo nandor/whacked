@@ -5,6 +5,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.List (nub)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Set (Set)
@@ -13,7 +14,7 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.FlowGraph
 
-
+import Debug.Trace
 
 data Value
   = Top
@@ -122,8 +123,10 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = func{ sfBody = [(i, reduce i x) | (i, x) <- sfBody, Set.member i mark' ] }
+  = func{ sfBody = relabel [(i, x) | (i, x) <- body', Set.member i reachable] }
   where
+    bodyReduced = Map.fromList body'
+    (body', varDecl, alias) = reduce sfBody Map.empty Map.empty
     (cfg, cfg') = buildFlowGraph sfBody
     (vars, ssa) = buildSSAGraph sfBody
     code = Map.fromList sfBody
@@ -137,30 +140,86 @@ optimise func@SFunction{..}
       (Map.fromList . zip vars . repeat $ Top)
     mark' = Set.map snd mark
 
-    reduce node jmp@SBinJump{..} = fromMaybe jmp $ do
-      left <- evalValue siLeft
-      right <- evalValue siRight
-      return $ case compareValue siCond left right of
-        Nothing -> jmp
-        Just x | x == siWhen -> SJump siWhere
-        _ -> SJump . fromJust . Map.lookup node $ next
+    -- Removes all expressions that are not used. An expression is used if
+    -- in the SSA graph there is a path from it to a jump, call or return
+    -- instructions.
+    reachable = dfs [i | (i, x) <- body', isRoot x] Set.empty
+    isRoot SBinJump{} = True
+    isRoot SReturn{} = True
+    isRoot SUnJump{} = True
+    isRoot SCall{} = True
+    isRoot SJump{} = True
+    isRoot _ = False
 
-    reduce node phi@SPhi{..} = fromMaybe phi $ do
-      result <- mconcat <$> mapM evalValue siMerge
-      case result of
-        ConstInt x -> return $ SConstInt siDest x
-        _ -> Nothing
+    dfs (x:xs) visited
+      |  x `Set.member` visited
+        = dfs xs visited
+      | Just instr <- Map.lookup x bodyReduced
+        = dfs (findDecl (getGen instr) ++ xs) (Set.insert x visited)
+      | otherwise
+        = dfs xs visited
+      where
+        findDecl vars
+          = concatMap (\x -> fromMaybe [] ((:[]) <$> Map.lookup x varDecl)) vars
+    dfs [] visited
+      = visited
 
-    reduce node bin@SBinOp{..} = fromMaybe bin $ do
-      left <- evalValue siLeft
-      right <- evalValue siRight
-      result <- evalBinOp siBinOp left right
-      case result of
-        ConstInt x -> return $ SConstInt siDest x
-        _ -> Nothing
-
-    reduce node x
-      = x
+    -- Replaces computable binary expressions with constants and removes
+    -- redundant jump instructions.
+    reduce ((i, instr):ns) vars alias
+      | not (i `Set.member` mark') = reduce ns vars alias
+      | otherwise = case instr of
+        jmp@SBinJump{} ->
+          let jmp' = fromMaybe jmp $ do
+                    left <- evalValue (findAlias . siLeft $ jmp)
+                    right <- evalValue (findAlias . siRight $ jmp)
+                    return $ case compareValue (siCond jmp) left right of
+                      Nothing -> jmp
+                      Just x | x == (siWhen jmp) -> SJump (siWhere jmp)
+                      _ -> SJump . fromJust . Map.lookup i $ next
+          in case ns' of
+            next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
+              (next:ns', vars', alias')
+            ns' ->
+              ((i, jmp') : ns', vars', alias')
+        jmp@SJump{..} ->
+          case ns' of
+            next@(x, _) : ns' | x >= siWhere -> (next:ns', vars', alias')
+            ns' -> ((i, jmp) : ns', vars', alias')
+        phi@SPhi{..} ->
+          let phi' = fromMaybe phi
+                      { siMerge
+                          = nub .
+                            filter ((`Map.member` vars)) .
+                            map findAlias $ siMerge
+                      } $ do
+                    result <- mconcat <$> mapM evalValue siMerge
+                    case result of
+                      ConstInt x -> return $ SConstInt siDest x
+                      _ -> Nothing
+          in case phi' of
+            SPhi{ siMerge = [x], siDest } ->
+              reduce ns vars (Map.insert siDest (findAlias x) alias)
+            _ -> ((i, phi') : ns', vars', alias')
+        bin@SBinOp{..} ->
+          let bin' = fromMaybe bin $ do
+                    left <- evalValue (findAlias siLeft)
+                    right <- evalValue (findAlias siRight)
+                    result <- evalBinOp siBinOp left right
+                    case result of
+                      ConstInt x -> return $ SConstInt siDest x
+                      _ -> Nothing
+          in ((i, bin') : ns', vars', alias')
+        call@SCall{..} ->
+          ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
+        int@SConstInt{..} -> ((i, instr):ns', vars', alias')
+      where
+        findAlias var
+          = fromMaybe var . Map.lookup var $ alias
+        (ns', vars', alias')
+          = reduce ns (foldr (\x -> Map.insert x i) vars (getKill instr)) alias
+    reduce [] vars alias
+      = ([], vars, alias)
 
     -- Used in the reduction step to evaluate a value.
     evalValue var

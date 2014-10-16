@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Whacked.Scratch where
 
 -- |The last intermediary form. Optimizations such as inlining, constant
@@ -78,3 +79,35 @@ data SInstr
     { siWhere :: Int
     }
   deriving (Eq, Ord, Show)
+
+
+isAssignment :: SInstr -> Bool
+isAssignment SBinOp{} = True
+isAssignment SCall{} = True
+isAssignment SConstInt{} = True
+isAssignment SPhi{} = True
+isAssignment _ = False
+
+
+getKill :: SInstr -> [SVar]
+getKill SBinOp{..} = [siDest]
+getKill SCall{..} = [siDest]
+getKill SConstInt{..} = [siDest]
+getKill SPhi{..} = [siDest]
+getKill _ = []
+
+getGen :: SInstr -> [SVar]
+getGen SBinOp{..}
+  = [siLeft, siRight]
+getGen SCall{..}
+  = siArgs
+getGen SPhi{..}
+  = siMerge
+getGen SReturn{..}
+  = [siVal]
+getGen SBinJump{..}
+  = [siLeft, siRight]
+getGen SUnJump{..}
+  = [siVal]
+getGen _
+  = []
