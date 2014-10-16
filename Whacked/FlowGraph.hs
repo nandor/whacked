@@ -2,6 +2,7 @@
 module Whacked.FlowGraph
   ( FlowGraph
   , relabel
+  , removePhi
   , buildFlowGraph
   ) where
 
@@ -40,6 +41,55 @@ relabel code
       = (update i, jmp{ siWhere = update siWhere })
     relabel' (i, x)
       = (update i, x)
+
+
+-- | Removes phi nodes from the code.
+removePhi :: [(Int, SInstr)] -> [(Int, SInstr)]
+removePhi code
+  = [ instr | Just instr <- map removePhi' code ]
+  where
+    (alias, _) = foldr findAlias (Map.empty, 0) code
+    findAlias (_, SPhi{..}) (alias, next)
+      = case Map.lookup siDest alias of
+          Nothing ->
+            ( foldl (\mp x -> Map.insert x (SVar next) mp)
+             (Map.insert siDest (SVar next) alias)
+             siMerge
+            , next + 1
+            )
+          Just var ->
+            ( foldl (\mp x -> Map.insert x var mp) alias siMerge
+            , next
+            )
+    findAlias (_, x) (alias, next)
+      = foldl newAlias (alias, next) (getGen x)
+
+    newAlias (alias, next) var
+      = case Map.lookup var alias of
+          Nothing -> ( Map.insert var (SVar next) alias, next + 1)
+          Just _ -> ( alias, next )
+
+    replace var
+      = fromMaybe var $ Map.lookup var alias
+
+    removePhi' (i, SPhi{..})
+      = Nothing
+    removePhi' (i, call@SCall{..})
+      = Just (i, call{ siDest = replace siDest, siArgs = map replace siArgs })
+    removePhi' (i, int@SConstInt{..})
+      = Just (i, int{ siDest = replace siDest })
+    removePhi' (i, jmp@SBinJump{..})
+      = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
+    removePhi' (i, jmp@SUnJump{..})
+      = Just (i, jmp{ siVal = replace siVal })
+    removePhi' (i, jmp@SJump{..})
+      = Just (i, jmp)
+    removePhi' (i, bin@SBinOp{..})
+      = Just (i, bin
+          { siDest = replace siDest
+          , siLeft = replace siLeft
+          , siRight = replace siRight
+          })
 
 
 -- | Builds the control flow graph.

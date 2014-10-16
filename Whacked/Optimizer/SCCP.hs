@@ -123,7 +123,12 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = func{ sfBody = relabel [(i, x) | (i, x) <- body', Set.member i reachable] }
+  = func
+    { sfBody
+        = relabel
+        . removePhi
+        $ [(i, x) | (i, x) <- body', i `Set.member` reachable]
+    }
   where
     bodyReduced = Map.fromList body'
     (body', varDecl, alias) = reduce sfBody Map.empty Map.empty
@@ -170,7 +175,10 @@ optimise func@SFunction{..}
       | not (i `Set.member` mark') = reduce ns vars alias
       | otherwise = case instr of
         jmp@SBinJump{} ->
-          let jmp' = fromMaybe jmp $ do
+          let jmp' = fromMaybe jmp
+                      { siLeft = findAlias $ siLeft jmp
+                      , siRight = findAlias $ siRight jmp
+                      } $ do
                     left <- evalValue (findAlias . siLeft $ jmp)
                     right <- evalValue (findAlias . siRight $ jmp)
                     return $ case compareValue (siCond jmp) left right of
@@ -189,9 +197,10 @@ optimise func@SFunction{..}
         phi@SPhi{..} ->
           let phi' = fromMaybe phi
                       { siMerge
-                          = nub .
-                            filter ((`Map.member` vars)) .
-                            map findAlias $ siMerge
+                          = nub
+                          . filter ((`Map.member` vars))
+                          . map findAlias
+                          $ siMerge
                       } $ do
                     result <- mconcat <$> mapM evalValue siMerge
                     case result of
