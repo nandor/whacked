@@ -4,6 +4,7 @@ module Main where
 
 import           Control.Applicative
 import           Control.Monad
+import           Data.List
 import           Safe
 import           System.Console.GetOpt
 import           System.Directory
@@ -111,6 +112,6 @@ main
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm
 
-              writeFile optOutput (show asm)
+              writeFile optOutput (concat . intersperse "\n" . map show $ asm)
 
     (_, _, errs) -> usage

@@ -1,5 +1,7 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
-module Whacked.Optimizer.LiveVariables where
+module Whacked.LiveVariables
+  ( liveVariables
+  ) where
 
 import           Control.Applicative
 import           Data.Map (Map)
@@ -10,9 +12,6 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
-
-
-import Debug.Trace
 
 
 -- | Function to perform data flow analysis.
@@ -51,9 +50,10 @@ framework (cfg, cfg') labels killGen
             map (\x -> fromMaybe Set.empty (fst <$> Map.lookup x mp)) succ
 
 
-reduceFunc :: SFunction -> SFunction
-reduceFunc func@SFunction{..}
-  = trace (concatMap (\x -> show x ++ "\n") (Map.toList $ (framework (buildFlowGraph sfBody) labels vars))) func
+-- Finds the live variables at every point in a program.
+liveVariables :: SFunction -> Map Int (Set SVar, Set SVar)
+liveVariables func@SFunction{..}
+  = framework (buildFlowGraph sfBody) labels $ vars
   where
     labels = map fst sfBody
     vars = Map.fromList . map findKillGen $ sfBody
@@ -74,9 +74,3 @@ reduceFunc func@SFunction{..}
       = (idx, (Set.empty, Set.singleton siVal))
     findKillGen (idx, SJump{..})
       = (idx, (Set.empty, Set.empty))
-
-
-removeDeadVars :: SProgram -> SProgram
-removeDeadVars SProgram{..}
-  = SProgram $ map reduceFunc spFuncs
-

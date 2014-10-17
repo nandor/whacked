@@ -289,7 +289,13 @@ generateI (AProgram functions)
   where
     generate' func = do
       (_, Scope{ declarations }, body) <- runGenerator (genFunc func) scope
-      return $ IFunction (afName func) (afType func) args body declarations
+      return $ IFunction
+          { ifName = afName func
+          , ifType = afType func
+          , ifArgs = args
+          , ifBody = body ++ [IReturn (IConstInt 0)]
+          , ifVars = declarations
+          }
       where
         -- |All functions, used to check types.
         functions'

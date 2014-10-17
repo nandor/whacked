@@ -64,6 +64,14 @@ instance Num Value where
   fromInteger = ConstInt . fromInteger
 
 
+instance Fractional Value where
+  ConstInt x / ConstInt y = ConstInt (x `div` y)
+  Bot / _ = Bot
+  _ / Bot = Bot
+
+  fromRational x = ConstInt undefined
+
+
 -- | Compares two values.
 compareValue :: CondOp -> Value -> Value -> Maybe Bool
 compareValue _ Bot _
@@ -123,11 +131,8 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = func
-    { sfBody
-        = relabel
-        . removePhi
-        $ [(i, x) | (i, x) <- body', i `Set.member` reachable]
+  = relabel . removePhi $ func
+    { sfBody = [(i, x) | (i, x) <- body', i `Set.member` reachable]
     }
   where
     bodyReduced = Map.fromList body'
@@ -218,10 +223,15 @@ optimise func@SFunction{..}
                     case result of
                       ConstInt x -> return $ SConstInt siDest x
                       _ -> Nothing
-          in ((i, bin') : ns', vars', alias')
+          in ( (i, bin') : ns'
+             , vars'
+              , alias'
+             )
         call@SCall{..} ->
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
         int@SConstInt{..} -> ((i, instr):ns', vars', alias')
+        ret@SReturn{..} ->
+          ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
       where
         findAlias var
           = fromMaybe var . Map.lookup var $ alias
@@ -294,6 +304,7 @@ optimise func@SFunction{..}
         right <- getValue siRight
         return $ case siBinOp of
           Add -> (xs, ssaNext, Map.insert siDest (left + right) vars)
+          Div -> (xs, ssaNext, Map.insert siDest (left / right) vars)
 
       -- Results of function calls are always variable.
       node@SCall{..} ->

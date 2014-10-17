@@ -97,6 +97,7 @@ getKill SConstInt{..} = [siDest]
 getKill SPhi{..} = [siDest]
 getKill _ = []
 
+
 getGen :: SInstr -> [SVar]
 getGen SBinOp{..}
   = [siLeft, siRight]
@@ -112,3 +113,20 @@ getGen SUnJump{..}
   = [siVal]
 getGen _
   = []
+
+getTarget :: SInstr -> Maybe Int
+getTarget SBinJump{..}
+  = Just siWhere
+getTarget SUnJump{..}
+  = Just siWhere
+getTarget SJump{..}
+  = Just siWhere
+getTarget _
+  = Nothing
+
+
+isCall :: SInstr -> Bool
+isCall SCall{}
+  = True
+isCall _
+  = False

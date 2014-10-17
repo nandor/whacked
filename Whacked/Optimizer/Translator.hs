@@ -284,7 +284,9 @@ genExpr :: IExpr
 genExpr IBinOp{..} dest = do
   (lt, le) <- genTemp >>= genExpr ieLeft
   (rt, re) <- genTemp >>= genExpr ieRight
-  emit $ SBinOp lt dest ieBinOp le re
+  emit $ if ieBinOp == Div
+    then SCall lt dest "__aeabi_idiv" [le, re]
+    else SBinOp lt dest ieBinOp le re
   return (lt, dest)
 genExpr IVar{..} dest = do
   Scope{ vars } <- get

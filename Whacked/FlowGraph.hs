@@ -21,11 +21,11 @@ type FlowGraph
 
 
 -- | Relabels the instructions after eliminating nodes.
-relabel :: [(Int, SInstr)] -> [(Int, SInstr)]
-relabel code
-  = map relabel' code
+relabel :: SFunction -> SFunction
+relabel func@SFunction{..}
+  = func{ sfBody = map relabel' sfBody }
   where
-    labels = Map.fromList (genLabels 0 0 (map fst code))
+    labels = Map.fromList (genLabels 0 0 (map fst sfBody))
     genLabels n cnt (x:xs)
       = zip [n..] (replicate (x - n + 1) cnt) ++ genLabels (x + 1) (cnt + 1) xs
     genLabels n _ []
@@ -44,11 +44,14 @@ relabel code
 
 
 -- | Removes phi nodes from the code.
-removePhi :: [(Int, SInstr)] -> [(Int, SInstr)]
-removePhi code
-  = [ instr | Just instr <- map removePhi' code ]
+removePhi :: SFunction -> SFunction
+removePhi func@SFunction{..}
+  = func
+    { sfBody = [ instr | Just instr <- map removePhi' sfBody ]
+    , sfArgs = map replace sfArgs
+    }
   where
-    (alias, _) = foldr findAlias (Map.empty, 0) code
+    (alias, _) = foldr findAlias (foldl newAlias (Map.empty, 0) sfArgs) sfBody
     findAlias (_, SPhi{..}) (alias, next)
       = case Map.lookup siDest alias of
           Nothing ->
@@ -90,6 +93,8 @@ removePhi code
           , siLeft = replace siLeft
           , siRight = replace siRight
           })
+    removePhi' (i, ret@SReturn{..})
+      = Just (i, ret{ siVal = replace siVal })
 
 
 -- | Builds the control flow graph.
