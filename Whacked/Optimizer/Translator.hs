@@ -356,19 +356,12 @@ genInstr IReadVar{..} = do
 
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  case t of
-    Int -> emit $ SCall [] "__print_int" [expr]
-    Char -> emit $ SCall [] "__print_char" [expr]
-    Bool -> emit $ SCall [] "__print_bool" [expr]
-    String -> emit $ SCall [] "__print_string" [expr]
+  emit $ SPrint t expr
 
 genInstr IPrintln{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  case t of
-    Int -> emit $ SCall [] "__println_int" [expr]
-    Char -> emit $ SCall [] "__println_char" [expr]
-    Bool -> emit $ SCall [] "__println_bool" [expr]
-    String -> emit $ SCall [] "__println_string" [expr]
+  emit $ SPrint t expr
+  emit $ SCall [] "__println" []
 
 
 -- | Generates code for a function.

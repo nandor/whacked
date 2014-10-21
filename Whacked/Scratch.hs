@@ -16,7 +16,6 @@ import           Whacked.Types
 -- variable versions.
 data SVar
   = SVar Int
-  | SVoid
   deriving ( Eq, Ord, Show )
 
 
@@ -89,13 +88,17 @@ data SInstr
     , siRight :: SVar
     }
   | SUnJump
-    { siType :: Type
+    { siType  :: Type
     , siWhere :: Int
     , siWhen  :: Bool
     , siVal   :: SVar
     }
   | SJump
     { siWhere :: Int
+    }
+  | SPrint
+    { siType :: Type
+    , siArg  :: SVar
     }
   deriving (Eq, Ord, Show)
 
@@ -143,6 +146,8 @@ getGen SBinJump{..}
 getGen SUnJump{..}
   = [siVal]
 getGen SUnOp{..}
+  = [siArg]
+getGen SPrint{..}
   = [siArg]
 getGen _
   = []

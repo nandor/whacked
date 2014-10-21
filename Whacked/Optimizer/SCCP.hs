@@ -242,12 +242,23 @@ optimise func@SFunction{..}
 
         call@SCall{..} ->
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
-        int@SConstInt{..} -> ((i, instr):ns', vars', alias')
-        bool@SConstBool{..} -> ((i, instr):ns', vars', alias')
-        bool@SConstChar{..} -> ((i, instr):ns', vars', alias')
-        bool@SConstString{..} -> ((i, instr):ns', vars', alias')
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
+        print@SPrint{..} ->
+          let t = case evalValue (findAlias siArg) of
+                Just (ConstInt _) -> Int
+                Just (ConstChar _) -> Char
+                Just (ConstString _) -> String
+                Just (ConstBool _) -> Bool
+                _ -> siType
+              instr' = case t of
+                Int -> SCall [] "__print_int" [findAlias siArg]
+                Char -> SCall [] "__print_char" [findAlias siArg]
+                String -> SCall [] "__print_string" [findAlias siArg]
+                Bool -> SCall [] "__print_bool" [findAlias siArg]
+          in ((i, instr'):ns', vars', alias')
+
+        _ -> ((i, instr):ns', vars', alias')
       where
         findAlias var
           = fromMaybe var . Map.lookup var $ alias
@@ -338,6 +349,10 @@ optimise func@SFunction{..}
 
       -- Returns do nothing.
       node@SReturn{..} ->
+        ( xs, [], vars )
+
+      -- Print has side effects.
+      node@SPrint{..} ->
         ( xs, [], vars )
 
       -- Constants are marked and propagated.
