@@ -18,8 +18,6 @@ import           Whacked.Tree
 import           Whacked.Types
 
 
-import Debug.Trace
-
 
 -- |Definition of the language.
 whacked :: TokenParser st
