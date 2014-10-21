@@ -133,6 +133,9 @@ instance Show IInstr where
   show IUnJump{..} = "IUnJump " ++ show iiWhere
   show IJump{..} = "IJump " ++ show iiWhere
   show IWriteVar{..} = "IWriteVar" ++ show iiVar
+  show INewArray{..} = "INewArray"
   show IReadVar{..} = "IReadVar" ++ show iiVar
   show IPrint{..} = "IPrint"
+  show IPrintln{..} = "IPrintln"
   show ILabel{..} = "ILabel " ++ show iiIndex
+  show IExit{..} = "IExit"

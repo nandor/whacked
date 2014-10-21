@@ -25,7 +25,7 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-
+import Debug.Trace
 
 -- | Control flow graph structure.
 type FlowGraph
@@ -291,9 +291,19 @@ genExpr IBinOp{..} dest = do
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
+
+genExpr IConstBool{..} dest = do
+  emit $ SConstBool dest ieBoolVal
+  return (Bool, dest)
+genExpr IConstChar{..} dest = do
+  emit $ SConstChar dest ieCharVal
+  return (Char, dest)
 genExpr IConstInt{..} dest = do
   emit $ SConstInt dest ieIntVal
   return (Int, dest)
+genExpr IConstReal{..} dest = do
+  emit $ SConstReal dest ieRealVal
+  return (Real, dest)
 
 genExpr IUnOp{..} dest
   = undefined
@@ -302,12 +312,6 @@ genExpr ICall{..} dest = do
   dest <- genTemp
   emit $ SCall ieType dest ieName (map snd args)
   return (ieType, dest)
-genExpr IConstReal{..} dest
-  = undefined
-genExpr IConstChar{..} dest
-  = undefined
-genExpr IConstString{..} dest
-  = undefined
 
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
@@ -318,6 +322,10 @@ genInstr ILabel{..} = do
 genInstr IReturn{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SReturn t expr
+
+genInstr IExit{..} = do
+  (_, expr) <- genTemp >>= genExpr iiExpr
+  emit $ SExit expr
 
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
@@ -344,6 +352,12 @@ genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   case t of
     Int -> emit $ SCall Void SVoid "__print_int" [expr]
+
+genInstr IPrintln{..} = do
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  case t of
+    Int -> emit $ SCall Void SVoid "__println_int" [expr]
+    Bool -> emit $ SCall Void SVoid "__println_bool" [expr]
 
 
 -- | Generates code for a function.

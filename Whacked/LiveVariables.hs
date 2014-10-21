@@ -58,19 +58,5 @@ liveVariables func@SFunction{..}
     labels = map fst sfBody
     vars = Map.fromList . map findKillGen $ sfBody
 
-    findKillGen (idx, SBinOp{..})
-      = (idx, (Set.singleton siDest, Set.fromList [siLeft, siRight]))
-    findKillGen (idx, SCall{..})
-      = (idx, (Set.singleton siDest, Set.fromList siArgs))
-    findKillGen (idx, SConstInt{..})
-      = (idx, (Set.singleton siDest, Set.empty))
-    findKillGen (idx, SPhi{..})
-      = (idx, (Set.singleton siDest, Set.fromList siMerge))
-    findKillGen (idx, SReturn{..})
-      = (idx, (Set.empty, Set.singleton siVal))
-    findKillGen (idx, SBinJump{..})
-      = (idx, (Set.empty, Set.fromList [siLeft, siRight]))
-    findKillGen (idx, SUnJump{..})
-      = (idx, (Set.empty, Set.singleton siVal))
-    findKillGen (idx, SJump{..})
-      = (idx, (Set.empty, Set.empty))
+    findKillGen (idx, op)
+      = (idx, (Set.fromList (getKill op), Set.fromList (getGen op)))

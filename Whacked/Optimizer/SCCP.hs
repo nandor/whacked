@@ -20,6 +20,7 @@ data Value
   = Top
   | Bot
   | ConstInt Int
+  | ConstBool Bool
   deriving ( Eq, Ord, Show )
 
 
@@ -34,44 +35,6 @@ instance Monoid Value where
     = Top
 
 
-instance Num Value where
-  -- addition
-  ConstInt x + ConstInt y = ConstInt (x + y)
-  Bot + _ = Bot
-  _ + Bot = Bot
-
-  -- multiplication
-  ConstInt x * ConstInt y = ConstInt (x * y)
-  ConstInt 0 * _ = ConstInt 0
-  _ * ConstInt 0 = ConstInt 0
-  Bot * _ = Bot
-  _ * Bot = Bot
-
-  -- subtraction
-  ConstInt x - ConstInt y = ConstInt (x - y)
-  Bot - _ = Bot
-  _ - Bot = Bot
-
-  -- Signum
-  signum (ConstInt x) = ConstInt (signum x)
-  signum x = x
-
-  -- abs
-  abs (ConstInt x) = ConstInt (abs x)
-  abs x = x
-
-  -- creation from an integer
-  fromInteger = ConstInt . fromInteger
-
-
-instance Fractional Value where
-  ConstInt x / ConstInt y = ConstInt (x `div` y)
-  Bot / _ = Bot
-  _ / Bot = Bot
-
-  fromRational x = ConstInt undefined
-
-
 -- | Compares two values.
 compareValue :: CondOp -> Value -> Value -> Maybe Bool
 compareValue _ Bot _
@@ -81,15 +44,23 @@ compareValue _ _ Bot
 compareValue op (ConstInt x) (ConstInt y)
   = Just $ (getComparator op) x y
 
+
 -- | Evaluates an operation.
 evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
 evalBinOp _ Bot _
   = Nothing
 evalBinOp _ _ Bot
   = Nothing
+evalBinOp _ Top y
+  = Just y
+evalBinOp _ y Top
+  = Just y
 evalBinOp op (ConstInt x) (ConstInt y)
   = return $ case op of
     Add -> ConstInt $ x + y
+evalBinOp op (ConstBool x) (ConstBool y)
+  = return $ case op of
+    Or -> ConstBool (x || y)
 
 
 -- | Builds the SSA graph.
@@ -102,6 +73,8 @@ buildSSAGraph block
     findDefs mp (idx, SBinOp{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SConstInt{..})
+      = Map.insert siDest idx mp
+    findDefs mp (idx, SConstBool{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SPhi{..})
       = Map.insert siDest idx mp
@@ -222,6 +195,7 @@ optimise func@SFunction{..}
                     result <- evalBinOp siBinOp left right
                     case result of
                       ConstInt x -> return $ SConstInt siDest x
+                      ConstBool x -> return $ SConstBool siDest x
                       _ -> Nothing
           in ( (i, bin') : ns'
              , vars'
@@ -230,8 +204,11 @@ optimise func@SFunction{..}
         call@SCall{..} ->
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
         int@SConstInt{..} -> ((i, instr):ns', vars', alias')
+        bool@SConstBool{..} -> ((i, instr):ns', vars', alias')
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
+        exit@SExit{..} ->
+          ((i, exit{ siVal = findAlias siVal }) : ns', vars', alias')
       where
         findAlias var
           = fromMaybe var . Map.lookup var $ alias
@@ -302,9 +279,9 @@ optimise func@SFunction{..}
       node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        return $ case siBinOp of
-          Add -> (xs, ssaNext, Map.insert siDest (left + right) vars)
-          Div -> (xs, ssaNext, Map.insert siDest (left / right) vars)
+        return $ case evalBinOp siBinOp left right of
+          Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
+          Just x -> (xs, ssaNext, Map.insert siDest x vars)
 
       -- Results of function calls are always variable.
       node@SCall{..} ->
@@ -315,13 +292,24 @@ optimise func@SFunction{..}
 
       -- Returns do nothing.
       node@SReturn{..} ->
-        ( xs, [], vars)
+        ( xs, [], vars )
+
+      -- Does nothing.
+      node@SExit{..} ->
+        ( xs, [], vars )
 
       -- Constants are marked and propagated.
       node@SConstInt{..} ->
         ( xs
         , ssaNext
         , Map.insert siDest (ConstInt siIntVal) vars
+        )
+
+      -- Constants are marked and propagated.
+      node@SConstBool{..} ->
+        ( xs
+        , ssaNext
+        , Map.insert siDest (ConstBool siBoolVal) vars
         )
 
       -- | Evaluate conditionals.

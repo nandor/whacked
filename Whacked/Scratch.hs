@@ -49,9 +49,21 @@ data SInstr
     , siFunc :: String
     , siArgs :: [SVar]
     }
+  | SConstBool
+    { siDest    :: SVar
+    , siBoolVal :: Bool
+    }
+  | SConstChar
+    { siDest    :: SVar
+    , siCharVal :: Char
+    }
   | SConstInt
     { siDest   :: SVar
     , siIntVal :: Int
+    }
+  | SConstReal
+    { siDest    :: SVar
+    , siRealVal :: Float
     }
   | SPhi
     { siDest  :: SVar
@@ -61,6 +73,9 @@ data SInstr
   | SReturn
     { siType :: Type
     , siVal  :: SVar
+    }
+  | SExit
+    { siVal :: SVar
     }
   | SBinJump
     { siType  :: Type
@@ -106,6 +121,8 @@ getGen SCall{..}
 getGen SPhi{..}
   = siMerge
 getGen SReturn{..}
+  = [siVal]
+getGen SExit{..}
   = [siVal]
 getGen SBinJump{..}
   = [siLeft, siRight]
