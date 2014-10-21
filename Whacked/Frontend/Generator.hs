@@ -204,22 +204,16 @@ genStmt AVarDecl{..} = do
       Just (idx, _) ->
         when (idx == nextScope) $
           genError asTag $ "duplicate variable '" ++ name ++ "'"
-      Nothing -> do
-        if expr /= Nothing
-          then do
-            let Just expr' = expr
-            (t, expr'') <- genExpr expr'
-            when (t /= asType) $
-              genError asTag $ "type error"
-            tell [IWriteVar name nextScope expr'']
-          else
-            case asType of
-              Int -> tell [ IWriteVar name nextScope (IConstInt 0)]
-
-        put scope
-          { variables = (nextScope, Map.insert name asType x) : xs
-          , declarations = Set.insert (name, nextScope, asType) declarations
-          }
+      Nothing -> case expr of
+        ARExpr{..} -> do
+          (t, expr') <- genExpr arExpr
+          when (t /= asType) $
+            genError asTag $ "type error"
+          tell [IWriteVar name nextScope expr']
+          put scope
+            { variables = (nextScope, Map.insert name asType x) : xs
+            , declarations = Set.insert (name, nextScope, asType) declarations
+            }
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
   when (t /= Bool) $ do

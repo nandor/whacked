@@ -1,33 +1,4 @@
 begin
-  int test(int a, int b, int c) is
-    return a + 2 + b
-  end
+  int a[10];
 
-  int f = 0;
-  int a = 0;
-  int e = 0;
-  int b = 0;
-  f = 4;
-  f = 3;
-  f = 2;
-  while f < 10 do
-    if a < 10 then
-      read a;
-      if b < 10 then
-        if a + 5 > 4 then
-          f = 12345678;
-          e = 2
-        else
-          f = 3;
-          e = 5
-        fi
-      else
-        f = 20;
-        e = 123
-      fi
-    else
-      f = 7
-    fi
-  done;
-  print f / a
 end

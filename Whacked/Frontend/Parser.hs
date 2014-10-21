@@ -18,6 +18,9 @@ import           Whacked.Tree
 import           Whacked.Types
 
 
+import Debug.Trace
+
+
 -- |Definition of the language.
 whacked :: TokenParser st
 whacked
@@ -54,6 +57,16 @@ whacked
           , "done"
           , "void"
           , "read"
+          , "print"
+          , "println"
+          , "call"
+          , "exit"
+          , "fst"
+          , "snd"
+          , "toInt"
+          , "null"
+          , "free"
+          , "newpair"
           ]
       , Token.caseSensitive   = True
       }
@@ -97,45 +110,126 @@ aTag = do
   return $ ATag (sourceName pos) (sourceLine pos) (sourceColumn pos)
 
 
+aBaseType :: GenParser Char st Type
+aBaseType
+  = asum . map try $
+    [ reserved "int"    *> return Int
+    , reserved "bool"   *> return Bool
+    , reserved "string" *> return String
+    , reserved "char"   *> return Char
+    , reserved "real"   *> return Real
+    , reserved "void"   *> return Void
+    ]
+
+
+aPairElemType :: GenParser Char st (Maybe Type)
+aPairElemType
+  = asum . map try $
+    [ Just <$> aArrayType
+    , Just <$> aBaseType
+    , reserved "pair" *> return Nothing
+    ]
+
+
+aPairType :: GenParser Char st Type
+aPairType = do
+  (l, r) <- reserved "pair" *> parens (do
+    l <- aPairElemType
+    comma
+    r <- aPairElemType
+    return (l, r))
+  return $ Pair l r
+
+
+aArrayType :: GenParser Char st Type
+aArrayType = do
+  t <- aBaseType <|> aPairType
+  count <- length <$> (many1 (brackets whiteSpace))
+  return $ Array t count
+
+
 aType :: GenParser Char st Type
 aType
-  = asum
-    [ reserved "int" *> return Int
-    , reserved "bool" *> return Bool
-    , reserved "void" *> return Void
+  = asum . map try $
+    [ aArrayType
+    , aBaseType
+    , aPairType
     ]
 
 
 aLValue :: GenParser Char st ALValue
 aLValue
-  = asum $ map try
-    [ ALVar <$> aTag <*> identifier
+  = asum . map try $
+    [ ALArray <$> aTag <*> identifier <*> brackets aExpr
+    , ALVar <$> aTag <*> identifier
+    , ALFst <$> aTag <*> (reserved "fst" *> identifier)
+    , ALSnd <$> aTag <*> (reserved "snd" *> identifier)
     ]
 
 
-aRValue :: GenParser Char st AExpr
-aRValue = do
+aRValue :: GenParser Char st ARValue
+aRValue
+  = asum $ map try
+    [ ARExpr <$> aTag <*> aExpr
+    , ARArray <$> aTag <*> brackets (commaSep aExpr)
+    ]
+
+
+aExprAtom :: GenParser Char st AExpr
+aExprAtom = do
   tag <- aTag
-  asum $ map try
+  asum . map try $
     [ parens aExpr
-    , ACall tag <$> identifier <*> parens (commaSep aExpr)
+    , do
+        reserved "newpair"
+        (l, r) <- parens $ do
+          l <- aExpr
+          comma
+          r <- aExpr
+          return (l, r)
+        return $ ANewPair tag l r
+    , do
+        optional (reserved "call")
+        name <- identifier
+        args <- parens (commaSep aExpr)
+        return $ ACall tag name args
+    , AConstInt tag . fromIntegral <$> integer
+    , AConstString tag <$> stringLiteral
+    , AConstChar tag <$> charLiteral
+    , AConstBool tag <$> asum
+      [ reserved "true" *> return True
+      , reserved "false" *> return False
+      ]
     , AVar tag <$> identifier
-    , AConstInt tag . fromIntegral <$> natural
+    , reserved "null" *> return (ANull tag)
     ]
 
 
 aExprOp :: OperatorTable Char st AExpr
 aExprOp
-  = [ [ Infix (tagBin "*"  Mul) AssocLeft
-      , Infix (tagBin "/"  Div) AssocLeft
-      , Infix (tagBin "%"  Mod) AssocLeft
+  = [ [ Postfix  (chainl1 (try index) $ return (flip (.)))
       ]
-    , [ Infix (tagBin "+"  Add) AssocLeft
-      , Infix (tagBin "-"  Sub) AssocLeft
+    , [ Prefix (tagUn "!" Not)
+      , Prefix (tagUn "-" Neg)
+      , Prefix (tagUn "toInt" ToInt)
+      , Prefix (tagUn "ord" Ord)
+      , Prefix (tagUn "fst" Fst)
+      , Prefix (tagUn "snd" Snd)
+      , Prefix (tagUn "len" Len)
+      ]
+    , [ Infix (tagBin "*" Mul) AssocLeft
+      , Infix (tagBin "/" Div) AssocLeft
+      , Infix (tagBin "%" Mod) AssocLeft
+      ]
+    , [ Infix (tagBin "+" Add) AssocLeft
+      , Infix (tagBin "-" Sub) AssocLeft
       ]
     , [ Infix (tagBin "<" $ Cmp CLT) AssocNone
       , Infix (tagBin ">" $ Cmp CGT) AssocNone
       , Infix (tagBin "==" $ Cmp CEQ) AssocNone
+      , Infix (tagBin "!=" $ Cmp CNEQ) AssocNone
+      , Infix (tagBin "<=" $ Cmp CLTE) AssocNone
+      , Infix (tagBin ">=" $ Cmp CGTE) AssocNone
       ]
     , [ Infix (tagBin "&&" And) AssocRight
       ]
@@ -143,41 +237,70 @@ aExprOp
       ]
     ]
   where
+    index = do
+      tag <- aTag
+      expr <- brackets aExpr
+      return $ \t -> AIndex tag t expr
     tagBin op name = do
       tag <- aTag
       reservedOp op
       return $ \lhs rhs -> ABinOp tag name lhs rhs
+    tagUn op name = do
+      tag <- aTag
+      reservedOp op
+      return $ \arg -> AUnOp tag name arg
 
 
 aExpr :: GenParser Char u AExpr
 aExpr
-  = buildExpressionParser aExprOp aRValue
+  = buildExpressionParser aExprOp aExprAtom
 
 
 aStatement :: GenParser Char st AStatement
 aStatement
   = asum $ map try
-    [ aReturn
-    , aPrint
+    [ aVarDecl
     , aAssign
+    , aReturn
+    , aExit
+    , aPrint
+    , aPrintln
     , aRead
-    , aVarDecl
     , aWhile
     , aBlock
     , aIf
+    , aSkip
+    , AFree <$> aTag <*> (reserved "free" *> aExpr)
     ]
   where
+    aSkip = do
+      tag <- aTag
+      reserved "skip"
+      return $ ASkip tag
+
     aReturn = do
       tag <- aTag
       reserved "return"
       expr <- aExpr
       return $ AReturn tag expr
 
+    aExit = do
+      tag <- aTag
+      reserved "exit"
+      expr <- aExpr
+      return $ AExit tag expr
+
     aPrint = do
       tag <- aTag
       reserved "print"
       expr <- aExpr
       return $ APrint tag expr
+
+    aPrintln = do
+      tag <- aTag
+      reserved "println"
+      expr <- aExpr
+      return $ APrintln tag expr
 
     aAssign = do
       tag <- aTag
@@ -198,7 +321,7 @@ aStatement
       vars <- commaSep1 $ do
         tag <- aTag
         name <- identifier
-        val <- optionMaybe (reservedOp "=" *> aExpr)
+        val <- reservedOp "=" *> aRValue
         return (tag, name, val)
       return $ AVarDecl tag varType vars
 
@@ -226,15 +349,10 @@ aStatement
       true <- semiSep1 aStatement
       asum
         [ reserved "fi" *> return (AIf tag cond true [])
-        , reserved "else" *> asum
-          [ try $ do
-              false <- aIf
-              return $ AIf tag cond true [false]
-          , try $ do
-              false <- semiSep aStatement
-              reserved "fi"
-              return $ AIf tag cond true false
-          ]
+        , reserved "else" *> do
+            false <- semiSep aStatement
+            reserved "fi"
+            return $ AIf tag cond true false
         ]
 
 
@@ -256,12 +374,12 @@ aFunction = do
 
 aProgram :: GenParser Char st AProgram
 aProgram = do
+  tag <- aTag
   reserved "begin"
   functions <- many (try aFunction)
-  cons <- AFunction <$> aTag
   body <- semiSep aStatement
   reserved "end"
-  return $ AProgram (cons [] Int "main" body : functions)
+  return $ AProgram (AFunction tag [] Int "main" body : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram

@@ -18,7 +18,12 @@ data BinaryOp
 
 data UnaryOp
   = Neg
-  | Aot
+  | Not
+  | Ord
+  | ToInt
+  | Fst
+  | Snd
+  | Len
   deriving ( Eq, Ord, Show )
 
 
@@ -32,6 +37,18 @@ data CondOp
   deriving ( Eq, Ord, Show )
 
 
+data Type
+  = Void
+  | Int
+  | Bool
+  | String
+  | Char
+  | Real
+  | Array Type Int
+  | Pair (Maybe Type) (Maybe Type)
+  deriving ( Eq, Ord, Show )
+
+
 getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)
 getComparator op
   = \x y -> (x `compare` y) `elem` case op of
@@ -41,21 +58,3 @@ getComparator op
     CGTE -> [GT, EQ]
     CEQ  -> [EQ]
     CNEQ -> [LT, GT]
-
-
-data Type
-  = Void
-  | Int
-  | Bool
-  | String
-  | Char
-  | Real
-  | Tuple Type Type
-  | Array Type [Int]
-  deriving ( Eq, Ord, Show )
-
-
-data TupleField
-  = First
-  | Second
-  deriving (Eq, Ord, Show)

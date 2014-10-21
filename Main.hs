@@ -1,3 +1,4 @@
+#! /usr/bin/env runhaskell
 {-# LANGUAGE LambdaCase, RecordWildCards, NamedFieldPuns #-}
 module Main where
 
