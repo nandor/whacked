@@ -82,10 +82,12 @@ removePhi func@SFunction{..}
         (i, call{ siRet = map replace siRet, siArgs = map replace siArgs})
     removePhi' (i, int@SConstInt{..})
       = Just (i, int{ siDest = replace siDest })
+    removePhi' (i, chr@SConstChar{..})
+      = Just (i, chr{ siDest = replace siDest })
     removePhi' (i, bool@SConstBool{..})
       = Just (i, bool{ siDest = replace siDest })
-    removePhi' (i, bool@SConstString{..})
-      = Just (i, bool{ siDest = replace siDest })
+    removePhi' (i, string@SConstString{..})
+      = Just (i, string{ siDest = replace siDest })
     removePhi' (i, jmp@SBinJump{..})
       = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
     removePhi' (i, jmp@SUnJump{..})
@@ -97,6 +99,11 @@ removePhi func@SFunction{..}
           { siDest = replace siDest
           , siLeft = replace siLeft
           , siRight = replace siRight
+          })
+    removePhi' (i, un@SUnOp{..})
+      = Just (i, un
+          { siDest = replace siDest
+          , siArg = replace siArg
           })
     removePhi' (i, ret@SReturn{..})
       = Just (i, ret{ siVal = replace siVal })

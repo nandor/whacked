@@ -8,6 +8,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Writer
+import           Data.Char
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as Map
@@ -64,6 +65,10 @@ compileInstr (_, SBinOp{..}) = do
           (fromJust $ Map.lookup siLeft regs)
           (fromJust $ Map.lookup siRight regs)
       ]
+compileInstr (_, SUnOp{..}) = do
+  scope@Scope{ regs } <- get
+  case siUnOp of
+    Ord -> return ()
 compileInstr (_, SCall{..}) = do
   scope@Scope{ regs } <- get
 
@@ -82,11 +87,18 @@ compileInstr (_, SConstInt{..}) = do
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) siIntVal]
 compileInstr (_, SConstString{..}) = do
   scope@Scope { regs, strings } <- get
-  tell [ARMADR (fromJust $ Map.lookup siDest regs) ("__msg" ++ (show $ length strings))]
+  tell [
+    ARMADR
+      (fromJust $ Map.lookup siDest regs)
+      ("__msg" ++ (show $ length strings))]
   put scope{ strings = siStringVal : strings }
 compileInstr (_, SConstBool{..}) = do
   scope@Scope{ regs } <- get
-  tell [ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBoolVal then 1 else 0 ]
+  tell [
+    ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBoolVal then 1 else 0 ]
+compileInstr (_, SConstChar{..}) = do
+  scope@Scope{ regs } <- get
+  tell [ARMLDR (fromJust $ Map.lookup siDest regs) (ord siCharVal)]
 compileInstr (_, SReturn{..}) = do
   scope@Scope{ regs, toSave } <- get
   move R0 (fromJust $ Map.lookup siVal regs)

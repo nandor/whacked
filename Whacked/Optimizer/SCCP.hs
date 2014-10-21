@@ -3,6 +3,7 @@ module Whacked.Optimizer.SCCP where
 
 import           Control.Applicative
 import           Control.Monad
+import           Data.Char
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.List (nub)
@@ -14,7 +15,7 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.FlowGraph
 
-import Debug.Trace
+
 
 data Value
   = Top
@@ -83,7 +84,10 @@ evalUnOp _ Top
 evalUnOp op (ConstInt x)
   = case op of
     Neg -> Just $ ConstInt (-x)
-
+    Ord -> Just $ ConstChar (chr x)
+evalUnOp op (ConstChar x)
+  = case op of
+    ToInt -> Just $ ConstInt (ord x)
 
 -- | Builds the SSA graph.
 buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])

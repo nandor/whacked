@@ -87,8 +87,8 @@ unOpType unOp t
   = Map.lookup (unOp, t) . Map.fromList $
     [ ((Neg,   Int   ), Int )
     , ((Not,   Bool  ), Bool)
-    , ((Ord,   Char  ), Int )
-    , ((ToInt, String), Int )
+    , ((Ord,   Int   ), Char)
+    , ((ToInt, Char  ), Int )
     , ((Len,   String), Int )
     ]
 
