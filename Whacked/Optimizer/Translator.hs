@@ -309,6 +309,9 @@ genExpr IConstChar{..} dest = do
 genExpr IConstInt{..} dest = do
   emit $ SConstInt dest ieIntVal
   return (Int, dest)
+genExpr IConstString{..} dest = do
+  emit $ SConstString dest ieStringVal
+  return (String, dest)
 
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
@@ -355,12 +358,15 @@ genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   case t of
     Int -> emit $ SCall [] "__print_int" [expr]
+    Bool -> emit $ SCall [] "__print_bool" [expr]
+    String -> emit $ SCall [] "__print_string" [expr]
 
 genInstr IPrintln{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   case t of
     Int -> emit $ SCall [] "__println_int" [expr]
     Bool -> emit $ SCall [] "__println_bool" [expr]
+    String -> emit $ SCall [] "__println_string" [expr]
 
 
 -- | Generates code for a function.

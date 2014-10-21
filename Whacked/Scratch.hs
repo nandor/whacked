@@ -67,6 +67,10 @@ data SInstr
     { siDest   :: SVar
     , siIntVal :: Int
     }
+  | SConstString
+    { siDest      :: SVar
+    , siStringVal :: String
+    }
   | SPhi
     { siDest  :: SVar
     , siType  :: Type
@@ -110,6 +114,12 @@ getKill SCall{..}
 getKill SBinOp{..}
   = [siDest]
 getKill SConstInt{..}
+  = [siDest]
+getKill SConstString{..}
+  = [siDest]
+getKill SConstBool{..}
+  = [siDest]
+getKill SConstChar{..}
   = [siDest]
 getKill SPhi{..}
   = [siDest]

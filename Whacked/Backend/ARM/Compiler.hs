@@ -21,14 +21,14 @@ import           Whacked.Types
 import           Whacked.LiveVariables
 
 
+
 import Debug.Trace
-
-
 data Scope
   = Scope
     { regs :: Map SVar ARMReg
     , live :: Map Int (Set SVar)
     , toSave :: [ARMReg]
+    , strings :: [String]
     }
   deriving (Eq, Ord, Show)
 
@@ -38,6 +38,14 @@ newtype Compiler a
     { run :: StateT Scope (Writer [ASM]) a
     }
   deriving (Applicative, Functor, Monad, MonadState Scope, MonadWriter [ASM])
+
+
+isolate :: Compiler a -> Compiler (a, [ASM])
+isolate gen = do
+  scope <- get
+  let ((a, scope'), instrs) = runWriter . runStateT (run gen) $ scope
+  put scope'
+  return (a, instrs)
 
 
 move :: ARMReg -> ARMReg -> Compiler ()
@@ -72,6 +80,10 @@ compileInstr (_, SCall{..}) = do
 compileInstr (_, SConstInt{..}) = do
   scope@Scope{ regs } <- get
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) siIntVal]
+compileInstr (_, SConstString{..}) = do
+  scope@Scope { regs, strings } <- get
+  tell [ARMADR (fromJust $ Map.lookup siDest regs) ("__msg" ++ (show $ length strings))]
+  put scope{ strings = siStringVal : strings }
 compileInstr (_, SConstBool{..}) = do
   scope@Scope{ regs } <- get
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBoolVal then 1 else 0 ]
@@ -106,30 +118,38 @@ compileFunc func@SFunction{..} = do
         . filter isJust
         . map (getTarget . snd)
         $ sfBody
-  put Scope{ regs = regs, live = live', toSave }
+  put Scope{ regs = regs, live = live', toSave, strings = [] }
 
+  (_, code) <- isolate $ do
+    forM_ (zip sfArgs (enumFrom R0)) $ \(arg, reg) -> do
+      case Map.lookup arg regs of
+        Nothing -> return ()
+        Just arg' -> move arg' reg
+    forM_ sfBody $ \(i, instr) -> do
+
+      -- Place a label if anything jumps here.
+      when (i `Set.member` target) $ do
+        tell [ARMLabel $ "L" ++ show i]
+
+      case getKill instr of
+        [x] | not $ isCall instr -> do
+          when (Set.member x (fromJust $ Map.lookup i live')) $ do
+            compileInstr (i, instr)
+        _ ->
+          compileInstr (i, instr)
+
+  Scope{ strings } <- get
+  tell [ARMSection ".data"]
+  forM_ (zip (reverse [0..length strings - 1]) strings) $ \(idx, string) -> do
+    tell [ARMLabel $ "__msg" ++ show idx]
+    tell [ARMWord $ length string]
+    tell [ARMAscii string]
+
+  tell [ARMSection ".text"]
+  tell [ARMGlobal sfName]
   tell [ARMLabel sfName]
   tell [ARMPush $ toSave ++ [LR]]
-  forM_ (zip sfArgs (enumFrom R0)) $ \(arg, reg) -> do
-    case Map.lookup arg regs of
-      Nothing -> return ()
-      Just arg' -> move arg' reg
-  forM_ sfBody $ \(i, instr) -> do
-
-    -- Place a label if anything jumps here.
-    when (i `Set.member` target) $ do
-      tell [ARMLabel $ "L" ++ show i]
-
-    case getKill instr of
-      [x] | not $ isCall instr -> do
-        when (Set.member x (fromJust $ Map.lookup i live')) $ do
-          compileInstr (i, instr)
-      _ ->
-        compileInstr (i, instr)
-
-  scope@Scope{ regs, toSave } <- get
-  tell [ARMPop $ toSave ++ [PC]]
-
+  tell code
 
 
 compileProg :: SProgram -> Compiler ()
@@ -147,4 +167,5 @@ compile program
         { regs = Map.empty
         , live = Map.empty
         , toSave = []
+        , strings = []
         }

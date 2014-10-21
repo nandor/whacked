@@ -21,6 +21,7 @@ data Value
   | Bot
   | ConstInt Int
   | ConstBool Bool
+  | ConstString String
   deriving ( Eq, Ord, Show )
 
 
@@ -57,7 +58,8 @@ evalBinOp _ y Top
   = Just y
 evalBinOp op (ConstInt x) (ConstInt y)
   = return $ case op of
-    Add -> ConstInt $ x + y
+    Add -> ConstInt (x + y)
+    Mul -> ConstInt (x * y)
 evalBinOp op (ConstBool x) (ConstBool y)
   = return $ case op of
     Or -> ConstBool (x || y)
@@ -229,6 +231,7 @@ optimise func@SFunction{..}
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
         int@SConstInt{..} -> ((i, instr):ns', vars', alias')
         bool@SConstBool{..} -> ((i, instr):ns', vars', alias')
+        bool@SConstString{..} -> ((i, instr):ns', vars', alias')
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
       where
@@ -325,17 +328,11 @@ optimise func@SFunction{..}
 
       -- Constants are marked and propagated.
       node@SConstInt{..} ->
-        ( xs
-        , ssaNext
-        , Map.insert siDest (ConstInt siIntVal) vars
-        )
-
-      -- Constants are marked and propagated.
+        (xs, ssaNext, Map.insert siDest (ConstInt siIntVal) vars)
       node@SConstBool{..} ->
-        ( xs
-        , ssaNext
-        , Map.insert siDest (ConstBool siBoolVal) vars
-        )
+        (xs, ssaNext, Map.insert siDest (ConstBool siBoolVal) vars)
+      node@SConstString{..} ->
+        (xs, ssaNext, Map.insert siDest (ConstString siStringVal) vars)
 
       -- | Evaluate conditionals.
       node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do

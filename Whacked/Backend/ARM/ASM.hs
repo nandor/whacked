@@ -40,6 +40,11 @@ instance Show ARMCond where
 
 data ASM
   = ARMLabel String
+  | ARMGlobal String
+  | ARMSection String
+  | ARMWord Int
+  | ARMAscii String
+  | ARMADR ARMReg String
   | ARMAdd ARMReg ARMReg ARMReg
   | ARMPush [ARMReg]
   | ARMPop [ARMReg]
@@ -52,8 +57,18 @@ data ASM
 
 
 instance Show ASM where
+  show (ARMSection section)
+    = ".section " ++ section
+  show (ARMGlobal label)
+    = ".global " ++ label
   show (ARMLabel label)
     = "" ++ label ++ ":"
+  show (ARMWord x)
+    = "\t.word " ++ show x
+  show (ARMAscii x)
+    = "\t.ascii " ++ show x
+  show (ARMADR d label)
+    = "\tLDR " ++ show d ++ ", =" ++ label
   show (ARMAdd d n m)
     = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMPush rs)

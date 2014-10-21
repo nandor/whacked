@@ -1,10 +1,12 @@
+.section .data
+__msg0:
+	.word 7
+	.ascii "Correct"
+.section .text
+.global main
 main:
-	PUSH {R4, LR}
-	LDR R4, =-5
-	LDR R1, =-3
-	MOV R0, R4
-	BL __aeabi_idivmod
-	MOV R4, R1
-	MOV R0, R4
-	BL __println_int
-	POP {R4, PC}
+	PUSH {LR}
+	LDR R0, =__msg0
+	BL __println_string
+	LDR R0, =0
+	POP {PC}

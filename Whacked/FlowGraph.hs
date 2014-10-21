@@ -84,6 +84,8 @@ removePhi func@SFunction{..}
       = Just (i, int{ siDest = replace siDest })
     removePhi' (i, bool@SConstBool{..})
       = Just (i, bool{ siDest = replace siDest })
+    removePhi' (i, bool@SConstString{..})
+      = Just (i, bool{ siDest = replace siDest })
     removePhi' (i, jmp@SBinJump{..})
       = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
     removePhi' (i, jmp@SUnJump{..})
