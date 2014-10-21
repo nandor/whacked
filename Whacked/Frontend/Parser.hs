@@ -120,12 +120,12 @@ aBaseType
     ]
 
 
-aPairElemType :: GenParser Char st (Maybe Type)
+aPairElemType :: GenParser Char st Type
 aPairElemType
   = asum . map try $
-    [ Just <$> aArrayType
-    , Just <$> aBaseType
-    , reserved "pair" *> return Nothing
+    [ aArrayType
+    , aBaseType
+    , reserved "pair" *> return Poly
     ]
 
 
@@ -187,7 +187,7 @@ aExprAtom = do
           return (l, r)
         return $ ANewPair tag l r
     , do
-        optional (reserved "call")
+        reserved "call"
         name <- identifier
         args <- parens (commaSep aExpr)
         return $ ACall tag name args
@@ -259,59 +259,24 @@ aStatement
   = asum $ map try
     [ aVarDecl
     , aAssign
-    , aReturn
-    , aExit
-    , aPrint
-    , aPrintln
-    , aRead
     , aWhile
     , aBlock
     , aIf
-    , aSkip
-    , AFree <$> aTag <*> (reserved "free" *> aExpr)
+    , ASkip    <$> (aTag <* reserved "skip")
+    , ARead    <$> aTag <*> (reserved "read" *> aLValue)
+    , AExit    <$> aTag <*> (reserved "exit" *> aExpr)
+    , APrint   <$> aTag <*> (reserved "print" *> aExpr)
+    , APrintln <$> aTag <*> (reserved "println" *> aExpr)
+    , AReturn  <$> aTag <*> (reserved "return" *> aExpr)
+    , AFree    <$> aTag <*> (reserved "free" *> aExpr)
     ]
   where
-    aSkip = do
-      tag <- aTag
-      reserved "skip"
-      return $ ASkip tag
-
-    aReturn = do
-      tag <- aTag
-      reserved "return"
-      expr <- aExpr
-      return $ AReturn tag expr
-
-    aExit = do
-      tag <- aTag
-      reserved "exit"
-      expr <- aExpr
-      return $ AExit tag expr
-
-    aPrint = do
-      tag <- aTag
-      reserved "print"
-      expr <- aExpr
-      return $ APrint tag expr
-
-    aPrintln = do
-      tag <- aTag
-      reserved "println"
-      expr <- aExpr
-      return $ APrintln tag expr
-
     aAssign = do
       tag <- aTag
       lval <- aLValue
       reservedOp "="
       expr <- aExpr
       return $ AAssign tag lval expr
-
-    aRead = do
-      tag <- aTag
-      reserved "read"
-      lval <- aLValue
-      return $ ARead tag lval
 
     aVarDecl = do
       tag <- aTag
@@ -344,14 +309,11 @@ aStatement
       reserved "if"
       cond <- aExpr
       reserved "then"
-      true <- semiSep1 aStatement
-      asum
-        [ reserved "fi" *> return (AIf tag cond true [])
-        , reserved "else" *> do
-            false <- semiSep aStatement
-            reserved "fi"
-            return $ AIf tag cond true false
-        ]
+      true <- semiSep aStatement
+      reserved "else"
+      false <- semiSep aStatement
+      reserved "fi"
+      return $ AIf tag cond true false
 
 
 aFunction :: GenParser Char st AFunction
@@ -375,9 +337,9 @@ aProgram = do
   tag <- aTag
   reserved "begin"
   functions <- many (try aFunction)
-  body <- semiSep aStatement
+  body <- semiSep1 aStatement
   reserved "end"
-  return $ AProgram (AFunction tag [] Int "main" body : functions)
+  return $ AProgram (AFunction tag [] Void "main" body : functions)
 
 
 parse :: String -> String -> Either ParseError AProgram

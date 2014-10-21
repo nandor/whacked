@@ -13,11 +13,14 @@ import           Control.Monad.State
 import           Control.Monad.Writer
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Whacked.Itch
 import           Whacked.Tree
 import           Whacked.Types
+
+import Debug.Trace
 
 
 
@@ -120,7 +123,7 @@ genExpr :: AExpr -> Generator (Type, IExpr)
 genExpr ABinOp{..}  = do
   (lt, le) <- genExpr aeLeft
   (rt, re) <- genExpr aeRight
-  when (lt /= rt) $ do
+  when (not $ (lt, rt) `elem` fromJust (Map.lookup aeBinOp binOpType)) $ do
     genError aeTag "type error"
   case aeBinOp of
     Cmp _ -> return ( Bool, IBinOp lt aeBinOp le re )
@@ -131,16 +134,29 @@ genExpr AVar{..} = do
     Just (idx, t) -> return (t, IVar t aeName idx)
 genExpr AConstInt{..} = do
   return (Int, IConstInt aeIntVal)
+genExpr AConstBool{..} = do
+  return (Bool, IConstBool aeBoolVal)
+genExpr AConstChar{..} = do
+  return (Char, IConstChar aeCharVal)
+genExpr AConstString{..} = do
+  return (String, IConstString aeStringVal)
 genExpr ACall{..} = do
   get >>= \Scope{ functions } -> case Map.lookup aeName functions of
     Nothing -> genError aeTag $ "undefined function '" ++ aeName ++ "'"
     Just AFunction{ afType, afArgs } -> do
+      when (length afArgs /= length aeArgs) $
+        genError aeTag $ "invalid number of arguments"
       args <- forM (zip afArgs aeArgs) $ \(AArg{ aaType }, arg) -> do
         (t, expr) <- genExpr arg
-        when (t /= aaType) $
+        when (not (t `match` aaType)) $
           genError aeTag $ "type error"
         return expr
       return (afType, ICall afType aeName args)
+genExpr ANewPair{..} = do
+  (lt, le) <- genExpr aeFst
+  (rt, re) <- genExpr aeSnd
+  return (Pair lt rt, INewPair (Pair lt rt) le re)
+
 
 -- |Generates a jump statement.
 genJump :: Int -> Bool -> IExpr -> Generator ()
@@ -167,6 +183,34 @@ genJump target branch expr@IBinOp{..}
       op -> tell [ IUnJump target branch expr ]
 
 
+-- |Generates code for an assignment statement.
+genAssignment :: Type -> ATag -> String -> ARValue -> Generator ()
+genAssignment declType tag name ARExpr{..} = do
+  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
+  (t, expr') <- genExpr arExpr
+  when (not (t `match` declType)) $
+    genError tag $ "type error"
+  tell [IWriteVar name nextScope expr']
+  put scope
+    { variables = (nextScope, Map.insert name declType x) : xs
+    , declarations = Set.insert (name, nextScope, declType) declarations
+    }
+genAssignment declType tag name ARArray{..} = do
+  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
+  case declType of
+    Array t n | n > 0 -> do
+      vals <- mapM genExpr arElems
+      forM_ vals $ \(t', _) ->
+        when (not (t' `match` (elemType (Array t n)))) $
+          genError tag $ "type error"
+      tell [INewArray name nextScope (map snd vals)]
+      put scope
+        { variables = (nextScope, Map.insert name declType x) : xs
+        , declarations = Set.insert (name, nextScope, declType) declarations
+        }
+    _ -> genError tag $ "type error"
+
+
 -- |Generates code for a statement.
 genStmt :: AStatement -> Generator ()
 genStmt AReturn{..} = do
@@ -175,19 +219,22 @@ genStmt AReturn{..} = do
     Nothing -> genError asTag "function not found"
     Just AFunction{ afType } -> do
       (t, expr) <- genExpr asExpr
-      when (t /= afType) $ do
+      when (not (t `match` afType)) $ do
         genError asTag "invalid return type"
       tell [IReturn expr]
 genStmt APrint{..} = do
   (t, expr) <- genExpr asExpr
   tell [IPrint expr]
+genStmt APrintln{..} = do
+  (t, expr) <- genExpr asExpr
+  tell [IPrintln expr]
 genStmt AAssign{..}
   = case asTo of
       ALVar{..} -> findVar alName >>= \case
         Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
         Just (idx, t) -> do
           (t', expr) <- genExpr asExpr
-          when (t /= t') $
+          when (not (t `match` t')) $
             genError alTag $ "type error"
           tell [IWriteVar alName idx expr]
 genStmt ARead{..}
@@ -195,28 +242,23 @@ genStmt ARead{..}
       ALVar{..} -> findVar alName >>= \case
         Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
         Just (idx, t) ->
-          tell [IReadVar alName idx t]
+          if not (isReadable t)
+            then genError asTag "type cannot be read"
+            else tell [IReadVar alName idx t]
 
 genStmt AVarDecl{..} = do
   forM_ asVars $ \(tag, name, expr) -> do
     scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
-    findVar name >>= \case
-      Just (idx, _) ->
-        when (idx == nextScope) $
-          genError asTag $ "duplicate variable '" ++ name ++ "'"
-      Nothing -> case expr of
-        ARExpr{..} -> do
-          (t, expr') <- genExpr arExpr
-          when (t /= asType) $
-            genError asTag $ "type error"
-          tell [IWriteVar name nextScope expr']
-          put scope
-            { variables = (nextScope, Map.insert name asType x) : xs
-            , declarations = Set.insert (name, nextScope, asType) declarations
-            }
+    var <- findVar name
+    when (isJust var) $ do
+      let Just (idx, t) = var
+      when (idx == nextScope) $
+        genError asTag $ "duplicate variable '" ++ name ++ "'"
+    genAssignment asType tag name expr
+
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
-  when (t /= Bool) $ do
+  when (not (t `match` Bool)) $ do
     genError asTag $ "boolean expected"
 
   start <- getLabel
@@ -230,7 +272,7 @@ genStmt AWhile{..} = do
   tell [ILabel end]
 genStmt AIf{..} = do
   (t, expr) <- genExpr asExpr
-  when (t /= Bool) $ do
+  when (not (t `match` Bool)) $ do
     genError asTag $ "boolean expected"
 
   if asFalse == []
@@ -250,14 +292,26 @@ genStmt AIf{..} = do
       tell [ILabel false]
       tell false'
       tell [ILabel end]
-
+genStmt AFree{..} = do
+  (t, expr) <- genExpr asExpr
+  case t of
+    Pair _ _ -> tell [IFree expr]
+    _ -> genError asTag $ "free can only be used on pairs"
+genStmt ABlock{..} = do
+  (_, instrs) <- scope $ mapM_ genStmt asBody
+  tell instrs
+genStmt AExit{..} = do
+  (t, expr) <- genExpr asExpr
+  when (not (t `match` Int)) $ do
+    genError asTag $ "integer expected"
+  tell [IExit expr]
 
 
 -- |Generates code for a function body.
 genFunc :: AFunction -> Generator ()
 genFunc AFunction{..} = do
   -- |Put all arguments into the scope.
-  scope@Scope{ nextScope, variables } <- get
+  scope@Scope{ nextScope, variables, functions } <- get
   (args, decls) <- foldM (\(args, decls) AArg{..} ->
     case Map.lookup aaName args of
       Nothing -> return
@@ -279,9 +333,15 @@ genFunc AFunction{..} = do
 -- an error message is returned.
 generateI :: AProgram -> Either String IProgram
 generateI (AProgram functions)
-  = IProgram <$> mapM generate' functions
+  = IProgram <$> mapM generate' (Map.toList functions')
   where
-    generate' func = do
+    -- |All functions, used to check types.
+    functions'
+      = Map.fromListWith (++)
+      . map (\func -> (afName func, [func]) )
+      $ functions
+
+    generate' (_, [func]) = do
       (_, Scope{ declarations }, body) <- runGenerator (genFunc func) scope
       return $ IFunction
           { ifName = afName func
@@ -291,10 +351,6 @@ generateI (AProgram functions)
           , ifVars = declarations
           }
       where
-        -- |All functions, used to check types.
-        functions'
-          = Map.fromList . map (\func -> (afName func, func) ) $ functions
-
         -- |All arguments, returned in the structure.
         args
           = map (\(AArg _ t name) -> (t, name)) (afArgs func)
@@ -302,10 +358,15 @@ generateI (AProgram functions)
         -- |Initial scope.
         scope
           = Scope
-            { function     = afName func
-            , functions    = functions'
-            , nextScope    = 0
-            , nextLabel    = 0
-            , variables    = []
+            { function = afName func
+            , functions
+              = Map.map (\[x] -> x)
+              . Map.filter (\x -> length x == 1)
+              $ functions'
+            , nextScope = 0
+            , nextLabel = 0
+            , variables = []
             , declarations = Set.empty
             }
+    generate' (name, _) = do
+      Left $ "redefinition of '" ++ name ++ "'"

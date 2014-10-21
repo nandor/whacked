@@ -48,6 +48,9 @@ data IExpr
     , ieName  :: String
     , ieScope :: Int
     }
+  | IConstBool
+    { ieBoolVal :: Bool
+    }
   | IConstInt
     { ieIntVal :: Int
     }
@@ -64,6 +67,11 @@ data IExpr
     { ieType :: Type
     , ieName :: String
     , ieArgs :: [IExpr]
+    }
+  | INewPair
+    { ieType :: Type
+    , ieFst :: IExpr
+    , ieSnd :: IExpr
     }
   deriving (Eq, Ord, Show)
 
@@ -92,6 +100,11 @@ data IInstr
     , iiScope :: Int
     , iiExpr  :: IExpr
     }
+  | INewArray
+    { iiVar   :: String
+    , iiScope :: Int
+    , iiExprs :: [IExpr]
+    }
   | IReadVar
     { iiVar   :: String
     , iiScope :: Int
@@ -100,8 +113,17 @@ data IInstr
   | IPrint
     { iiExpr :: IExpr
     }
+  | IPrintln
+    { iiExpr :: IExpr
+    }
   | ILabel
     { iiIndex :: Int
+    }
+  | IFree
+    { iiExpr :: IExpr
+    }
+  | IExit
+    { iiExpr :: IExpr
     }
   deriving ( Eq, Ord )
 
