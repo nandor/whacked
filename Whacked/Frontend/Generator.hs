@@ -120,14 +120,17 @@ genError ATag{..} msg
 -- |Transforms the AST expression to IMF expressions, checking types and
 -- removing tags.
 genExpr :: AExpr -> Generator (Type, IExpr)
-genExpr ABinOp{..}  = do
+genExpr ABinOp{..} = do
   (lt, le) <- genExpr aeLeft
   (rt, re) <- genExpr aeRight
-  when (not $ (lt, rt) `elem` fromJust (Map.lookup aeBinOp binOpType)) $ do
-    genError aeTag "type error"
-  case aeBinOp of
-    Cmp _ -> return ( Bool, IBinOp lt aeBinOp le re )
-    _ -> return ( lt, IBinOp lt aeBinOp le re )
+  case binOpType aeBinOp lt rt of
+    Nothing -> genError aeTag "type error"
+    Just t -> return (t, IBinOp t aeBinOp le re)
+genExpr AUnOp{..} = do
+  (t, expr) <- genExpr aeArg
+  case unOpType aeUnOp t of
+    Nothing -> genError aeTag "type error"
+    Just t -> return (t, IUnOp t aeUnOp expr)
 genExpr AVar{..} = do
   findVar aeName >>= \case
     Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"

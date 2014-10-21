@@ -43,6 +43,12 @@ data SInstr
     , siLeft  :: SVar
     , siRight :: SVar
     }
+  | SUnOp
+    { siType :: Type
+    , siDest :: SVar
+    , siUnOp :: UnaryOp
+    , siArg  :: SVar
+    }
   | SCall
     { siType :: Type
     , siDest :: SVar
@@ -103,13 +109,19 @@ isAssignment _ = False
 
 
 getKill :: SInstr -> [SVar]
-getKill SBinOp{..} = [siDest]
 getKill SCall{..}
   | siDest == SVoid = []
   | otherwise = [siDest]
-getKill SConstInt{..} = [siDest]
-getKill SPhi{..} = [siDest]
-getKill _ = []
+getKill SBinOp{..}
+  = [siDest]
+getKill SConstInt{..}
+  = [siDest]
+getKill SPhi{..}
+  = [siDest]
+getKill SUnOp{..}
+  = [siDest]
+getKill _
+  = []
 
 
 getGen :: SInstr -> [SVar]
@@ -125,6 +137,8 @@ getGen SBinJump{..}
   = [siLeft, siRight]
 getGen SUnJump{..}
   = [siVal]
+getGen SUnOp{..}
+  = [siArg]
 getGen _
   = []
 

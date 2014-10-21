@@ -288,6 +288,10 @@ genExpr IBinOp{..} dest = do
     then SCall lt dest "__aeabi_idiv" [le, re]
     else SBinOp lt dest ieBinOp le re
   return (lt, dest)
+genExpr IUnOp{..} dest = do
+  (t, expr) <- genTemp >>= genExpr ieArg
+  emit $ SUnOp t dest ieUnOp expr
+  return (t, dest)
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
@@ -305,8 +309,6 @@ genExpr IConstReal{..} dest = do
   emit $ SConstReal dest ieRealVal
   return (Real, dest)
 
-genExpr IUnOp{..} dest
-  = undefined
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
   dest <- genTemp

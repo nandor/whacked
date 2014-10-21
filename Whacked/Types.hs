@@ -50,23 +50,49 @@ data Type
   deriving ( Eq, Ord, Show )
 
 
-binOpType :: Map BinaryOp [(Type, Type)]
-binOpType
-  = Map.fromList
-    [ (Add,      [(Int, Int)])
-    , (Sub,      [(Int, Int)])
-    , (Mul,      [(Int, Int)])
-    , (Div,      [(Int, Int)])
-    , (Mod,      [(Int, Int)])
-    , (And,      [(Bool, Bool)])
-    , (Or,       [(Bool, Bool)])
-    , (Cmp CLT,  [(Int, Int), (Char, Char), (String, String)])
-    , (Cmp CLTE, [(Int, Int), (Char, Char), (String, String)])
-    , (Cmp CGT,  [(Int, Int), (Char, Char), (String, String)])
-    , (Cmp CGTE, [(Int, Int), (Char, Char), (String, String)])
-    , (Cmp CEQ,  [(Int, Int), (Char, Char), (String, String)])
-    , (Cmp CNEQ, [(Int, Int), (Char, Char), (String, String)])
+binOpType :: BinaryOp -> Type -> Type -> Maybe Type
+binOpType binOp lt rt
+  = Map.lookup (binOp, lt, rt) . Map.fromList $
+    [ ((Add,      Int,    Int),    Int )
+    , ((Sub,      Int,    Int),    Int )
+    , ((Div,      Int,    Int),    Int )
+    , ((Mul,      Int,    Int),    Int )
+    , ((Div,      Int,    Int),    Int )
+    , ((Mod,      Int,    Int),    Int )
+    , ((And,      Int,    Int),    Int )
+    , ((And,      Bool,   Bool),   Bool)
+    , ((Or,       Bool,   Bool),   Bool)
+    , ((Cmp CLT,  Int,    Int),    Bool)
+    , ((Cmp CLT,  Char,   Char),   Bool)
+    , ((Cmp CLT,  String, String), Bool)
+    , ((Cmp CLTE, Int,    Int),    Bool)
+    , ((Cmp CLTE, Char,   Char),   Bool)
+    , ((Cmp CLTE, String, String), Bool)
+    , ((Cmp CGT,  Int,    Int),    Bool)
+    , ((Cmp CGT,  Char,   Char),   Bool)
+    , ((Cmp CGT,  String, String), Bool)
+    , ((Cmp CGTE, Int,    Int),    Bool)
+    , ((Cmp CGTE, Char,   Char),   Bool)
+    , ((Cmp CGTE, String, String), Bool)
+    , ((Cmp CEQ,  Int,    Int),    Bool)
+    , ((Cmp CEQ,  Char,   Char),   Bool)
+    , ((Cmp CEQ,  String, String), Bool)
+    , ((Cmp CNEQ, Int,    Int),    Bool)
+    , ((Cmp CNEQ, Char,   Char),   Bool)
+    , ((Cmp CNEQ, String, String), Bool)
     ]
+
+
+unOpType :: UnaryOp -> Type -> Maybe Type
+unOpType unOp t
+  = Map.lookup (unOp, t) . Map.fromList $
+    [ ((Neg,   Int   ), Int )
+    , ((Not,   Bool  ), Bool)
+    , ((Ord,   Char  ), Int )
+    , ((ToInt, String), Int )
+    , ((Len,   String), Int )
+    ]
+
 
 
 getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)

@@ -63,6 +63,17 @@ evalBinOp op (ConstBool x) (ConstBool y)
     Or -> ConstBool (x || y)
 
 
+-- | Evaluates an unary operation.
+evalUnOp :: UnaryOp -> Value -> Maybe Value
+evalUnOp _ Bot
+  = Nothing
+evalUnOp _ Top
+  = Just Top
+evalUnOp op (ConstInt x)
+  = case op of
+    Neg -> Just $ ConstInt (-x)
+
+
 -- | Builds the SSA graph.
 buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
 buildSSAGraph block
@@ -199,8 +210,21 @@ optimise func@SFunction{..}
                       _ -> Nothing
           in ( (i, bin') : ns'
              , vars'
-              , alias'
+             , alias'
              )
+        un@SUnOp{..} ->
+          let un' = fromMaybe un $ do
+                   arg <- evalValue (findAlias siArg)
+                   result <- evalUnOp siUnOp arg
+                   case result of
+                      ConstInt x -> return $ SConstInt siDest x
+                      ConstBool x -> return $ SConstBool siDest x
+                      _ -> Nothing
+          in ( (i, un') : ns'
+             , vars'
+             , alias'
+             )
+
         call@SCall{..} ->
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
         int@SConstInt{..} -> ((i, instr):ns', vars', alias')
@@ -278,6 +302,13 @@ optimise func@SFunction{..}
         left <- getValue siLeft
         right <- getValue siRight
         return $ case evalBinOp siBinOp left right of
+          Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
+          Just x -> (xs, ssaNext, Map.insert siDest x vars)
+
+      -- Evaluate an unary operation.
+      node@SUnOp{..} -> fromMaybe (xs, [], vars) $ do
+        arg <- getValue siArg
+        return $ case evalUnOp siUnOp arg of
           Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
           Just x -> (xs, ssaNext, Map.insert siDest x vars)
 
