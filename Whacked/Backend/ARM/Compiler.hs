@@ -73,6 +73,9 @@ compileInstr (_, SCall{..}) = do
 compileInstr (_, SConstInt{..}) = do
   scope@Scope{ regs } <- get
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) siIntVal]
+compileInstr (_, SConstBool{..}) = do
+  scope@Scope{ regs } <- get
+  tell [ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBoolVal then 1 else 0 ]
 compileInstr (_, SReturn{..}) = do
   scope@Scope{ regs, toSave } <- get
   move R0 (fromJust $ Map.lookup siVal regs)
@@ -124,6 +127,9 @@ compileFunc func@SFunction{..} = do
           compileInstr (i, instr)
       _ ->
         compileInstr (i, instr)
+
+  scope@Scope{ regs, toSave } <- get
+  tell [ARMPop $ toSave ++ [PC]]
 
 
 

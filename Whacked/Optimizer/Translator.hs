@@ -325,7 +325,7 @@ genInstr IReturn{..} = do
 
 genInstr IExit{..} = do
   (_, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SExit expr
+  emit $ SCall Void SVoid "__exit" [expr]
 
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft

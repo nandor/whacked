@@ -38,7 +38,7 @@ framework (cfg, cfg') labels killGen
       where
         mp' = Map.insert idx (newIn, newOut) mp
 
-        (kill, gen) = fromJust $ Map.lookup idx killGen
+        Just (kill, gen) = Map.lookup idx killGen
 
         newIn = case snd <$> Map.lookup idx mp of
           Nothing -> gen

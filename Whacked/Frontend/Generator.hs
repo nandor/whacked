@@ -347,7 +347,7 @@ generateI (AProgram functions)
           { ifName = afName func
           , ifType = afType func
           , ifArgs = args
-          , ifBody = body ++ [IExit (IConstInt 0)]
+          , ifBody = body
           , ifVars = declarations
           }
       where

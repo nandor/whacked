@@ -207,8 +207,6 @@ optimise func@SFunction{..}
         bool@SConstBool{..} -> ((i, instr):ns', vars', alias')
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
-        exit@SExit{..} ->
-          ((i, exit{ siVal = findAlias siVal }) : ns', vars', alias')
       where
         findAlias var
           = fromMaybe var . Map.lookup var $ alias
@@ -292,10 +290,6 @@ optimise func@SFunction{..}
 
       -- Returns do nothing.
       node@SReturn{..} ->
-        ( xs, [], vars )
-
-      -- Does nothing.
-      node@SExit{..} ->
         ( xs, [], vars )
 
       -- Constants are marked and propagated.

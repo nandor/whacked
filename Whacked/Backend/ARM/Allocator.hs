@@ -54,6 +54,8 @@ allocate live func@SFunction{..}
           = Map.insertWith (++) siDest (R0 : allRegs) mp
         pref mp (_, SConstInt{..})
           = Map.insertWith (++) siDest allRegs mp
+        pref mp (_, SConstBool{..})
+          = Map.insertWith (++) siDest allRegs mp
         pref mp (_, SReturn{..})
           = Map.insertWith (++) siVal (R0 : allRegs) mp
         pref mp (_, instr)
@@ -77,8 +79,7 @@ allocate live func@SFunction{..}
             removeArgs mp arg
               = Map.insert arg (oldRegs `Set.difference` argRegs) mp
               where
-                oldRegs
-                  = fromJust $ Map.lookup arg mp
+                Just oldRegs = Map.lookup arg mp
 
     -- All common registers.
     allRegs

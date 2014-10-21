@@ -74,9 +74,6 @@ data SInstr
     { siType :: Type
     , siVal  :: SVar
     }
-  | SExit
-    { siVal :: SVar
-    }
   | SBinJump
     { siType  :: Type
     , siWhere :: Int
@@ -107,7 +104,9 @@ isAssignment _ = False
 
 getKill :: SInstr -> [SVar]
 getKill SBinOp{..} = [siDest]
-getKill SCall{..} = [siDest]
+getKill SCall{..}
+  | siDest == SVoid = []
+  | otherwise = [siDest]
 getKill SConstInt{..} = [siDest]
 getKill SPhi{..} = [siDest]
 getKill _ = []
@@ -121,8 +120,6 @@ getGen SCall{..}
 getGen SPhi{..}
   = siMerge
 getGen SReturn{..}
-  = [siVal]
-getGen SExit{..}
   = [siVal]
 getGen SBinJump{..}
   = [siLeft, siRight]
