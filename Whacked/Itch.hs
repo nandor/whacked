@@ -54,9 +54,6 @@ data IExpr
   | IConstInt
     { ieIntVal :: Int
     }
-  | IConstReal
-    { ieRealVal :: Float
-    }
   | IConstChar
     { ieCharVal :: Char
     }

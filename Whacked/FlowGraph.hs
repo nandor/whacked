@@ -78,7 +78,8 @@ removePhi func@SFunction{..}
     removePhi' (i, SPhi{..})
       = Nothing
     removePhi' (i, call@SCall{..})
-      = Just (i, call{ siDest = replace siDest, siArgs = map replace siArgs })
+      = Just
+        (i, call{ siRet = map replace siRet, siArgs = map replace siArgs})
     removePhi' (i, int@SConstInt{..})
       = Just (i, int{ siDest = replace siDest })
     removePhi' (i, bool@SConstBool{..})

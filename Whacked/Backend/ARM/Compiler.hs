@@ -66,9 +66,8 @@ compileInstr (_, SCall{..}) = do
   tell [ARMBL siFunc]
 
   -- Copy return value to an appropiate register.
-  case siType of
-    Void -> return ()
-    Int -> move (fromJust $ Map.lookup siDest regs) R0
+  forM_ (zip siRet $ enumFrom R0) $ \(ret, reg) ->
+    move (fromMaybe reg . Map.lookup ret $ regs) reg
 
 compileInstr (_, SConstInt{..}) = do
   scope@Scope{ regs } <- get

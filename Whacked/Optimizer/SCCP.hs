@@ -316,7 +316,7 @@ optimise func@SFunction{..}
       node@SCall{..} ->
         ( xs
         , []
-        , Map.insert siDest Bot vars
+        , foldl (\mp x -> Map.insert x Bot mp) vars siRet
         )
 
       -- Returns do nothing.

@@ -284,10 +284,14 @@ genExpr :: IExpr
 genExpr IBinOp{..} dest = do
   (lt, le) <- genTemp >>= genExpr ieLeft
   (rt, re) <- genTemp >>= genExpr ieRight
-  emit $ if ieBinOp == Div
-    then SCall lt dest "__aeabi_idiv" [le, re]
-    else SBinOp lt dest ieBinOp le re
-  return (lt, dest)
+  case ieBinOp of
+    Div -> emit $ SCall [dest] "__aeabi_idiv" [le, re]
+    Mod -> do
+      dest' <- genTemp
+      emit $ SCall [dest', dest] "__aeabi_idivmod" [le, re]
+    _ -> do
+      emit $ SBinOp lt dest ieBinOp le re
+  return (fromJust $ binOpType ieBinOp lt rt, dest)
 genExpr IUnOp{..} dest = do
   (t, expr) <- genTemp >>= genExpr ieArg
   emit $ SUnOp t dest ieUnOp expr
@@ -305,14 +309,11 @@ genExpr IConstChar{..} dest = do
 genExpr IConstInt{..} dest = do
   emit $ SConstInt dest ieIntVal
   return (Int, dest)
-genExpr IConstReal{..} dest = do
-  emit $ SConstReal dest ieRealVal
-  return (Real, dest)
 
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
   dest <- genTemp
-  emit $ SCall ieType dest ieName (map snd args)
+  emit $ SCall [dest] ieName (map snd args)
   return (ieType, dest)
 
 
@@ -327,7 +328,7 @@ genInstr IReturn{..} = do
 
 genInstr IExit{..} = do
   (_, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SCall Void SVoid "__exit" [expr]
+  emit $ SCall [] "__exit" [expr]
 
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
@@ -345,7 +346,7 @@ genInstr IWriteVar{..} = do
 genInstr IReadVar{..} = do
   expr <- genTemp
   case iiType of
-    Int -> emit $ SCall iiType expr "__read_int" []
+    Int -> emit $ SCall [expr] "__read_int" []
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (iiType, expr) vars }
 
@@ -353,13 +354,13 @@ genInstr IReadVar{..} = do
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   case t of
-    Int -> emit $ SCall Void SVoid "__print_int" [expr]
+    Int -> emit $ SCall [] "__print_int" [expr]
 
 genInstr IPrintln{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   case t of
-    Int -> emit $ SCall Void SVoid "__println_int" [expr]
-    Bool -> emit $ SCall Void SVoid "__println_bool" [expr]
+    Int -> emit $ SCall [] "__println_int" [expr]
+    Bool -> emit $ SCall [] "__println_bool" [expr]
 
 
 -- | Generates code for a function.

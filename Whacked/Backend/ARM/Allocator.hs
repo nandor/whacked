@@ -51,7 +51,10 @@ allocate live func@SFunction{..}
         pref mp (_, SBinOp{..})
           = Map.insertWith (++) siDest allRegs mp
         pref mp (_, SCall{..})
-          = Map.insertWith (++) siDest (R0 : allRegs) mp
+          = foldl add mp $ zip siRet (enumFrom R0) ++ zip siArgs (enumFrom R0)
+          where
+            add mp (var, reg)
+              = Map.insertWith (++) var (reg : allRegs) mp
         pref mp (_, SConstInt{..})
           = Map.insertWith (++) siDest allRegs mp
         pref mp (_, SConstBool{..})
@@ -73,7 +76,7 @@ allocate live func@SFunction{..}
             remove mp (i, SCall{..})
               = foldl removeArgs mp (Set.toList liveOut)
               where
-                liveOut = snd . fromJust $ Map.lookup i live
+                Just (_, liveOut) = Map.lookup i live
             remove mp (_, _)
               = mp
             removeArgs mp arg
@@ -106,7 +109,10 @@ allocate live func@SFunction{..}
       = assign' (fromMaybe Set.empty $ Map.lookup x graph) (x:xs) []
       where
         (r:rs)
-          = Set.toList $ (fromJust $ Map.lookup x varPref) `Set.difference` used
+          | Just x <- Map.lookup x varPref
+            = Set.toList (x `Set.difference` used)
+          | otherwise
+            = error "This should not happen."
 
         assign' set (x:xs) ys
           | Set.member x set = assign' set xs (x:ys)

@@ -5,8 +5,9 @@ module Whacked.Scratch where
 -- folding, dead code elimination and sparse conditional constant propagation
 -- are applied on this form.
 
-import Data.Map
-import Whacked.Types
+import           Data.Map(Map)
+import qualified Data.Map as Map
+import           Whacked.Types
 
 
 
@@ -50,8 +51,7 @@ data SInstr
     , siArg  :: SVar
     }
   | SCall
-    { siType :: Type
-    , siDest :: SVar
+    { siRet  :: [SVar]
     , siFunc :: String
     , siArgs :: [SVar]
     }
@@ -66,10 +66,6 @@ data SInstr
   | SConstInt
     { siDest   :: SVar
     , siIntVal :: Int
-    }
-  | SConstReal
-    { siDest    :: SVar
-    , siRealVal :: Float
     }
   | SPhi
     { siDest  :: SVar
@@ -110,8 +106,7 @@ isAssignment _ = False
 
 getKill :: SInstr -> [SVar]
 getKill SCall{..}
-  | siDest == SVoid = []
-  | otherwise = [siDest]
+  = siRet
 getKill SBinOp{..}
   = [siDest]
 getKill SConstInt{..}

@@ -115,8 +115,6 @@ aBaseType
     , reserved "bool"   *> return Bool
     , reserved "string" *> return String
     , reserved "char"   *> return Char
-    , reserved "real"   *> return Real
-    , reserved "void"   *> return Void
     ]
 
 

@@ -38,13 +38,12 @@ data CondOp
 
 
 data Type
-  = Void
-  | Int
+  = Int
   | Bool
   | String
   | Char
-  | Real
   | Poly
+  | Void
   | Array Type Int
   | Pair Type Type
   deriving ( Eq, Ord, Show )
