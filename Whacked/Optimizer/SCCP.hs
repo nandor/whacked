@@ -21,6 +21,7 @@ data Value
   | Bot
   | ConstInt Int
   | ConstBool Bool
+  | ConstChar Char
   | ConstString String
   deriving ( Eq, Ord, Show )
 
@@ -63,6 +64,14 @@ evalBinOp op (ConstInt x) (ConstInt y)
 evalBinOp op (ConstBool x) (ConstBool y)
   = return $ case op of
     Or -> ConstBool (x || y)
+evalBinOp op (ConstChar x) (ConstChar y)
+  = return $ case op of
+    Cmp CLT  -> ConstBool (x < y)
+    Cmp CLTE -> ConstBool (x <= y)
+    Cmp CGT  -> ConstBool (x > y)
+    Cmp CGTE -> ConstBool (x >= y)
+    Cmp CEQ  -> ConstBool (x == y)
+    Cmp CNEQ -> ConstBool (x /= y)
 
 
 -- | Evaluates an unary operation.
@@ -231,6 +240,7 @@ optimise func@SFunction{..}
           ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
         int@SConstInt{..} -> ((i, instr):ns', vars', alias')
         bool@SConstBool{..} -> ((i, instr):ns', vars', alias')
+        bool@SConstChar{..} -> ((i, instr):ns', vars', alias')
         bool@SConstString{..} -> ((i, instr):ns', vars', alias')
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
@@ -331,6 +341,8 @@ optimise func@SFunction{..}
         (xs, ssaNext, Map.insert siDest (ConstInt siIntVal) vars)
       node@SConstBool{..} ->
         (xs, ssaNext, Map.insert siDest (ConstBool siBoolVal) vars)
+      node@SConstChar{..} ->
+        (xs, ssaNext, Map.insert siDest (ConstChar siCharVal) vars)
       node@SConstString{..} ->
         (xs, ssaNext, Map.insert siDest (ConstString siStringVal) vars)
 
