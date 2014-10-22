@@ -91,6 +91,8 @@ instance Show ASM where
     = "\tMOV " ++ show d ++ ", " ++ show n
   show (ARMLDR d n)
     = "\tLDR " ++ show d ++ ", =" ++ show n
+  show (ARMSTR d n m)
+    = "\tST " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMB cond xs)
     = "\tB" ++ show cond ++ " " ++ xs
   show (ARMBL xs)

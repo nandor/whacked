@@ -220,12 +220,13 @@ aExprOp
     , [ Infix (tagBin "+" Add) AssocLeft
       , Infix (tagBin "-" Sub) AssocLeft
       ]
-    , [ Infix (tagBin "<" $ Cmp CLT) AssocNone
-      , Infix (tagBin ">" $ Cmp CGT) AssocNone
-      , Infix (tagBin "==" $ Cmp CEQ) AssocNone
-      , Infix (tagBin "!=" $ Cmp CNEQ) AssocNone
+    , [ Infix (tagBin "<"  $ Cmp CLT ) AssocNone
+      , Infix (tagBin ">"  $ Cmp CGT ) AssocNone
       , Infix (tagBin "<=" $ Cmp CLTE) AssocNone
       , Infix (tagBin ">=" $ Cmp CGTE) AssocNone
+      ]
+    , [ Infix (tagBin "==" $ Cmp CEQ ) AssocNone
+      , Infix (tagBin "!=" $ Cmp CNEQ) AssocNone
       ]
     , [ Infix (tagBin "&&" And) AssocRight
       ]

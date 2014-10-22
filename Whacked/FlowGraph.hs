@@ -14,7 +14,6 @@ import           Whacked.Scratch
 import           Whacked.Types
 
 
-import Debug.Trace
 
 type FlowGraph
   = Map Int [Int]

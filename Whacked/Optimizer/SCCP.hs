@@ -39,32 +39,32 @@ instance Monoid Value where
 
 
 -- | Compares two values.
-compareValue :: CondOp -> Value -> Value -> Maybe Bool
-compareValue _ Bot _
+compareValue :: CondOp -> (SVar, Value) -> (SVar, Value) -> Maybe Bool
+compareValue _ (_, Bot) (_, _)
   = Nothing
-compareValue _ _ Bot
+compareValue _ (_, _) (_, Bot)
   = Nothing
-compareValue op (ConstInt x) (ConstInt y)
+compareValue op (_, ConstInt x) (_, ConstInt y)
   = Just $ (getComparator op) x y
-compareValue op (ConstBool x) (ConstBool y)
+compareValue op (_, ConstBool x) (_, ConstBool y)
   = Just $ (getComparator op) x y
-compareValue op (ConstString x) (ConstString y)
+compareValue op (x, ConstString _) (y, ConstString _)
   = Just $ (getComparator op) x y
-compareValue op (ConstChar x) (ConstChar y)
+compareValue op (_, ConstChar x) (_, ConstChar y)
   = Just $ (getComparator op) x y
 
 
 -- | Evaluates an operation.
-evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
-evalBinOp _ Bot _
+evalBinOp :: BinaryOp -> (SVar, Value) -> (SVar, Value) -> Maybe Value
+evalBinOp _ (_, Bot) (_, _)
   = Nothing
-evalBinOp _ _ Bot
+evalBinOp _ (_, _) (_, Bot)
   = Nothing
-evalBinOp _ Top y
+evalBinOp _ (_, Top) (_, y)
   = Just y
-evalBinOp _ y Top
+evalBinOp _ (_, y) (_, Top)
   = Just y
-evalBinOp op (ConstInt x) (ConstInt y)
+evalBinOp op (_, ConstInt x) (_, ConstInt y)
   = return $ case op of
     Add -> ConstInt (x + y)
     Sub -> ConstInt (x - y)
@@ -75,11 +75,11 @@ evalBinOp op (ConstInt x) (ConstInt y)
     Cmp CGTE -> ConstBool (x >= y)
     Cmp CEQ  -> ConstBool (x == y)
     Cmp CNEQ -> ConstBool (x /= y)
-evalBinOp op (ConstBool x) (ConstBool y)
+evalBinOp op (_, ConstBool x) (_, ConstBool y)
   = return $ case op of
     Or -> ConstBool (x || y)
     And -> ConstBool (x && y)
-evalBinOp op (ConstChar x) (ConstChar y)
+evalBinOp op (_, ConstChar x) (_, ConstChar y)
   = return $ case op of
     Cmp CLT  -> ConstBool (x < y)
     Cmp CLTE -> ConstBool (x <= y)
@@ -87,14 +87,7 @@ evalBinOp op (ConstChar x) (ConstChar y)
     Cmp CGTE -> ConstBool (x >= y)
     Cmp CEQ  -> ConstBool (x == y)
     Cmp CNEQ -> ConstBool (x /= y)
-evalBinOp op (ConstString x) (ConstString y)
-  = return $ case op of
-    Cmp CLT  -> ConstBool (x < y)
-    Cmp CLTE -> ConstBool (x <= y)
-    Cmp CGT  -> ConstBool (x > y)
-    Cmp CGTE -> ConstBool (x >= y)
-    Cmp CEQ  -> ConstBool (x == y)
-    Cmp CNEQ -> ConstBool (x /= y)
+
 
 -- | Evaluates an unary operation.
 evalUnOp :: UnaryOp -> Value -> Maybe Value
@@ -207,12 +200,13 @@ optimise func@SFunction{..}
                       { siLeft = findAlias $ siLeft jmp
                       , siRight = findAlias $ siRight jmp
                       } $ do
-                    left <- evalValue (findAlias . siLeft $ jmp)
-                    right <- evalValue (findAlias . siRight $ jmp)
-                    val <- compareValue (siCond jmp) left right
-                    return $ if val == siWhen jmp
-                        then SJump (siWhere jmp)
-                        else SJump . fromJust . Map.lookup i $ next
+              left <- evalValue (findAlias . siLeft $ jmp)
+              right <- evalValue (findAlias . siRight $ jmp)
+              val <- compareValue
+                   (siCond jmp) (siLeft jmp, left) (siRight jmp, right)
+              return $ if val == siWhen jmp
+                  then SJump (siWhere jmp)
+                  else SJump . fromJust . Map.lookup i $ next
           in case ns' of
             next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
               (next:ns', vars', alias')
@@ -259,7 +253,7 @@ optimise func@SFunction{..}
                       } $ do
                     left <- evalValue (findAlias siLeft)
                     right <- evalValue (findAlias siRight)
-                    result <- evalBinOp siBinOp left right
+                    result <- evalBinOp siBinOp (siLeft, left) (siRight, right)
                     case result of
                       ConstInt x -> return $ SConstInt (findAlias siDest) x
                       ConstBool x -> return $ SConstBool (findAlias siDest) x
@@ -377,7 +371,7 @@ optimise func@SFunction{..}
       node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        return $ case evalBinOp siBinOp left right of
+        return $ case evalBinOp siBinOp (siLeft, left) (siRight, right) of
           Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
           Just x -> (xs, ssaNext, Map.insert siDest x vars)
 
@@ -420,7 +414,7 @@ optimise func@SFunction{..}
       node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        expr <- compareValue siCond left right
+        expr <- compareValue siCond (siLeft, left) (siRight, right)
         if expr == siWhen
           then do
             return ([(end, siWhere)], [], vars)
