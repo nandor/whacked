@@ -16,7 +16,10 @@ import           Whacked.Types
 import           Whacked.FlowGraph
 
 
-import Debug.Trace
+
+-- |Values used in the lattice for sparse conditional constant propagation.
+-- Due to the fact that the input code is type checked, when combining two
+-- values that are neither Bot nor Top, both of them will have the same type.
 data Value
   = Top
   | Bot
@@ -27,6 +30,8 @@ data Value
   deriving ( Eq, Ord, Show )
 
 
+-- |The monoid instance is used when aggregating values that come from
+-- different PHI nodes. Top values are ignored, disjoint values yield Bot.
 instance Monoid Value where
   mappend Top x = x
   mappend x Top = x

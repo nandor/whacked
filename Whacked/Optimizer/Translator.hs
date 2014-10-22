@@ -378,7 +378,9 @@ genInstr IPrintln{..} = do
   emit $ SCall [] "__println" []
 
 genInstr IEnd{} = do
-  return ()
+  expr <- genTemp
+  emit $ SConstInt expr 0
+  emit $ SReturn Int expr
 
 
 -- | Generates code for a function.

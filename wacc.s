@@ -12,3 +12,5 @@ main:
 	LDR R0, =0
 	BL __print_bool
 	BL __println
+	LDR R0, =0
+	POP {PC}
