@@ -20,7 +20,7 @@ data UnaryOp
   = Neg
   | Not
   | Ord
-  | ToInt
+  | Chr
   | Fst
   | Snd
   | Len
@@ -89,8 +89,8 @@ unOpType unOp t
   = Map.lookup (unOp, t) . Map.fromList $
     [ ((Neg,   Int   ), Int )
     , ((Not,   Bool  ), Bool)
-    , ((Ord,   Int   ), Char)
-    , ((ToInt, Char  ), Int )
+    , ((Ord,   Char  ), Int )
+    , ((Chr ,  Int   ), Char)
     , ((Len,   String), Int )
     ]
 

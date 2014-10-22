@@ -102,6 +102,7 @@ data AStatement
     { asTag :: ATag
     , asExpr :: AExpr
     }
+  | AEnd
   deriving (Eq, Ord, Show)
 
 

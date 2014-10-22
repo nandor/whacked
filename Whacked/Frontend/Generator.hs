@@ -6,6 +6,9 @@ module Whacked.Frontend.Generator
   ( generateI
   ) where
 
+
+import Debug.Trace
+
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Except
@@ -16,6 +19,7 @@ import qualified Data.Map as Map
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Whacked.FlowGraph
 import           Whacked.Itch
 import           Whacked.Tree
 import           Whacked.Types
@@ -78,7 +82,7 @@ scope gen = do
 
   -- Run the isolated generator & propagate errors and scopes.
   case runGenerator gen scope' of
-    Left err -> fail err
+    Left err -> throwError err
     Right (a, scope''@Scope{ variables }, instr) -> do
       put scope''{ variables = tail variables }
       return (a, instr)
@@ -323,8 +327,10 @@ genStmt AExit{..} = do
   when (not (t `match` Int)) $ do
     genError asTag $ "integer expected"
   tell [IExit expr]
-
-
+genStmt ASkip{..} = do
+  return ()
+genStmt AEnd
+  = tell [IEnd]
 -- |Generates code for a function body.
 genFunc :: AFunction -> Generator ()
 genFunc AFunction{..} = do
@@ -350,8 +356,13 @@ genFunc AFunction{..} = do
 -- |Generates code for all the functions in the program. If type checking fails,
 -- an error message is returned.
 generateI :: AProgram -> Either String IProgram
-generateI (AProgram functions)
-  = IProgram <$> mapM generate' (Map.toList functions')
+generateI (AProgram functions) = do
+  funcs <- forM (Map.toList functions') $ \func -> do
+    ifunc <- generate' func
+    unless (checkFlowGraph ifunc) $
+      throwError "not all control paths terminate"
+    return ifunc
+  return $ IProgram funcs
   where
     -- |All functions, used to check types.
     functions'
@@ -365,7 +376,7 @@ generateI (AProgram functions)
           { ifName = afName func
           , ifType = afType func
           , ifArgs = args
-          , ifBody = body ++ [IReturn (IConstInt 0)]
+          , ifBody = body
           , ifVars = declarations
           }
       where

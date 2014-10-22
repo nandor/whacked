@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns, LambdaCase #-}
 module Whacked.Frontend.Parser
   ( parse
   , ParseError
@@ -6,8 +6,10 @@ module Whacked.Frontend.Parser
 
 
 import           Control.Applicative ((*>), (<*), (<$>), (<*>))
+import           Control.Monad
 import           Data.Foldable
 import           Data.Functor.Identity
+import           Data.Int
 import           Text.ParserCombinators.Parsec hiding (parse)
 import qualified Text.ParserCombinators.Parsec as Parsec
 import           Text.ParserCombinators.Parsec.Expr
@@ -17,7 +19,7 @@ import qualified Text.ParserCombinators.Parsec.Token as Token
 import           Whacked.Tree
 import           Whacked.Types
 
-
+import Debug.Trace
 
 -- |Definition of the language.
 whacked :: TokenParser st
@@ -61,7 +63,8 @@ whacked
           , "exit"
           , "fst"
           , "snd"
-          , "toInt"
+          , "ord"
+          , "chr"
           , "null"
           , "free"
           , "newpair"
@@ -189,9 +192,34 @@ aExprAtom = do
         name <- identifier
         args <- parens (commaSep aExpr)
         return $ ACall tag name args
-    , AConstInt tag . fromIntegral <$> integer
+    , do
+        int <- integer
+        when (int < toInteger (minBound :: Int32)) $
+          unexpected $ "integer too small: " ++ show int
+        when (toInteger (maxBound :: Int32) < int) $
+          unexpected $ "integer too big: " ++ show int
+        return $ AConstInt tag (fromIntegral int)
+    , do
+        char '\''
+        chr <- noneOf "\""
+        if chr /= '\\'
+          then lexeme (char '\'') *> return (AConstChar tag chr)
+          else do
+            chr <- anyChar
+            lexeme $ char '\''
+            AConstChar tag <$> case chr of
+              '0'  -> return '\0'
+              'b'  -> return '\b'
+              't'  -> return '\t'
+              'n'  -> return '\n'
+              'f'  -> return '\f'
+              'r'  -> return '\r'
+              '"'  -> return '\"'
+              '\'' -> return '\''
+              '\\' -> return '\\'
+              x -> unexpected "invalid escape sequence"
+
     , AConstString tag <$> stringLiteral
-    , AConstChar tag <$> charLiteral
     , AConstBool tag <$> asum
       [ reserved "true" *> return True
       , reserved "false" *> return False
@@ -207,7 +235,7 @@ aExprOp
       ]
     , [ Prefix (tagUn "!" Not)
       , Prefix (tagUn "-" Neg)
-      , Prefix (tagUn "toInt" ToInt)
+      , Prefix (tagUn "chr" Chr)
       , Prefix (tagUn "ord" Ord)
       , Prefix (tagUn "fst" Fst)
       , Prefix (tagUn "snd" Snd)
@@ -336,7 +364,7 @@ aProgram = do
   tag <- aTag
   reserved "begin"
   functions <- many (try aFunction)
-  body <- semiSep1 aStatement
+  body <- (++ [AEnd]) <$> semiSep1 aStatement
   reserved "end"
   return $ AProgram (AFunction tag [] Void "main" body : functions)
 

@@ -4,16 +4,18 @@ module Whacked.FlowGraph
   , relabel
   , removePhi
   , buildFlowGraph
+  , checkFlowGraph
   ) where
 
 
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe
+import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-
+import Debug.Trace
 
 type FlowGraph
   = Map Int [Int]
@@ -147,3 +149,42 @@ buildFlowGraph block
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+
+-- | Checks whether all paths terminate.
+checkFlowGraph :: IFunction -> Bool
+checkFlowGraph IFunction{..}
+  = terminates 0
+  where
+    body = Map.fromList $ zip [0..] ifBody
+
+    labels = Map.foldlWithKey getLabel Map.empty body
+    getLabel mp i ILabel{ iiLabel }
+      = Map.insert iiLabel i mp
+    getLabel mp _ _
+      = mp
+    findNext n
+      = fromJust $ Map.lookup n labels
+
+    terminates n
+      = case Map.lookup n body of
+          Nothing ->
+            False
+          Just IReturn{} ->
+            True
+          Just IExit{} ->
+            True
+          Just IEnd{} ->
+            True
+          Just IJump{..} ->
+            terminates (findNext iiWhere)
+          Just IBinJump{..} ->
+            terminates (n + 1) && terminates (findNext iiWhere)
+          Just IUnJump{..} ->
+            terminates (n + 1) && terminates (findNext iiWhere)
+          Just _ ->
+            terminates (n + 1)
+
+    isTerminal IReturn{}
+      = True
+    isTerminal IExit{}
+      = True

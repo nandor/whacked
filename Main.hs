@@ -92,11 +92,15 @@ main
 
       -- |Get the AST.
       readFile sourceName >>= \source -> case parse sourceName source of
-        Left err -> putStrLn (show err)
+        Left err -> do
+          putStrLn (show err)
+          exitWith $ ExitFailure 100
         Right ast -> do
           when optPrintAST $ print ast
           case generateI ast of
-            Left err -> putStrLn err
+            Left err -> do
+              putStrLn err
+              exitWith $ ExitFailure 200
             Right itch -> do
               when optPrintIMF $ do
                 forM_ (ipFuncs itch) $ \IFunction{..} -> do

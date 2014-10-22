@@ -128,7 +128,9 @@ data IInstr
   | IExit
     { iiExpr :: IExpr
     }
+  | IEnd
   deriving ( Eq, Ord )
+
 
 instance Show IInstr where
   show IReturn{..} = "IReturn"

@@ -98,13 +98,13 @@ evalUnOp _ Top
 evalUnOp op (ConstInt x)
   = case op of
     Neg -> Just $ ConstInt (-x)
-    Ord -> Just $ ConstChar (chr x)
+    Chr -> Just $ ConstChar (chr x)
 evalUnOp op (ConstBool x)
   = case op of
     Not -> Just $ ConstBool (not x)
 evalUnOp op (ConstChar x)
   = case op of
-    ToInt -> Just $ ConstInt (ord x)
+    Ord -> Just $ ConstInt (ord x)
 
 -- | Builds the SSA graph.
 buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
@@ -200,13 +200,13 @@ optimise func@SFunction{..}
                       { siLeft = findAlias $ siLeft jmp
                       , siRight = findAlias $ siRight jmp
                       } $ do
-              left <- evalValue (findAlias . siLeft $ jmp)
-              right <- evalValue (findAlias . siRight $ jmp)
-              val <- compareValue
-                   (siCond jmp) (siLeft jmp, left) (siRight jmp, right)
-              return $ if val == siWhen jmp
-                  then SJump (siWhere jmp)
-                  else SJump . fromJust . Map.lookup i $ next
+                        left <- evalValue (findAlias . siLeft $ jmp)
+                        right <- evalValue (findAlias . siRight $ jmp)
+                        val <- compareValue
+                             (siCond jmp) (siLeft jmp, left) (siRight jmp, right)
+                        return $ if val == siWhen jmp
+                            then SJump (siWhere jmp)
+                            else SJump . fromJust . Map.lookup i $ next
           in case ns' of
             next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
               (next:ns', vars', alias')
@@ -237,10 +237,10 @@ optimise func@SFunction{..}
                           . map findAlias
                           $ siMerge
                       } $ do
-                    result <- mconcat <$> mapM evalValue siMerge
-                    case result of
-                      ConstInt x -> return $ SConstInt siDest x
-                      _ -> Nothing
+                        result <- mconcat <$> mapM evalValue siMerge
+                        case result of
+                          ConstInt x -> return $ SConstInt siDest x
+                          _ -> Nothing
           in case phi' of
             SPhi{ siMerge = [x], siDest } ->
               reduce ns vars (Map.insert siDest (findAlias x) alias)
