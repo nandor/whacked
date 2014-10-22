@@ -377,6 +377,9 @@ genInstr IPrintln{..} = do
   emit $ SPrint t expr
   emit $ SCall [] "__println" []
 
+genInstr IEnd{} = do
+  return ()
+
 
 -- | Generates code for a function.
 genFunc :: IFunction

@@ -145,3 +145,4 @@ instance Show IInstr where
   show IPrintln{..} = "IPrintln"
   show ILabel{..} = "ILabel " ++ show iiLabel
   show IExit{..} = "IExit"
+  show IEnd{..} = "IEnd"
