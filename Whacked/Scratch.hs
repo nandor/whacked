@@ -70,6 +70,13 @@ data SInstr
     { siDest      :: SVar
     , siStringVal :: String
     }
+  | SWriteArray
+    { siType  :: Type
+    , siDest  :: SVar
+    , siArg   :: SVar
+    , siIndex :: SVar
+    , siExpr  :: SVar
+    }
   | SPhi
     { siDest  :: SVar
     , siType  :: Type
@@ -128,6 +135,8 @@ getKill SPhi{..}
   = [siDest]
 getKill SUnOp{..}
   = [siDest]
+getKill SWriteArray{..}
+  = [siDest]
 getKill _
   = []
 
@@ -149,6 +158,8 @@ getGen SUnOp{..}
   = [siArg]
 getGen SPrint{..}
   = [siArg]
+getGen SWriteArray{..}
+  = [siArg, siIndex, siExpr]
 getGen _
   = []
 

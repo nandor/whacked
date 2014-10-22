@@ -169,15 +169,15 @@ data ALValue
     }
   | ALFst
     { alTag :: ATag
-    , alPair :: String
+    , alName :: String
     }
   | ALSnd
     { alTag :: ATag
-    , alPair :: String
+    , alName :: String
     }
   | ALArray
     { alTag :: ATag
-    , alArray :: String
+    , alName :: String
     , alIndex :: AExpr
     }
   deriving (Eq, Ord, Show)

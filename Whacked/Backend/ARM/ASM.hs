@@ -28,14 +28,22 @@ data ARMReg
 data ARMCond
   = ALT
   | AGT
+  | ALTE
+  | AGTE
+  | AEQ
+  | ANE
   | AAL
   deriving (Eq, Ord)
 
 
 instance Show ARMCond where
-  show AAL = ""
-  show AGT = "GT"
-  show ALT = "LT"
+  show AAL  = ""
+  show AGT  = "GT"
+  show ALT  = "LT"
+  show AGTE = "GT"
+  show ALTE = "LT"
+  show AEQ  = "EQ"
+  show ANE  = "NE"
 
 
 data ASM
@@ -50,6 +58,7 @@ data ASM
   | ARMPop [ARMReg]
   | ARMMov ARMReg ARMReg
   | ARMLDR ARMReg Int
+  | ARMSTR ARMReg ARMReg ARMReg
   | ARMBL String
   | ARMB ARMCond String
   | ARMCmp ARMReg ARMReg

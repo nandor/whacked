@@ -110,12 +110,18 @@ compileInstr (_, SBinJump{..}) = do
         (fromJust $ Map.lookup siRight regs)
        ]
   case siCond of
-    CLT -> tell [ARMB ALT $ "L" ++ show siWhere]
-    CGT -> tell [ARMB AGT $ "L" ++ show siWhere]
+    CLT  -> tell [ARMB ALT  $ "L" ++ show siWhere]
+    CGT  -> tell [ARMB AGT  $ "L" ++ show siWhere]
+    CLTE -> tell [ARMB ALTE $ "L" ++ show siWhere]
+    CGTE -> tell [ARMB AGTE $ "L" ++ show siWhere]
+    CEQ  -> tell [ARMB AEQ  $ "L" ++ show siWhere]
+    CNEQ -> tell [ARMB ANE  $ "L" ++ show siWhere]
 compileInstr (_, SUnJump{..})
   = return ()
 compileInstr (_, SJump{..}) = do
   tell [ARMB AAL $ "L" ++ show siWhere]
+compileInstr (_, SWriteArray{..}) = do
+  tell [ARMSTR R0 R0 R1]
 
 
 compileFunc :: SFunction -> Compiler ()

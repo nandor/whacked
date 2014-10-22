@@ -88,6 +88,16 @@ removePhi func@SFunction{..}
       = Just (i, bool{ siDest = replace siDest })
     removePhi' (i, string@SConstString{..})
       = Just (i, string{ siDest = replace siDest })
+    removePhi' (i, write@SWriteArray{..})
+      = Just
+        ( i
+        , write
+          { siDest = replace siDest
+          , siArg = replace siArg
+          , siIndex = replace siIndex
+          , siExpr = replace siExpr
+          }
+        )
     removePhi' (i, jmp@SBinJump{..})
       = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
     removePhi' (i, jmp@SUnJump{..})

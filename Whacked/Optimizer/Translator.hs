@@ -45,14 +45,14 @@ getBlocks body
       ILabel{..} | block == [] ->
         group
           blocks
-          (Map.insert iiIndex next target)
+          (Map.insert iiLabel next target)
           [instr]
           next
           instrs
       ILabel{..} ->
         group
           (Map.insert next (reverse block) blocks)
-          (Map.insert iiIndex (next + 1) target)
+          (Map.insert iiLabel (next + 1) target)
           [instr]
           (next + 1)
           instrs
@@ -346,13 +346,22 @@ genInstr IWriteVar{..} = do
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
 
-genInstr IReadVar{..} = do
+genInstr IWriteArray{..} = do
+  (_, expr) <- genTemp >>= genExpr iiIndex
+  (t', expr') <- genTemp >>= genExpr iiExpr
+  dest <- genTemp
+
+  scope@Scope{ vars } <- get
+  let Just (arrType, arr) = Map.lookup (iiVar, iiScope) vars
+  emit $ SWriteArray t' dest arr expr expr'
+  put scope{ vars = Map.insert (iiVar, iiScope) (arrType, dest) vars }
+
+genInstr IRead{..} = do
   expr <- genTemp
   case iiType of
     Int -> emit $ SCall [expr] "__read_int" []
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (iiType, expr) vars }
-
 
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr

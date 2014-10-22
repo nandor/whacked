@@ -16,7 +16,7 @@ import           Whacked.Types
 import           Whacked.FlowGraph
 
 
-
+import Debug.Trace
 data Value
   = Top
   | Bot
@@ -46,6 +46,10 @@ compareValue _ _ Bot
   = Nothing
 compareValue op (ConstInt x) (ConstInt y)
   = Just $ (getComparator op) x y
+compareValue op (ConstBool x) (ConstBool y)
+  = Just $ (getComparator op) x y
+compareValue op (ConstString x) (ConstString y)
+  = Just $ (getComparator op) x y
 
 
 -- | Evaluates an operation.
@@ -61,10 +65,18 @@ evalBinOp _ y Top
 evalBinOp op (ConstInt x) (ConstInt y)
   = return $ case op of
     Add -> ConstInt (x + y)
+    Sub -> ConstInt (x - y)
     Mul -> ConstInt (x * y)
+    Cmp CLT  -> ConstBool (x < y)
+    Cmp CLTE -> ConstBool (x <= y)
+    Cmp CGT  -> ConstBool (x > y)
+    Cmp CGTE -> ConstBool (x >= y)
+    Cmp CEQ  -> ConstBool (x == y)
+    Cmp CNEQ -> ConstBool (x /= y)
 evalBinOp op (ConstBool x) (ConstBool y)
   = return $ case op of
     Or -> ConstBool (x || y)
+    And -> ConstBool (x && y)
 evalBinOp op (ConstChar x) (ConstChar y)
   = return $ case op of
     Cmp CLT  -> ConstBool (x < y)
@@ -73,7 +85,14 @@ evalBinOp op (ConstChar x) (ConstChar y)
     Cmp CGTE -> ConstBool (x >= y)
     Cmp CEQ  -> ConstBool (x == y)
     Cmp CNEQ -> ConstBool (x /= y)
-
+evalBinOp op (ConstString x) (ConstString y)
+  = return $ case op of
+    Cmp CLT  -> ConstBool (x < y)
+    Cmp CLTE -> ConstBool (x <= y)
+    Cmp CGT  -> ConstBool (x > y)
+    Cmp CGTE -> ConstBool (x >= y)
+    Cmp CEQ  -> ConstBool (x == y)
+    Cmp CNEQ -> ConstBool (x /= y)
 
 -- | Evaluates an unary operation.
 evalUnOp :: UnaryOp -> Value -> Maybe Value
@@ -85,6 +104,9 @@ evalUnOp op (ConstInt x)
   = case op of
     Neg -> Just $ ConstInt (-x)
     Ord -> Just $ ConstChar (chr x)
+evalUnOp op (ConstBool x)
+  = case op of
+    Not -> Just $ ConstBool (not x)
 evalUnOp op (ConstChar x)
   = case op of
     ToInt -> Just $ ConstInt (ord x)
@@ -346,6 +368,9 @@ optimise func@SFunction{..}
         , []
         , foldl (\mp x -> Map.insert x Bot mp) vars siRet
         )
+
+      -- Array assignments do not propagate information.
+      node@SWriteArray{..} -> (xs, ssaNext, Map.insert siDest Bot vars)
 
       -- Returns do nothing.
       node@SReturn{..} ->

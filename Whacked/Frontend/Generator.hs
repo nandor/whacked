@@ -230,23 +230,33 @@ genStmt APrintln{..} = do
   (t, expr) <- genExpr asExpr
   tell [IPrintln expr]
 genStmt AAssign{..}
-  = case asTo of
-      ALVar{..} -> findVar alName >>= \case
-        Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-        Just (idx, t) -> do
-          (t', expr) <- genExpr asExpr
-          when (not (t `match` t')) $
-            genError alTag $ "type error"
-          tell [IWriteVar alName idx expr]
+  = findVar (alName asTo) >>= \case
+      Nothing -> genError asTag $ "undefined variable '" ++ (alName asTo) ++ "'"
+      Just (idx, t) -> case asTo of
+        ALVar{..} -> do
+            (t', expr) <- genExpr asExpr
+            when (not (t `match` t')) $
+              genError alTag $ "type error"
+            tell [IWriteVar alName idx expr]
+        ALArray{..} -> do
+          (t', expr') <- genExpr alIndex
+          (t'', expr'') <- genExpr asExpr
+          when (t' /= Int) $
+            genError alTag "indices must be integers"
+          case t of
+            String | t'' == Char ->
+              tell [IWriteArray alName idx expr' expr'']
+            Array t n | n  == 1 && t == t'' ->
+              tell [IWriteArray alName idx expr' expr'']
+            _ -> genError alTag $ "'" ++ alName ++ "' is not an array"
 genStmt ARead{..}
-  = case asTo of
-      ALVar{..} -> findVar alName >>= \case
-        Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-        Just (idx, t) ->
-          if not (isReadable t)
-            then genError asTag "type cannot be read"
-            else tell [IReadVar alName idx t]
-
+  = findVar (alName asTo) >>= \case
+      Nothing -> genError asTag $ "undefined variable '" ++ (alName asTo) ++ "'"
+      Just (idx, t) -> case asTo of
+        ALVar{..} | isReadable t->
+          tell [IRead alName idx t]
+        ALVar{..} ->
+          genError alTag "type cannot be read"
 genStmt AVarDecl{..} = do
   forM_ asVars $ \(tag, name, expr) -> do
     scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get

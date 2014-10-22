@@ -11,10 +11,9 @@ def main():
         for file in files:
             if not file.endswith(".wacc"):
                 continue
+            file = os.path.join(root, file)
             print("\n" + file + ":\n")
-            subprocess.call([
-                "./dist/build/whacked/whacked",
-                os.path.join(root, file)])
+            subprocess.call(["./dist/build/whacked/whacked", file])
 
 
 if __name__ == "__main__":

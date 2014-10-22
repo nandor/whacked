@@ -97,12 +97,18 @@ data IInstr
     , iiScope :: Int
     , iiExpr  :: IExpr
     }
+  | IWriteArray
+    { iiVar   :: String
+    , iiScope :: Int
+    , iiIndex :: IExpr
+    , iiExpr  :: IExpr
+    }
   | INewArray
     { iiVar   :: String
     , iiScope :: Int
     , iiExprs :: [IExpr]
     }
-  | IReadVar
+  | IRead
     { iiVar   :: String
     , iiScope :: Int
     , iiType  :: Type
@@ -114,7 +120,7 @@ data IInstr
     { iiExpr :: IExpr
     }
   | ILabel
-    { iiIndex :: Int
+    { iiLabel :: Int
     }
   | IFree
     { iiExpr :: IExpr
@@ -130,9 +136,10 @@ instance Show IInstr where
   show IUnJump{..} = "IUnJump " ++ show iiWhere
   show IJump{..} = "IJump " ++ show iiWhere
   show IWriteVar{..} = "IWriteVar" ++ show iiVar
+  show IWriteArray{..} = "IWriteArray" ++ show iiVar
   show INewArray{..} = "INewArray"
-  show IReadVar{..} = "IReadVar" ++ show iiVar
+  show IRead{..} = "IRead" ++ show iiVar
   show IPrint{..} = "IPrint"
   show IPrintln{..} = "IPrintln"
-  show ILabel{..} = "ILabel " ++ show iiIndex
+  show ILabel{..} = "ILabel " ++ show iiLabel
   show IExit{..} = "IExit"
