@@ -21,8 +21,6 @@ data UnaryOp
   | Not
   | Ord
   | Chr
-  | Fst
-  | Snd
   | Len
   deriving ( Eq, Ord, Show )
 
@@ -40,7 +38,6 @@ data CondOp
 data Type
   = Int
   | Bool
-  | String
   | Char
   | Poly
   | Void
@@ -63,37 +60,32 @@ binOpType binOp lt rt
     , ((Or,       Bool,   Bool),   Bool)
     , ((Cmp CLT,  Int,    Int),    Bool)
     , ((Cmp CLT,  Char,   Char),   Bool)
-    , ((Cmp CLT,  String, String), Bool)
     , ((Cmp CLTE, Int,    Int),    Bool)
     , ((Cmp CLTE, Char,   Char),   Bool)
-    , ((Cmp CLTE, String, String), Bool)
     , ((Cmp CGT,  Int,    Int),    Bool)
     , ((Cmp CGT,  Char,   Char),   Bool)
-    , ((Cmp CGT,  String, String), Bool)
     , ((Cmp CGTE, Int,    Int),    Bool)
     , ((Cmp CGTE, Char,   Char),   Bool)
-    , ((Cmp CGTE, String, String), Bool)
     , ((Cmp CEQ,  Int,    Int),    Bool)
     , ((Cmp CEQ,  Char,   Char),   Bool)
-    , ((Cmp CEQ,  String, String), Bool)
     , ((Cmp CEQ,  Bool,   Bool),   Bool)
     , ((Cmp CNEQ, Int,    Int),    Bool)
     , ((Cmp CNEQ, Char,   Char),   Bool)
-    , ((Cmp CNEQ, String, String), Bool)
     , ((Cmp CNEQ, Bool,   Bool),   Bool)
     ]
 
 
 unOpType :: UnaryOp -> Type -> Maybe Type
-unOpType unOp t
-  = Map.lookup (unOp, t) . Map.fromList $
-    [ ((Neg,   Int   ), Int )
-    , ((Not,   Bool  ), Bool)
-    , ((Ord,   Char  ), Int )
-    , ((Chr ,  Int   ), Char)
-    , ((Len,   String), Int )
-    ]
-
+unOpType Neg Int
+  = Just Int
+unOpType Not Bool
+  = Just Bool
+unOpType Chr Char
+  = Just Int
+unOpType Chr Int
+  = Just Char
+unOpType Len (Array _ _)
+  = Just Int
 
 
 getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)

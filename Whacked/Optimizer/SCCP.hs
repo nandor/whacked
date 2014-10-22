@@ -87,6 +87,8 @@ evalBinOp op (_, ConstChar x) (_, ConstChar y)
     Cmp CGTE -> ConstBool (x >= y)
     Cmp CEQ  -> ConstBool (x == y)
     Cmp CNEQ -> ConstBool (x /= y)
+evalBinOp op (_, ConstString x) (_, ConstString y)
+  = Just Bot
 
 
 -- | Evaluates an unary operation.

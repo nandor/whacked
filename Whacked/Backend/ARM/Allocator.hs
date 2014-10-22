@@ -86,7 +86,7 @@ allocate live func@SFunction{..}
 
     -- All common registers.
     allRegs
-      = enumFromTo R4 R11
+      = enumFromTo R0 R11
     argRegs
       = Set.fromList (enumFromTo R0 R3)
 

@@ -57,8 +57,9 @@ data IExpr
   | IConstChar
     { ieCharVal :: Char
     }
-  | IConstString
-    { ieStringVal :: String
+  | IConstArray
+    { ieType :: Type
+    , ieVals :: [IExpr]
     }
   | ICall
     { ieType :: Type
