@@ -307,9 +307,9 @@ aStatement
       reserved "if"
       cond <- aExpr
       reserved "then"
-      true <- semiSep aStatement
+      true <- semiSep1 aStatement
       reserved "else"
-      false <- semiSep aStatement
+      false <- semiSep1 aStatement
       reserved "fi"
       return $ AIf tag cond true false
 
@@ -325,7 +325,7 @@ aFunction = do
     argName <- identifier
     return $ AArg tag argType argName
   reserved "is"
-  body <- semiSep aStatement
+  body <- semiSep1 aStatement
   reserved "end"
   return $ AFunction tag args retType name body
 

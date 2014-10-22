@@ -338,6 +338,10 @@ genInstr IBinJump{..} = do
   (rt, re) <- genTemp >>= genExpr iiRight
   emit $ SBinJump lt iiWhere iiWhen iiCond le re
 
+genInstr IUnJump{..} = do
+  (t, expr) <- genTemp >>= genExpr iiVal
+  emit $ SUnJump t iiWhere iiWhen expr
+
 genInstr IJump{..} = do
   emit $ SJump iiWhere
 
@@ -360,6 +364,7 @@ genInstr IRead{..} = do
   expr <- genTemp
   case iiType of
     Int -> emit $ SCall [expr] "__read_int" []
+    Char -> emit $ SCall [expr] "__read_char" []
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (iiType, expr) vars }
 

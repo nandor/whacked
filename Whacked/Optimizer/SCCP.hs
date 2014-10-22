@@ -50,6 +50,8 @@ compareValue op (ConstBool x) (ConstBool y)
   = Just $ (getComparator op) x y
 compareValue op (ConstString x) (ConstString y)
   = Just $ (getComparator op) x y
+compareValue op (ConstChar x) (ConstChar y)
+  = Just $ (getComparator op) x y
 
 
 -- | Evaluates an operation.
@@ -207,10 +209,23 @@ optimise func@SFunction{..}
                       } $ do
                     left <- evalValue (findAlias . siLeft $ jmp)
                     right <- evalValue (findAlias . siRight $ jmp)
-                    return $ case compareValue (siCond jmp) left right of
-                      Nothing -> jmp
-                      Just x | x == (siWhen jmp) -> SJump (siWhere jmp)
-                      _ -> SJump . fromJust . Map.lookup i $ next
+                    val <- compareValue (siCond jmp) left right
+                    return $ if val == siWhen jmp
+                        then SJump (siWhere jmp)
+                        else SJump . fromJust . Map.lookup i $ next
+          in case ns' of
+            next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
+              (next:ns', vars', alias')
+            ns' ->
+              ((i, jmp') : ns', vars', alias')
+        jmp@SUnJump{} ->
+          let jmp' = fromMaybe jmp{ siVal = findAlias $ siVal jmp } $ do
+                    val <- evalValue (findAlias . siVal $ jmp)
+                    case val of
+                      ConstBool x | x == siWhen jmp ->
+                        return $ SJump (siWhere jmp)
+                      ConstBool x | x /= siWhen jmp ->
+                        return $ SJump . fromJust . Map.lookup i $ next
           in case ns' of
             next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
               (next:ns', vars', alias')
@@ -237,13 +252,17 @@ optimise func@SFunction{..}
               reduce ns vars (Map.insert siDest (findAlias x) alias)
             _ -> ((i, phi') : ns', vars', alias')
         bin@SBinOp{..} ->
-          let bin' = fromMaybe bin $ do
+          let bin' = fromMaybe bin
+                      { siLeft = findAlias siLeft
+                      , siRight = findAlias siRight
+                      , siDest = findAlias siDest
+                      } $ do
                     left <- evalValue (findAlias siLeft)
                     right <- evalValue (findAlias siRight)
                     result <- evalBinOp siBinOp left right
                     case result of
-                      ConstInt x -> return $ SConstInt siDest x
-                      ConstBool x -> return $ SConstBool siDest x
+                      ConstInt x -> return $ SConstInt (findAlias siDest) x
+                      ConstBool x -> return $ SConstBool (findAlias siDest) x
                       _ -> Nothing
           in ( (i, bin') : ns'
              , vars'
@@ -263,7 +282,15 @@ optimise func@SFunction{..}
              )
 
         call@SCall{..} ->
-          ((i, call{ siArgs = map findAlias siArgs }) : ns', vars', alias')
+          ( ( i
+            , call
+              { siArgs = map findAlias siArgs
+              , siRet = map findAlias siRet
+              }
+            ) : ns'
+          , vars'
+          , alias'
+          )
         ret@SReturn{..} ->
           ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
         print@SPrint{..} ->
@@ -279,7 +306,6 @@ optimise func@SFunction{..}
                 String -> SCall [] "__print_string" [findAlias siArg]
                 Bool -> SCall [] "__print_bool" [findAlias siArg]
           in ((i, instr'):ns', vars', alias')
-
         _ -> ((i, instr):ns', vars', alias')
       where
         findAlias var
@@ -394,13 +420,21 @@ optimise func@SFunction{..}
       node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        case compareValue siCond left right of
-          Nothing ->
-            return (cfgNext, [], vars)
-          Just x | x == siWhen ->
+        expr <- compareValue siCond left right
+        if expr == siWhen
+          then do
             return ([(end, siWhere)], [], vars)
-          Just x | x /= siWhen ->
+          else do
             return ([(end, fromJust $ Map.lookup end next)], [], vars)
+      node@SUnJump{..} -> fromMaybe (cfgNext, [], vars) $ do
+        expr <- getValue siVal
+        case expr of
+          ConstBool x | x == siWhen ->
+            return ([(end, siWhere)], [], vars)
+          ConstBool x | x /= siWhen ->
+            return ([(end, fromJust $ Map.lookup end next)], [], vars)
+          _ ->
+            Nothing
 
       -- Add the unique branch target to the cfg worklist.
       node@SJump{..} -> ( xs, [], vars )

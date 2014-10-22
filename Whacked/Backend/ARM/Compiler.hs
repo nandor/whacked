@@ -65,6 +65,12 @@ compileInstr (_, SBinOp{..}) = do
           (fromJust $ Map.lookup siLeft regs)
           (fromJust $ Map.lookup siRight regs)
       ]
+    Sub ->
+      [ ARMSub
+          (fromJust $ Map.lookup siDest regs)
+          (fromJust $ Map.lookup siLeft regs)
+          (fromJust $ Map.lookup siRight regs)
+      ]
 compileInstr (_, SUnOp{..}) = do
   scope@Scope{ regs } <- get
   case siUnOp of

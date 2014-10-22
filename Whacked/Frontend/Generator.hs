@@ -181,7 +181,14 @@ genJump target branch expr@IBinOp{..}
         tell [ ILabel end ]
       Cmp op -> do
         tell [ IBinJump target branch op ieLeft ieRight ]
-      op -> tell [ IUnJump target branch expr ]
+      op ->
+        tell [ IUnJump target branch expr ]
+genJump target branch expr
+  = case expr of
+    IUnOp{ ieUnOp = Not, .. } ->
+      tell [IUnJump target (not branch) ieArg ]
+    _ ->
+      tell [ IUnJump target branch expr]
 
 
 -- |Generates code for an assignment statement.

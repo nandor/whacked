@@ -44,6 +44,7 @@ relabel func@SFunction{..}
 
 
 -- | Removes phi nodes from the code.
+-- | TODO(nl1813): Fix phi renaming.
 removePhi :: SFunction -> SFunction
 removePhi func@SFunction{..}
   = func

@@ -54,6 +54,7 @@ data ASM
   | ARMAscii String
   | ARMADR ARMReg String
   | ARMAdd ARMReg ARMReg ARMReg
+  | ARMSub ARMReg ARMReg ARMReg
   | ARMPush [ARMReg]
   | ARMPop [ARMReg]
   | ARMMov ARMReg ARMReg
@@ -80,6 +81,8 @@ instance Show ASM where
     = "\tLDR " ++ show d ++ ", =" ++ label
   show (ARMAdd d n m)
     = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMSub d n m)
+    = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMPush rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMPop rs)
