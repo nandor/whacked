@@ -300,13 +300,13 @@ genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
 
-genExpr IConstBool{..} dest = do
+genExpr IBool{..} dest = do
   emit $ SConstBool dest ieBoolVal
   return (Bool, dest)
-genExpr IConstChar{..} dest = do
+genExpr IChar{..} dest = do
   emit $ SConstChar dest ieCharVal
   return (Char, dest)
-genExpr IConstInt{..} dest = do
+genExpr IInt{..} dest = do
   emit $ SConstInt dest ieIntVal
   return (Int, dest)
 genExpr IConstString{..} dest = do

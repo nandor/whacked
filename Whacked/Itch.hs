@@ -48,13 +48,13 @@ data IExpr
     , ieName  :: String
     , ieScope :: Int
     }
-  | IConstBool
+  | IBool
     { ieBoolVal :: Bool
     }
-  | IConstInt
+  | IInt
     { ieIntVal :: Int
     }
-  | IConstChar
+  | IChar
     { ieCharVal :: Char
     }
   | IConstString

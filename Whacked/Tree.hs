@@ -19,7 +19,7 @@ data ATag
     , atLine :: Int
     , atChar :: Int
     }
-  deriving (Eq, Ord, Show)
+  deriving ( Eq, Ord, Show )
 
 
 data AProgram
@@ -50,9 +50,35 @@ data AArg
 
 
 data AStatement
-  = AReturn
+  = ASkip
+    { asTag :: ATag
+    }
+  | AVarDecl
+    { asTag  :: ATag
+    , asType :: Type
+    , asName :: String
+    , asWhat :: ARValue
+    }
+  | AAssign
+    { asTag  :: ATag
+    , asTo   :: ALValue
+    , asWhat :: ARValue
+    }
+  | ARead
+    { asTag  :: ATag
+    , asTo   :: ALValue
+    }
+  | AFree
+    { asTag :: ATag
+    , asExpr :: AExpr
+    }
+  | AReturn
     { asTag   :: ATag
     , asExpr  :: AExpr
+    }
+  | AExit
+    { asTag  :: ATag
+    , asExpr :: AExpr
     }
   | APrint
     { asTag  :: ATag
@@ -62,45 +88,20 @@ data AStatement
     { asTag :: ATag
     , asExpr :: AExpr
     }
-  | AAssign
-    { asTag  :: ATag
-    , asTo   :: ALValue
-    , asExpr :: AExpr
-    }
-  | ARead
-    { asTag  :: ATag
-    , asTo   :: ALValue
-    }
-  | AVarDecl
-    { asTag  :: ATag
-    , asType :: Type
-    , asVars :: [(ATag, String, ARValue)]
-    }
-  | AWhile
-    { asTag  :: ATag
-    , asExpr :: AExpr
-    , asBody :: [AStatement]
-    }
   | AIf
     { asTag   :: ATag
     , asExpr  :: AExpr
     , asTrue  :: [AStatement]
     , asFalse :: [AStatement]
     }
+  | AWhile
+    { asTag  :: ATag
+    , asExpr :: AExpr
+    , asBody :: [AStatement]
+    }
   | ABlock
     { asTag  :: ATag
     , asBody :: [AStatement]
-    }
-  | ASkip
-    { asTag :: ATag
-    }
-  | AExit
-    { asTag  :: ATag
-    , asExpr :: AExpr
-    }
-  | AFree
-    { asTag :: ATag
-    , asExpr :: AExpr
     }
   | AEnd
   deriving (Eq, Ord, Show)
@@ -142,11 +143,6 @@ data AExpr
     { aeTag     :: ATag
     , aeBoolVal :: Bool
     }
-  | ACall
-    { aeTag  :: ATag
-    , aeName :: String
-    , aeArgs :: [AExpr]
-    }
   | AIndex
     { aeTag   :: ATag
     , aeArray :: AExpr
@@ -155,30 +151,25 @@ data AExpr
   | ANull
     { aeTag :: ATag
     }
-  | ANewPair
-    { aeTag :: ATag
-    , aeFst :: AExpr
-    , aeSnd :: AExpr
-    }
   deriving (Eq, Ord, Show)
 
 
 data ALValue
   = ALVar
-    { alTag :: ATag
+    { alTag  :: ATag
     , alName :: String
     }
   | ALFst
-    { alTag :: ATag
-    , alName :: String
+    { alTag  :: ATag
+    , alPair :: AExpr
     }
   | ALSnd
-    { alTag :: ATag
-    , alName :: String
+    { alTag  :: ATag
+    , alPair :: AExpr
     }
   | ALArray
-    { alTag :: ATag
-    , alName :: String
+    { alTag   :: ATag
+    , alName  :: String
     , alIndex :: AExpr
     }
   deriving (Eq, Ord, Show)
@@ -193,8 +184,22 @@ data ARValue
     { arTag   :: ATag
     , arElems :: [AExpr]
     }
-  | ARTuple
-    { arFst :: AExpr
+  | ARPair
+    { arTag :: ATag
+    , arFst :: AExpr
     , arSnd :: AExpr
+    }
+  | ARFst
+    { arTag  :: ATag
+    , arPair :: AExpr
+    }
+  | ARSnd
+    { arTag  :: ATag
+    , arPair :: AExpr
+    }
+  | ARCall
+    { arTag  :: ATag
+    , arFunc :: String
+    , arArgs :: [AExpr]
     }
   deriving (Eq, Ord, Show)

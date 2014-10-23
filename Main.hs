@@ -15,7 +15,7 @@ import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Frontend.Parser
-import           Whacked.Frontend.Generator
+--import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
 import           Whacked.Optimizer.SCCP
 import           Whacked.Backend.ARM as ARM
@@ -97,7 +97,7 @@ main
           exitWith $ ExitFailure 100
         Right ast -> do
           when optPrintAST $ print ast
-          case generateI ast of
+          {-case generateI ast of
             Left err -> do
               putStrLn err
               exitWith $ ExitFailure 200
@@ -117,6 +117,6 @@ main
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm
 
-              writeFile optOutput (concat . intersperse "\n" . map show $ asm)
+              writeFile optOutput (concat . intersperse "\n" . map show $ asm)-}
 
     (_, _, errs) -> usage

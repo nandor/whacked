@@ -138,11 +138,11 @@ genExpr AVar{..} = do
     Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"
     Just (idx, t) -> return (t, IVar t aeName idx)
 genExpr AConstInt{..} = do
-  return (Int, IConstInt aeIntVal)
+  return (Int, IInt aeIntVal)
 genExpr AConstBool{..} = do
-  return (Bool, IConstBool aeBoolVal)
+  return (Bool, IBool aeBoolVal)
 genExpr AConstChar{..} = do
-  return (Char, IConstChar aeCharVal)
+  return (Char, IChar aeCharVal)
 genExpr AConstString{..} = do
   return (String, IConstString aeStringVal)
 genExpr ACall{..} = do
@@ -269,14 +269,13 @@ genStmt ARead{..}
         ALVar{..} ->
           genError alTag "type cannot be read"
 genStmt AVarDecl{..} = do
-  forM_ asVars $ \(tag, name, expr) -> do
-    scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
-    var <- findVar name
-    when (isJust var) $ do
-      let Just (idx, t) = var
-      when (idx == nextScope) $
-        genError asTag $ "duplicate variable '" ++ name ++ "'"
-    genAssignment asType tag name expr
+  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
+  var <- findVar asName
+  when (isJust var) $ do
+    let Just (idx, t) = var
+    when (idx == nextScope) $
+      genError asTag $ "duplicate variable '" ++ asName ++ "'"
+  genAssignment asType asTag asName asWhat
 
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
