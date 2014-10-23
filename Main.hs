@@ -15,10 +15,10 @@ import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Frontend.Parser
---import           Whacked.Frontend.Generator
-import           Whacked.Optimizer.Translator
-import           Whacked.Optimizer.SCCP
-import           Whacked.Backend.ARM as ARM
+import           Whacked.Frontend.Generator
+--import           Whacked.Optimizer.Translator
+--import           Whacked.Optimizer.SCCP
+--import           Whacked.Backend.ARM as ARM
 
 
 data Options
@@ -97,7 +97,7 @@ main
           exitWith $ ExitFailure 100
         Right ast -> do
           when optPrintAST $ print ast
-          {-case generateI ast of
+          case generateI ast of
             Left err -> do
               putStrLn err
               exitWith $ ExitFailure 200
@@ -107,7 +107,7 @@ main
                   putStrLn (ifName ++ show ifArgs ++ show ifVars)
                   mapM_ (putStrLn . show) ifBody
 
-              let scratch = sccp . generateS $ itch
+              {-let scratch = sccp . generateS $ itch
               when optPrintIMF $ do
                 forM_ (spFuncs scratch) $ \SFunction{..} -> do
                   putStrLn (show sfArgs)

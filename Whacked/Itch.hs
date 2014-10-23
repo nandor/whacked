@@ -49,28 +49,42 @@ data IExpr
     , ieScope :: Int
     }
   | IBool
-    { ieBoolVal :: Bool
+    { ieBool :: Bool
     }
   | IInt
-    { ieIntVal :: Int
+    { ieInt :: Int
     }
   | IChar
-    { ieCharVal :: Char
+    { ieChar :: Char
     }
-  | IConstString
-    { ieStringVal :: String
+  | IArray
+    { ieType :: Type
+    , ieElems :: [IExpr]
+    }
+  | IPair
+    { ieType :: Type
+    , ieLeft :: IExpr
+    , ieRight :: IExpr
+    }
+  | IIndex
+    { ieType  :: Type
+    , ieArray :: IExpr
+    , ieIndex :: IExpr
+    }
+  | IElem
+    { ieType :: Type
+    , iePair :: IExpr
+    , ieElem :: Elem
     }
   | ICall
     { ieType :: Type
     , ieName :: String
     , ieArgs :: [IExpr]
     }
-  | INewPair
-    { ieType :: Type
-    , ieFst :: IExpr
-    , ieSnd :: IExpr
+  | INull
+    {
     }
-  deriving (Eq, Ord, Show)
+  deriving ( Eq, Ord, Show )
 
 
 data IInstr
@@ -92,22 +106,24 @@ data IInstr
   | IJump
     { iiWhere :: Int
     }
-  | IWriteVar
+  | IAssVar
     { iiVar   :: String
     , iiScope :: Int
     , iiExpr  :: IExpr
     }
-  | IWriteArray
+  | IAssArray
     { iiVar   :: String
     , iiScope :: Int
-    , iiIndex :: IExpr
+    , iiIndex :: [IExpr]
     , iiExpr  :: IExpr
     }
-  | INewArray
+  | IAssPair
     { iiVar   :: String
-    , iiScope :: Int
-    , iiExprs :: [IExpr]
+    , iiSCope :: Int
+    , iiElem  :: Elem
+    , iiExpr  :: IExpr
     }
+
   | IRead
     { iiVar   :: String
     , iiScope :: Int
@@ -133,16 +149,16 @@ data IInstr
 
 
 instance Show IInstr where
-  show IReturn{..} = "IReturn"
-  show IBinJump{..} = "IBinJump " ++ show iiWhere
-  show IUnJump{..} = "IUnJump " ++ show iiWhere
-  show IJump{..} = "IJump " ++ show iiWhere
-  show IWriteVar{..} = "IWriteVar" ++ show iiVar
-  show IWriteArray{..} = "IWriteArray" ++ show iiVar
-  show INewArray{..} = "INewArray"
-  show IRead{..} = "IRead" ++ show iiVar
-  show IPrint{..} = "IPrint"
-  show IPrintln{..} = "IPrintln"
-  show ILabel{..} = "ILabel " ++ show iiLabel
-  show IExit{..} = "IExit"
-  show IEnd{..} = "IEnd"
+  show IReturn{..}   = "IReturn   "
+  show IBinJump{..}  = "IBinJump  " ++ show iiWhere
+  show IUnJump{..}   = "IUnJump   " ++ show iiWhere
+  show IJump{..}     = "IJump     " ++ show iiWhere
+  show IAssVar{..}   = "IAssVar   " ++ iiVar
+  show IAssArray{..} = "IAssArray " ++ iiVar
+  show IAssPair{..}  = "IAssPair  "
+  show IRead{..}     = "IRead     " ++ iiVar
+  show IPrint{..}    = "IPrint    "
+  show IPrintln{..}  = "IPrintln  "
+  show ILabel{..}    = "ILabel    " ++ show iiLabel
+  show IExit{..}     = "IExit     "
+  show IEnd{..}      = "IEnd      "

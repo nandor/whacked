@@ -104,6 +104,8 @@ data AStatement
     , asBody :: [AStatement]
     }
   | AEnd
+    {
+    }
   deriving (Eq, Ord, Show)
 
 
@@ -123,25 +125,21 @@ data AExpr
     { aeTag  :: ATag
     , aeName :: String
     }
-  | AConstInt
+  | ABool
+    { aeTag  :: ATag
+    , aeBool :: Bool
+    }
+  | AInt
+    { aeTag :: ATag
+    , aeInt :: Int
+    }
+  | AChar
+    { aeTag  :: ATag
+    , aeChar :: Char
+    }
+  | AString
     { aeTag    :: ATag
-    , aeIntVal :: Int
-    }
-  | AConstReal
-    { aeTag     :: ATag
-    , aeRealVal :: Float
-    }
-  | AConstChar
-    { aeTag     :: ATag
-    , aeCharVal :: Char
-    }
-  | AConstString
-    { aeTag       :: ATag
-    , aeStringVal :: String
-    }
-  | AConstBool
-    { aeTag     :: ATag
-    , aeBoolVal :: Bool
+    , aeString :: String
     }
   | AIndex
     { aeTag   :: ATag
@@ -159,17 +157,14 @@ data ALValue
     { alTag  :: ATag
     , alName :: String
     }
-  | ALFst
+  | ALElem
     { alTag  :: ATag
     , alPair :: AExpr
-    }
-  | ALSnd
-    { alTag  :: ATag
-    , alPair :: AExpr
+    , alElem :: Elem
     }
   | ALArray
     { alTag   :: ATag
-    , alName  :: String
+    , alArray :: AExpr
     , alIndex :: AExpr
     }
   deriving (Eq, Ord, Show)
@@ -189,17 +184,14 @@ data ARValue
     , arFst :: AExpr
     , arSnd :: AExpr
     }
-  | ARFst
+  | ARElem
     { arTag  :: ATag
     , arPair :: AExpr
-    }
-  | ARSnd
-    { arTag  :: ATag
-    , arPair :: AExpr
+    , arElem :: Elem
     }
   | ARCall
     { arTag  :: ATag
-    , arFunc :: String
+    , arName :: String
     , arArgs :: [AExpr]
     }
   deriving (Eq, Ord, Show)

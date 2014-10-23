@@ -5,9 +5,9 @@ module Whacked.Frontend.Parser
   ) where
 
 
-import           Control.Applicative ((*>), (<*), (<$>), (<*>))
+import           Control.Applicative ((*>), (<*), (<$>), (<*>), pure)
 import           Control.Monad
-import           Data.Foldable
+import           Data.Foldable hiding (foldl)
 import           Data.Functor.Identity
 import           Data.Int
 import           Text.ParserCombinators.Parsec hiding (parse)
@@ -19,8 +19,8 @@ import qualified Text.ParserCombinators.Parsec.Token as Token
 import           Whacked.Tree
 import           Whacked.Types
 
-import Debug.Trace
 
+import Debug.Trace
 -- |Definition of the language.
 whacked :: TokenParser st
 whacked
@@ -110,8 +110,8 @@ aType
     baseType = asum . map try $
       [ reserved "int"    *> return Int
       , reserved "bool"   *> return Bool
-      , reserved "string" *> return String
-      , reserved "char"   *> return (Array Char 1)
+      , reserved "string" *> return (Array Char)
+      , reserved "char"   *> return Char
       ]
 
     pairElemType = asum . map try $
@@ -131,17 +131,24 @@ aType
     arrayType = do
       t <- baseType <|> pairType
       count <- length <$> (many1 (brackets whiteSpace))
-      return $ Array t count
+      return $ foldl (\x _ -> Array x) t [1..count]
 
 
 -- |Parses a LValue.
 aLValue :: GenParser Char st ALValue
 aLValue
   = asum . map try $
-    [ ALArray <$> aTag <*> identifier <*> brackets aExpr
+    [ do
+        tag <- aTag
+        expr <- aExpr
+        case expr of
+          AIndex{..} ->
+            return $ ALArray tag aeArray aeIndex
+          _ ->
+            unexpected "expected an array index"
     , ALVar   <$> aTag <*> identifier
-    , ALFst   <$> aTag <*> (reserved "fst" *> aExpr)
-    , ALSnd   <$> aTag <*> (reserved "snd" *> aExpr)
+    , ALElem  <$> aTag <*> (reserved "fst" *> aExpr) <*> pure Fst
+    , ALElem  <$> aTag <*> (reserved "snd" *> aExpr) <*> pure Snd
     ]
 
 
@@ -159,8 +166,8 @@ aRValue
           comma
           right <- aExpr
           return $ ARPair tag left right
-    , ARFst   <$> aTag <*> (reserved "fst" *> aExpr)
-    , ARSnd   <$> aTag <*> (reserved "snd" *> aExpr)
+    , ARElem <$> aTag <*> (reserved "fst" *> aExpr) <*> pure Fst
+    , ARElem <$> aTag <*> (reserved "snd" *> aExpr) <*> pure Fst
     , do
         tag <- aTag
         reserved "call"
@@ -196,8 +203,8 @@ aExpr
           , Infix (tagBin "<"  $ Cmp CLT ) AssocNone
           , Infix (tagBin "<=" $ Cmp CLTE) AssocNone
           ]
-        , [ Infix (tagBin "==" $ Cmp CEQ ) AssocNone
-          , Infix (tagBin "!=" $ Cmp CNEQ) AssocNone
+        , [ Infix (tagBin "==" $ Cmp CEQ) AssocNone
+          , Infix (tagBin "!=" $ Cmp CNE) AssocNone
           ]
         , [ Infix (tagBin "&&" And) AssocRight
           ]
@@ -227,8 +234,8 @@ aExpr
           int <- integer
           when (1 + toInteger (maxBound :: Int32) < int) $
             unexpected $ "integer too big: " ++ show int
-          return $ AConstInt tag (fromIntegral int)
-      , AConstBool <$> aTag <*> asum
+          return $ AInt tag (fromIntegral int)
+      , ABool <$> aTag <*> asum
         [ reserved "true" *> return True
         , reserved "false" *> return False
         ]
@@ -237,11 +244,11 @@ aExpr
           char '\''
           chr <- noneOf "\""
           if chr /= '\\'
-            then lexeme (char '\'') *> return (AConstChar tag chr)
+            then lexeme (char '\'') *> return (AChar tag chr)
             else do
               chr <- anyChar
               lexeme $ char '\''
-              AConstChar tag <$> case chr of
+              AChar tag <$> case chr of
                 '0'  -> return '\0'
                 'b'  -> return '\b'
                 't'  -> return '\t'
@@ -252,7 +259,7 @@ aExpr
                 '\'' -> return '\''
                 '\\' -> return '\\'
                 x -> unexpected "invalid escape sequence"
-      , AConstString <$> aTag <*> stringLiteral
+      , AString <$> aTag <*> stringLiteral
       , AVar <$> aTag <*> identifier
       , reserved "null" *> (ANull <$> aTag)
       ]

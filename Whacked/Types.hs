@@ -1,9 +1,7 @@
 module Whacked.Types where
 
-import           Data.Map(Map)
-import qualified Data.Map as Map
 
-
+-- |Binary operators.
 data BinaryOp
   = Add
   | Sub
@@ -16,83 +14,88 @@ data BinaryOp
   deriving ( Eq, Ord, Show )
 
 
+-- |Unary operators.
 data UnaryOp
   = Neg
   | Not
   | Ord
   | Chr
-  | Fst
-  | Snd
   | Len
   deriving ( Eq, Ord, Show )
 
 
+-- |Comparision operators.
 data CondOp
   = CLT
   | CLTE
   | CGT
   | CGTE
   | CEQ
-  | CNEQ
+  | CNE
   deriving ( Eq, Ord, Show )
 
 
+-- |All types present in the WACC language.
 data Type
   = Int
   | Bool
-  | String
   | Char
-  | Poly
-  | Void
-  | Array Type Int
+  | Array Type
   | Pair Type Type
+  | Poly
+  | Empty
+  | Null
+  | Void
   deriving ( Eq, Ord, Show )
 
 
+-- |Pair fields.
+data Elem
+  = Fst
+  | Snd
+  deriving ( Eq, Ord, Show )
+
+
+-- |Returns the type of the result of a binary operation or Nothing.
 binOpType :: BinaryOp -> Type -> Type -> Maybe Type
-binOpType binOp lt rt
-  = Map.lookup (binOp, lt, rt) . Map.fromList $
-    [ ((Add,      Int,    Int),    Int )
-    , ((Sub,      Int,    Int),    Int )
-    , ((Div,      Int,    Int),    Int )
-    , ((Mul,      Int,    Int),    Int )
-    , ((Div,      Int,    Int),    Int )
-    , ((Mod,      Int,    Int),    Int )
-    , ((And,      Int,    Int),    Int )
-    , ((And,      Bool,   Bool),   Bool)
-    , ((Or,       Bool,   Bool),   Bool)
-    , ((Cmp CLT,  Int,    Int),    Bool)
-    , ((Cmp CLT,  Char,   Char),   Bool)
-    , ((Cmp CLT,  String, String), Bool)
-    , ((Cmp CLTE, Int,    Int),    Bool)
-    , ((Cmp CLTE, Char,   Char),   Bool)
-    , ((Cmp CLTE, String, String), Bool)
-    , ((Cmp CGT,  Int,    Int),    Bool)
-    , ((Cmp CGT,  Char,   Char),   Bool)
-    , ((Cmp CGT,  String, String), Bool)
-    , ((Cmp CGTE, Int,    Int),    Bool)
-    , ((Cmp CGTE, Char,   Char),   Bool)
-    , ((Cmp CGTE, String, String), Bool)
-    , ((Cmp CEQ,  Int,    Int),    Bool)
-    , ((Cmp CEQ,  Char,   Char),   Bool)
-    , ((Cmp CEQ,  String, String), Bool)
-    , ((Cmp CEQ,  Bool,   Bool),   Bool)
-    , ((Cmp CNEQ, Int,    Int),    Bool)
-    , ((Cmp CNEQ, Char,   Char),   Bool)
-    , ((Cmp CNEQ, String, String), Bool)
-    , ((Cmp CNEQ, Bool,   Bool),   Bool)
-    ]
+binOpType Add Int  Int  = Just Int
+binOpType Sub Int  Int  = Just Int
+binOpType Div Int  Int  = Just Int
+binOpType Mul Int  Int  = Just Int
+binOpType Mod Int  Int  = Just Int
+binOpType And Bool Bool = Just Bool
+binOpType Or  Bool Bool = Just Bool
+
+binOpType (Cmp CLT ) Int  Int  = Just Bool
+binOpType (Cmp CLT ) Char Char = Just Bool
+binOpType (Cmp CLTE) Int  Int  = Just Bool
+binOpType (Cmp CLTE) Char Char = Just Bool
+binOpType (Cmp CGT ) Int  Int  = Just Bool
+binOpType (Cmp CGT ) Char Char = Just Bool
+binOpType (Cmp CGTE) Int  Int  = Just Bool
+binOpType (Cmp CGTE) Char Char = Just Bool
+
+binOpType (Cmp CEQ) Int  Int  = Just Bool
+binOpType (Cmp CEQ) Char Char = Just Bool
+binOpType (Cmp CEQ) Bool Bool = Just Bool
+binOpType (Cmp CNE) Int  Int  = Just Bool
+binOpType (Cmp CNE) Char Char = Just Bool
+binOpType (Cmp CNE) Bool Bool = Just Bool
+
+binOpType (Cmp CEQ) (Array _)  (Array _)  = Just Bool
+binOpType (Cmp CNE) (Array _)  (Array _)  = Just Bool
+binOpType (Cmp CEQ) (Pair _ _) (Pair _ _) = Just Bool
+binOpType (Cmp CNE) (Pair _ _) (Pair _ _) = Just Bool
 
 
+-- Return the type of an unary operation or nothing
 unOpType :: UnaryOp -> Type -> Maybe Type
-unOpType unOp t
-  = Map.lookup (unOp, t) . Map.fromList $
-    [ ((Neg,   Int   ), Int )
-    , ((Not,   Bool  ), Bool)
-    , ((Ord,   Char  ), Int )
-    , ((Chr ,  Int   ), Char)
-    , ((Len,   String), Int )
-    ]
+unOpType Neg Int         = Just Int
+unOpType Not Bool      = Just Bool
+unOpType Ord Char      = Just Int
+unOpType Chr Int       = Just Char
+unOpType Len (Array _) = Just Int
+unOpType _ _           = Nothing
 
 
 
@@ -104,7 +107,7 @@ getComparator op
     CGT  -> [GT]
     CGTE -> [GT, EQ]
     CEQ  -> [EQ]
-    CNEQ -> [LT, GT]
+    CNE  -> [LT, GT]
 
 
 match :: Type -> Type -> Bool
@@ -119,19 +122,12 @@ match x y
     _ -> False
 
 
-elemType :: Type -> Type
-elemType (Array t 1)
-  = t
-elemType (Array t n)
-  = Array t (n - 1)
-
-
 isReadable :: Type -> Bool
 isReadable Void
   = False
 isReadable (Pair _ _)
   = False
-isReadable (Array _ _)
+isReadable (Array _)
   = False
 isReadable Bool
   = False

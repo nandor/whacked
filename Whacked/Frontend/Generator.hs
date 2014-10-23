@@ -7,7 +7,6 @@ module Whacked.Frontend.Generator
   ) where
 
 
-import Debug.Trace
 
 import           Control.Applicative
 import           Control.Monad
@@ -25,7 +24,7 @@ import           Whacked.Tree
 import           Whacked.Types
 
 
-
+import Debug.Trace
 -- |The scope keeps information about declared variables, functions return
 -- types, label counters and scope counters. It is wrapped into a state monad
 -- for easy access.
@@ -122,45 +121,87 @@ genError ATag{..} msg
 -- |Transforms the AST expression to IMF expressions, checking types and
 -- removing tags.
 genExpr :: AExpr -> Generator (Type, IExpr)
+genExpr AUnOp{..} = do
+  (t, expr) <- genExpr aeArg
+  case unOpType aeUnOp t of
+    Nothing ->
+      genError aeTag "type error: mismatched types"
+    Just t ->
+      return (t, IUnOp t aeUnOp expr)
 genExpr ABinOp{..} = do
   (lt, le) <- genExpr aeLeft
   (rt, re) <- genExpr aeRight
   case binOpType aeBinOp lt rt of
-    Nothing -> genError aeTag "type error"
-    Just t -> return (t, IBinOp t aeBinOp le re)
-genExpr AUnOp{..} = do
-  (t, expr) <- genExpr aeArg
-  case unOpType aeUnOp t of
-    Nothing -> genError aeTag "type error"
-    Just t -> return (t, IUnOp t aeUnOp expr)
-genExpr AVar{..} = do
-  findVar aeName >>= \case
-    Nothing -> genError aeTag $ "undefined variable '" ++ aeName ++ "'"
-    Just (idx, t) -> return (t, IVar t aeName idx)
-genExpr AConstInt{..} = do
-  return (Int, IInt aeIntVal)
-genExpr AConstBool{..} = do
-  return (Bool, IBool aeBoolVal)
-genExpr AConstChar{..} = do
-  return (Char, IChar aeCharVal)
-genExpr AConstString{..} = do
-  return (String, IConstString aeStringVal)
-genExpr ACall{..} = do
-  get >>= \Scope{ functions } -> case Map.lookup aeName functions of
-    Nothing -> genError aeTag $ "undefined function '" ++ aeName ++ "'"
+    Nothing ->
+      genError aeTag "type error: mismatched types"
+    Just t ->
+      return (t, IBinOp t aeBinOp le re)
+genExpr AVar{..} = findVar aeName >>= \case
+  Nothing ->
+    genError aeTag $ "undefined variable '" ++ aeName ++ "'"
+  Just (idx, t) ->
+    return (t, IVar t aeName idx)
+genExpr AInt{..} =
+  return (Int, IInt aeInt)
+genExpr ABool{..} =
+  return (Bool, IBool aeBool)
+genExpr AChar{..} =
+  return (Char, IChar aeChar)
+genExpr AString{..} =
+  return (Array Char, IArray (Array Char) (map IChar aeString))
+genExpr AIndex{..} = do
+  (at, aexpr) <- genExpr aeArray
+  (it, iexpr) <- genExpr aeIndex
+  when (it /= Int) $
+    genError aeTag $ "type error: integer expected"
+  case at of
+    Array at' ->
+      return (at', IIndex at' aexpr iexpr)
+    _ ->
+      genError aeTag $ "type error: array expected"
+genExpr ANull{..} =
+  return (Null, INull)
+
+
+-- |Generates code to convert a rvalue to an expression.
+genRValue :: ARValue -> Generator (Type, IExpr)
+genRValue ARExpr{..} =
+  genExpr arExpr
+genRValue ARArray{..} =
+  mapM genExpr arElems >>= \case
+    [] ->
+      return (Empty, IArray Empty [])
+    ((t, x):xs) | all (\(y, _) -> y == t) xs ->
+      return (Array t, IArray t $ x:(map snd xs))
+    _ ->
+      genError arTag $ "type error: invalid element"
+genRValue ARPair{..} = do
+  (le, lexpr) <- genExpr arFst
+  (re, rexpr) <- genExpr arSnd
+  return (Pair le re, IPair (Pair le re) lexpr rexpr)
+genRValue ARElem{..} = do
+  (pe, pexpr) <- genExpr arPair
+  case pe of
+    Pair lp rp | arElem == Fst ->
+      return (lp, IElem lp pexpr Fst)
+    Pair lp rp | arElem == Snd ->
+      return (rp, IElem rp pexpr Snd)
+    _ ->
+      genError arTag "type error: pair expected"
+genRValue ARCall{..} = do
+  Scope{ functions } <- get
+  case Map.lookup arName functions of
+    Nothing ->
+      genError arTag $ "undefined function '" ++ arName ++ "'"
     Just AFunction{ afType, afArgs } -> do
-      when (length afArgs /= length aeArgs) $
-        genError aeTag $ "invalid number of arguments"
-      args <- forM (zip afArgs aeArgs) $ \(AArg{ aaType }, arg) -> do
+      when (length afArgs /= length arArgs) $
+        genError arTag $ "invalid number of arguments"
+      args <- forM (zip afArgs arArgs) $ \(AArg{ aaType }, arg) -> do
         (t, expr) <- genExpr arg
         when (not (t `match` aaType)) $
-          genError aeTag $ "type error"
+          genError arTag $ "type error: invalid argument"
         return expr
-      return (afType, ICall afType aeName args)
-genExpr ANewPair{..} = do
-  (lt, le) <- genExpr aeFst
-  (rt, re) <- genExpr aeSnd
-  return (Pair lt rt, INewPair (Pair lt rt) le re)
+      return (afType, ICall afType arName args)
 
 
 -- |Generates a jump statement.
@@ -195,36 +236,63 @@ genJump target branch expr
       tell [ IUnJump target branch expr]
 
 
--- |Generates code for an assignment statement.
-genAssignment :: Type -> ATag -> String -> ARValue -> Generator ()
-genAssignment declType tag name ARExpr{..} = do
-  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
-  (t, expr') <- genExpr arExpr
-  when (not (t `match` declType)) $
-    genError tag $ "type error"
-  tell [IWriteVar name nextScope expr']
-  put scope
-    { variables = (nextScope, Map.insert name declType x) : xs
-    , declarations = Set.insert (name, nextScope, declType) declarations
-    }
-genAssignment declType tag name ARArray{..} = do
-  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
-  case declType of
-    Array t n | n > 0 -> do
-      vals <- mapM genExpr arElems
-      forM_ vals $ \(t', _) ->
-        when (not (t' `match` (elemType (Array t n)))) $
-          genError tag $ "type error"
-      tell [INewArray name nextScope (map snd vals)]
-      put scope
-        { variables = (nextScope, Map.insert name declType x) : xs
-        , declarations = Set.insert (name, nextScope, declType) declarations
-        }
-    _ -> genError tag $ "type error"
+-- |Generates code for an asignment instruction.
+genAssignment :: ALValue -> Type -> IExpr -> Generator ()
+genAssignment ALArray{..} et eexpr = do
+  (at, aexpr) <- genExpr alArray
+  (it, iexpr) <- genExpr alIndex
+
+  when (it /= Int) $
+    genError alTag "type error: integer expected"
+  case at of
+    Array t -> do
+      when (t /= et) $
+        genError alTag "type error: mismatched types"
+
+    _ -> do
+      genError alTag "type error: array expected"
 
 
 -- |Generates code for a statement.
 genStmt :: AStatement -> Generator ()
+genStmt ASkip{..} = do
+  -- Ignore skip statements
+  return ()
+
+genStmt AVarDecl{..} = do
+  -- Insert variables in the scope. Checks if the variable has not been already
+  -- declared in the same scope, generates an assignment instruction & places
+  -- the variable in the symbol table.
+  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
+
+  -- There must be no other declaration in the same scope.
+  var <- findVar asName
+  when (isJust var) $ do
+    let Just (idx, t) = var
+    when (idx == nextScope) $
+      genError asTag $ "duplicate variable '" ++ asName ++ "'"
+
+  -- Check the types
+  (et, eexpr) <- genRValue asWhat
+  when (not $ asType `match` et) $
+    genError asTag $ "type error: mismatched types"
+
+  -- Generate an assignment instruction.
+  tell [IAssVar asName nextScope eexpr]
+
+  -- Update the symbol table.
+  put scope
+    { variables = (nextScope, Map.insert asName asType x) : xs
+    , declarations = Set.insert (asName, nextScope, asType) declarations
+    }
+
+genStmt AAssign{..} = do
+  -- Generates code for assignments. Checks if the variable has been defined
+  -- beforehand & checks whether the types are correct.
+  (et, eexpr) <- genRValue asWhat
+  genAssignment asTo et eexpr
+
+
 genStmt AReturn{..} = do
   scope@Scope{ function, functions } <- get
   case Map.lookup function functions of
@@ -240,26 +308,7 @@ genStmt APrint{..} = do
 genStmt APrintln{..} = do
   (t, expr) <- genExpr asExpr
   tell [IPrintln expr]
-genStmt AAssign{..}
-  = findVar (alName asTo) >>= \case
-      Nothing -> genError asTag $ "undefined variable '" ++ (alName asTo) ++ "'"
-      Just (idx, t) -> case asTo of
-        ALVar{..} -> do
-            (t', expr) <- genExpr asExpr
-            when (not (t `match` t')) $
-              genError alTag $ "type error"
-            tell [IWriteVar alName idx expr]
-        ALArray{..} -> do
-          (t', expr') <- genExpr alIndex
-          (t'', expr'') <- genExpr asExpr
-          when (t' /= Int) $
-            genError alTag "indices must be integers"
-          case t of
-            String | t'' == Char ->
-              tell [IWriteArray alName idx expr' expr'']
-            Array t n | n  == 1 && t == t'' ->
-              tell [IWriteArray alName idx expr' expr'']
-            _ -> genError alTag $ "'" ++ alName ++ "' is not an array"
+
 genStmt ARead{..}
   = findVar (alName asTo) >>= \case
       Nothing -> genError asTag $ "undefined variable '" ++ (alName asTo) ++ "'"
@@ -268,15 +317,6 @@ genStmt ARead{..}
           tell [IRead alName idx t]
         ALVar{..} ->
           genError alTag "type cannot be read"
-genStmt AVarDecl{..} = do
-  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
-  var <- findVar asName
-  when (isJust var) $ do
-    let Just (idx, t) = var
-    when (idx == nextScope) $
-      genError asTag $ "duplicate variable '" ++ asName ++ "'"
-  genAssignment asType asTag asName asWhat
-
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
   when (not (t `match` Bool)) $ do
@@ -326,10 +366,10 @@ genStmt AExit{..} = do
   when (not (t `match` Int)) $ do
     genError asTag $ "integer expected"
   tell [IExit expr]
-genStmt ASkip{..} = do
-  return ()
 genStmt AEnd
   = tell [IEnd]
+
+
 -- |Generates code for a function body.
 genFunc :: AFunction -> Generator ()
 genFunc AFunction{..} = do
