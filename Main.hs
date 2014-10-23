@@ -14,7 +14,7 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
---import           Whacked.Optimizer.Translator
+import           Whacked.Optimizer.Translator
 --import           Whacked.Optimizer.SCCP
 --import           Whacked.Backend.ARM as ARM
 
@@ -100,15 +100,10 @@ main
               putStrLn err
               exitWith $ ExitFailure 200
             Right itch -> do
-              when optPrintIMF $ do
-                print itch
-
-              {-let scratch = sccp . generateS $ itch
-              when optPrintIMF $ do
-                forM_ (spFuncs scratch) $ \SFunction{..} -> do
-                  putStrLn (show sfArgs)
-                  mapM_ (putStrLn . show) sfBody
-
+              when optPrintIMF $ print itch
+              let scratch = generateS $ itch
+              when optPrintIMF $ print scratch
+              {-
               let asm = ARM.compile scratch
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm

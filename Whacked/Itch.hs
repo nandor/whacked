@@ -146,7 +146,7 @@ data IInstr
 
 instance Show IProgram where
   show IProgram{..}
-    = concat (intersperse "\n\n" $ map show ipFuncs)
+    = concat . intersperse "\n\n" . map show $ ipFuncs
 
 
 instance Show IFunction where
@@ -189,32 +189,29 @@ instance Show IExpr where
 
 instance Show IInstr where
   show IReturn{..}
-    = "    IReturn   " ++ show iiExpr
+    = "    ret      " ++ show iiExpr
   show IBinJump{..}
-    = "    IBinJump  @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=="
-      ++ "(" ++ show iiLeft ++ ")" ++ show iiCond ++ "(" ++ show iiRight ++ ")"
+    = "    jmpbin  @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=" ++
+      "(" ++ show iiLeft ++ ")" ++ show iiCond ++ "(" ++ show iiRight ++ ")"
   show IUnJump{..}
-    = "    IUnJump   @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=="
-      ++ show iiVal
+    = "    jmpun   @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=" ++ show iiVal
   show IJump{..}
-    = "    IJump     @" ++ show iiWhere
+    = "    jmp     @" ++ show iiWhere
   show IAssVar{..}
-    = "    IAssVar   <" ++ iiVar ++ ":" ++ show iiScope ++ ">"
-      ++ "=" ++ show iiExpr
+    = "    <" ++ iiVar ++ ":" ++ show iiScope ++ ">=" ++ show iiExpr
   show IAssArray{..}
-    = "    IAssArray " ++ show iiArray ++ "[" ++ show iiIndex ++ "]"
-      ++ "=" ++ show iiExpr
+    = "    " ++ show iiArray ++ "[" ++ show iiIndex ++ "]=" ++ show iiExpr
   show IAssPair{..}
-    = "    IAss" ++ show iiElem ++ "   " ++ show iiPair ++ "=" ++ show iiExpr
+    = "    " ++ show iiPair ++ "[" ++ show iiElem ++ "]=" ++ show iiExpr
   show IPrint{..}
-    = "    IPrint    " ++ show iiExpr
+    = "    print    " ++ show iiExpr
   show IPrintln{..}
-    = "    IPrintln  " ++ show iiExpr
+    = "    println  " ++ show iiExpr
   show ILabel{..}
     = " @" ++ show iiLabel ++ ":"
   show IExit{..}
-    = "    IExit     " ++ show iiExpr
+    = "    exit     " ++ show iiExpr
   show IEnd{..}
-    = "    IEnd      "
+    = "    end      "
   show IFree{..}
-    = "    IFree     " ++ show iiExpr
+    = "    free     " ++ show iiExpr

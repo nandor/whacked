@@ -203,7 +203,7 @@ getPhiNodes vars blocks frontier
       = visits mp queue Set.empty Set.empty
       where
         queue = map fst . Map.toList . Map.filter (any assignsTo) $ blocks
-        assignsTo IWriteVar{..}
+        assignsTo IAssVar{..}
           = iiVar == name
         assignsTo _
           = False
@@ -301,17 +301,17 @@ genExpr IVar{..} dest = do
   return . fromJust $ Map.lookup (ieName, ieScope) vars
 
 genExpr IBool{..} dest = do
-  emit $ SConstBool dest ieBoolVal
+  emit $ SConstBool dest ieBool
   return (Bool, dest)
 genExpr IChar{..} dest = do
-  emit $ SConstChar dest ieCharVal
+  emit $ SConstChar dest ieChar
   return (Char, dest)
 genExpr IInt{..} dest = do
-  emit $ SConstInt dest ieIntVal
+  emit $ SConstInt dest ieInt
   return (Int, dest)
-genExpr IConstString{..} dest = do
-  emit $ SConstString dest ieStringVal
-  return (String, dest)
+--genExpr IConstString{..} dest = do
+--  emit $ SConstString dest ieStringVal
+--  return (String, dest)
 
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
@@ -345,28 +345,10 @@ genInstr IUnJump{..} = do
 genInstr IJump{..} = do
   emit $ SJump iiWhere
 
-genInstr IWriteVar{..} = do
+genInstr IAssVar{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
-
-genInstr IWriteArray{..} = do
-  (_, expr) <- genTemp >>= genExpr iiIndex
-  (t', expr') <- genTemp >>= genExpr iiExpr
-  dest <- genTemp
-
-  scope@Scope{ vars } <- get
-  let Just (arrType, arr) = Map.lookup (iiVar, iiScope) vars
-  emit $ SWriteArray t' dest arr expr expr'
-  put scope{ vars = Map.insert (iiVar, iiScope) (arrType, dest) vars }
-
-genInstr IRead{..} = do
-  expr <- genTemp
-  case iiType of
-    Int -> emit $ SCall [expr] "__read_int" []
-    Char -> emit $ SCall [expr] "__read_char" []
-  scope@Scope{ vars } <- get
-  put scope{ vars = Map.insert (iiVar, iiScope) (iiType, expr) vars }
 
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr

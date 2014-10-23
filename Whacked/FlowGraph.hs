@@ -4,7 +4,6 @@ module Whacked.FlowGraph
   , relabel
   , removePhi
   , buildFlowGraph
-  , checkFlowGraph
   , allPathsReturn
   ) where
 
@@ -127,7 +126,7 @@ removePhi func@SFunction{..}
     removePhi' (i, jmp@SBinJump{..})
       = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
     removePhi' (i, jmp@SUnJump{..})
-      = Just (i, jmp{ siVal = replace siVal })
+      = Just (i, jmp{ siArg = replace siArg })
     removePhi' (i, jmp@SJump{..})
       = Just (i, jmp)
     removePhi' (i, bin@SBinOp{..})
@@ -142,7 +141,7 @@ removePhi func@SFunction{..}
           , siArg = replace siArg
           })
     removePhi' (i, ret@SReturn{..})
-      = Just (i, ret{ siVal = replace siVal })
+      = Just (i, ret{ siArg = replace siArg })
 
 
 -- | Builds the control flow graph.

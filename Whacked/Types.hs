@@ -11,7 +11,18 @@ data BinaryOp
   | And
   | Or
   | Cmp CondOp
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
+
+
+instance Show BinaryOp where
+  show Add     = "+"
+  show Sub     = "-"
+  show Mul     = "*"
+  show Div     = "/"
+  show Mod     = "%"
+  show And     = "&"
+  show Or      = "|"
+  show (Cmp x) = show x
 
 
 -- |Unary operators.
@@ -21,7 +32,15 @@ data UnaryOp
   | Ord
   | Chr
   | Len
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
+
+
+instance Show UnaryOp where
+  show Neg = "-"
+  show Not = "!"
+  show Ord = "ord"
+  show Chr = "chr"
+  show Len = "len"
 
 
 -- |Comparision operators.
@@ -32,7 +51,16 @@ data CondOp
   | CGTE
   | CEQ
   | CNE
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
+
+
+instance Show CondOp where
+  show CLT  = "<"
+  show CLTE = "<="
+  show CGT  = ">"
+  show CGTE = ">="
+  show CEQ  = "=="
+  show CNE  = "/="
 
 
 -- |All types present in the WACC language.

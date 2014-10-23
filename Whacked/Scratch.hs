@@ -5,8 +5,10 @@ module Whacked.Scratch where
 -- folding, dead code elimination and sparse conditional constant propagation
 -- are applied on this form.
 
+import           Data.List
 import           Data.Map(Map)
 import qualified Data.Map as Map
+import           Text.Printf(printf)
 import           Whacked.Types
 
 
@@ -16,14 +18,14 @@ import           Whacked.Types
 -- variable versions.
 data SVar
   = SVar Int
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data SProgram
   = SProgram
     { spFuncs :: [SFunction]
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data SFunction
@@ -32,7 +34,7 @@ data SFunction
     , sfArgs :: [SVar]
     , sfName :: String
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data SInstr
@@ -84,7 +86,7 @@ data SInstr
     }
   | SReturn
     { siType :: Type
-    , siVal  :: SVar
+    , siArg  :: SVar
     }
   | SBinJump
     { siType  :: Type
@@ -98,7 +100,7 @@ data SInstr
     { siType  :: Type
     , siWhere :: Int
     , siWhen  :: Bool
-    , siVal   :: SVar
+    , siArg   :: SVar
     }
   | SJump
     { siWhere :: Int
@@ -107,7 +109,58 @@ data SInstr
     { siType :: Type
     , siArg  :: SVar
     }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+instance Show SVar where
+  show (SVar i)
+    = "@" ++ show i
+
+
+instance Show SProgram where
+  show SProgram{..}
+    = concat . intersperse "\n\n" . map show $ spFuncs
+
+
+instance Show SFunction where
+  show SFunction{..}
+    = sfName ++ "(" ++ concat (intersperse "," $ map show sfArgs) ++ ")\n"
+      ++ concat (intersperse "\n" $ map showInstr sfBody)
+    where
+      showInstr (i, x)
+        = printf "%4d    %s" i (show x)
+
+
+instance Show SInstr where
+  show SBinOp{..}
+    = show siDest ++ " <- " ++ show siLeft ++ show siBinOp ++ show siRight
+  show SUnOp{..}
+    = show siDest ++ " <- " ++ show siUnOp ++ "(" ++ show siArg ++ ")"
+  show SCall{..}
+    = (concat . intersperse "," $ map show siRet) ++
+      " <- call " ++
+      (concat . intersperse "," $ map show siArgs)
+  show SConstBool{..}
+    = show siDest ++ " <- " ++ show siBoolVal
+  show SConstChar{..}
+    = show siDest ++ " <- " ++ show siCharVal
+  show SConstInt{..}
+    = show siDest ++ " <- " ++ show siIntVal
+  show SConstString{..}
+    = ""
+  show SWriteArray{..}
+    = ""
+  show SPhi{..}
+    = ""
+  show SReturn{..}
+    = "ret    " ++ show siArg
+  show SBinJump{..}
+    = "jmpbin " ++ show siWhere
+  show SUnJump{..}
+    = "jmpun  " ++ show siWhere
+  show SJump{..}
+    = "jmp    " ++ show siWhere
+  show SPrint{..}
+    = "print  " ++ show siArg
 
 
 isAssignment :: SInstr -> Bool
@@ -149,11 +202,11 @@ getGen SCall{..}
 getGen SPhi{..}
   = siMerge
 getGen SReturn{..}
-  = [siVal]
+  = [siArg]
 getGen SBinJump{..}
   = [siLeft, siRight]
 getGen SUnJump{..}
-  = [siVal]
+  = [siArg]
 getGen SUnOp{..}
   = [siArg]
 getGen SPrint{..}
