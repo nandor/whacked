@@ -336,7 +336,7 @@ genStmt ARead{..} = case asTo of
         genError alTag "type error: type cannot be read"
 genStmt AFree{..} = do
   (t, expr) <- genExpr asExpr
-  unless (t `match` Poly) $
+  unless (t `match` Null) $
     genError asTag $ "free can only be used on pairs"
   tell [IFree expr]
 genStmt AReturn{..} = do

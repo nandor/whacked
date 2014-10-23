@@ -314,7 +314,7 @@ genExpr IInt{..} dest = do
 genExpr IArray{..} dest = do
   case ieElems of
     [] -> do
-      emit $ SEmptyArray dest
+      emit $ SNewArray dest 0
       return (Empty, dest)
     xs | all (isConst Char) xs -> do
       emit $ SCharArray dest . map (\(IChar x) -> x) $ xs
@@ -325,6 +325,16 @@ genExpr IArray{..} dest = do
     xs | all (isConst Bool) xs -> do
       emit $ SBoolArray dest . map (\(IBool x) -> x) $ xs
       return (Array Int, dest)
+    _ -> do
+      emit $ SNewArray dest (length ieElems)
+      elems <- forM ieElems $ \elem -> do
+        expr <- genTemp
+        genExpr elem expr
+      forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
+        idx <- genTemp
+        emit $ SInt idx i
+        emit $ SWriteArray t dest idx expr
+      return (Array ieType, dest)
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
   (_, idx) <- genTemp >>= genExpr ieIndex

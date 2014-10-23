@@ -80,8 +80,9 @@ data SInstr
     { siDest :: SVar
     , siInts :: [Int]
     }
-  | SEmptyArray
+  | SNewArray
     { siDest :: SVar
+    , siLength :: Int
     }
   | SWriteArray
     { siType  :: Type
@@ -163,8 +164,8 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siChars
   show SIntArray{..}
     = show siDest ++ " <- " ++ show siInts
-  show SEmptyArray{..}
-    = show siDest ++ " <- []"
+  show SNewArray{..}
+    = show siDest ++ " <- new[" ++ show siLength ++ "]"
   show SWriteArray{..}
     = show siArray ++ "[" ++ show siIndex ++ "] <- " ++ show siExpr
   show SReadArray{..}
