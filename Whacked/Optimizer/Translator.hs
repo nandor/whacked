@@ -332,7 +332,16 @@ genExpr ICall{..} dest = do
   dest <- genTemp
   emit $ SCall [dest] ieName (map snd args)
   return (ieType, dest)
-
+genExpr IRead{..} dest = case ieType of
+  Int -> do
+    emit $ SCall [dest] "__read_int" []
+    return (Int, dest)
+  Char -> do
+    emit $ SCall [dest] "__read_char" []
+    return (Char, dest)
+  Array Char -> do
+    emit $ SCall [dest] "__read_string" []
+    return (Array Char, dest)
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
 genInstr :: IInstr -> Generator ()
@@ -366,11 +375,15 @@ genInstr IAssVar{..} = do
 
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SPrint t expr
+  emit $ case t of
+    Int        -> SCall [] "__print_int"    [expr]
+    Char       -> SCall [] "__print_char"   [expr]
+    Bool       -> SCall [] "__print_bool"   [expr]
+    Array Char -> SCall [] "__print_string" [expr]
+    _          -> SCall [] "__print_ref"    [expr]
 
 genInstr IPrintln{..} = do
-  (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SPrint t expr
+  genInstr (IPrint iiExpr)
   emit $ SCall [] "__println" []
 
 genInstr IEnd{} = do

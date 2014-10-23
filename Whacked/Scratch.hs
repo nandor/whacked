@@ -115,11 +115,8 @@ data SInstr
   | SJump
     { siWhere :: Int
     }
-  | SPrint
-    { siType :: Type
-    , siArg  :: SVar
-    }
   deriving (Eq, Ord)
+
 
 instance Show SVar where
   show (SVar i)
@@ -148,7 +145,7 @@ instance Show SInstr where
   show SCall{..}
     = (concat . intersperse "," $ map show siRet) ++
       " <- call " ++ siFunc ++
-      (concat . intersperse "," $ map show siArgs)
+      "(" ++ (concat . intersperse "," $ map show siArgs) ++ ")"
   show SBool{..}
     = show siDest ++ " <- " ++ show siBool
   show SChar{..}
@@ -161,6 +158,12 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siChars
   show SIntArray{..}
     = show siDest ++ " <- " ++ show siInts
+  show SEmptyArray{..}
+    = show siDest ++ " <- []"
+  show SPhi{..}
+    = show siDest ++ " <- phi(" ++
+      (concat . intersperse "," $ map show siMerge) ++
+      ")"
   show SReturn{..}
     = "ret    " ++ show siArg
   show SBinJump{..}
@@ -170,12 +173,6 @@ instance Show SInstr where
     = "jmpun  @" ++ show siWhere
   show SJump{..}
     = "jmp    @" ++ show siWhere
-  show SPrint{..}
-    = "print  " ++ show siArg
-  show SPhi{..}
-    = show siDest ++ " <- phi(" ++
-      (concat . intersperse "," $ map show siMerge) ++
-      ")"
 
 
 isAssignment :: SInstr -> Bool
