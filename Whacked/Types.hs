@@ -144,9 +144,9 @@ unOpType _ _           = Nothing
 
 
 -- |Returns a function that compares two values.
-getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)
-getComparator op
-  = \x y -> (x `compare` y) `elem` case op of
+compareOp :: (Ord a, Eq a) => CondOp -> a -> a -> Bool
+compareOp op x y
+  = (x `compare` y) `elem` case op of
     CLT  -> [LT]
     CLTE -> [LT, EQ]
     CGT  -> [GT]

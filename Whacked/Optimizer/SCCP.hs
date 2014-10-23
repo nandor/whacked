@@ -20,14 +20,20 @@ import           Whacked.FlowGraph
 -- |Values used in the lattice for sparse conditional constant propagation.
 -- Due to the fact that the input code is type checked, when combining two
 -- values that are neither Bot nor Top, both of them will have the same type.
+-- Pair references can either be null or point to an original pair.
+-- The code will try to merge most references to the original svar that was
+-- the destination of the instruction that allocated the pair.
+-- Array references can either be null or point to an original array
+-- with length information. The original array refers to the svar that was
+-- the destination of the instruction that allocated this array.
 data Value
   = Top
   | Bot
-  | ConstInt Int
-  | ConstBool Bool
-  | ConstChar Char
-  | ConstArray (Maybe (SVar, Int))
-  | ConstPair (Maybe SVar)
+  | CInt Int
+  | CBool Bool
+  | CChar Char
+  | CArray (Maybe (SVar, Int))
+  | CPair (Maybe SVar)
   deriving ( Eq, Ord, Show )
 
 
@@ -44,52 +50,61 @@ instance Monoid Value where
     = Top
 
 
--- | Compares two values.
+-- |Compares two values. Returns a boolean if both values are known and
+-- can be compared.
 compareValue :: CondOp -> Value -> Value -> Maybe Bool
 compareValue _ Bot _
   = Nothing
 compareValue _ _ Bot
   = Nothing
-compareValue op (ConstInt x)  (ConstInt y)
-  = Just $ (getComparator op) x y
-compareValue op (ConstBool x) (ConstBool y)
-  = Just $ (getComparator op) x y
-compareValue op (ConstChar x) (ConstChar y)
-  = Just $ (getComparator op) x y
+compareValue op (CInt x)  (CInt y)
+  = Just $ compareOp op x y
+compareValue op (CBool x) (CBool y)
+  = Just $ compareOp op x y
+compareValue op (CChar x) (CChar y)
+  = Just $ compareOp op x y
+compareValue op x'@(CPair _) y'@(CPair _)
+  = Just $ compareOp op x' y'
+compareValue op x'@(CArray _) y'@(CArray _)
+  = Just $ compareOp op x' y'
 
 
--- | Evaluates an operation.
+-- |Evaluates a binary operation. If the result is well defined, it returns a
+-- value describing it. If one of the operands was Top or the values are not
+-- consistent, Nothing is returned.
 evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
-evalBinOp _ (_, Bot) (_, _)
+evalBinOp _ Bot _
   = Nothing
-evalBinOp _ (_, _) (_, Bot)
+evalBinOp _ _ Bot
   = Nothing
-evalBinOp _ (_, Top) (_, y)
+evalBinOp _ Top y
   = Just y
-evalBinOp _ (_, y) (_, Top)
+evalBinOp _ y Top
   = Just y
-evalBinOp op (_, ConstInt x) (_, ConstInt y)
-  = return $ case op of
-    Add -> ConstInt (x + y)
-    Sub -> ConstInt (x - y)
-    Mul -> ConstInt (x * y)
-    Div -> ConstInt (x `div` y)
-    Mod -> ConstInt (x `mod` y)
-    Cmp x -> ConstBool (fromJust $ compareValue x (ConstInt x) (ConstInt y))
-
-evalBinOp op (_, ConstBool x) (_, ConstBool y)
-  = return $ case op of
-    Or -> ConstBool (x || y)
-    And -> ConstBool (x && y)
-evalBinOp op (_, ConstChar x) (_, ConstChar y)
-  = return $ case op of
-    Cmp CLT  -> ConstBool (x < y)
-    Cmp CLTE -> ConstBool (x <= y)
-    Cmp CGT  -> ConstBool (x > y)
-    Cmp CGTE -> ConstBool (x >= y)
-    Cmp CEQ  -> ConstBool (x == y)
-    Cmp CNE  -> ConstBool (x /= y)
-
+evalBinOp op (CInt x) (CInt y)
+  = Just $ case op of
+    Add     -> CInt (x + y)
+    Sub     -> CInt (x - y)
+    Mul     -> CInt (x * y)
+    Div     -> CInt (x `div` y)
+    Mod     -> CInt (x `mod` y)
+    Cmp cmp -> CBool $ compareOp cmp x y
+evalBinOp op (CBool x) (CBool y)
+  = Just $ case op of
+    Or      -> CBool (x || y)
+    And     -> CBool (x && y)
+    Cmp cmp -> CBool $ compareOp cmp x y
+evalBinOp op (CChar x) (CChar y)
+  = Just $ case op of
+    Cmp cmp -> CBool $ compareOp cmp x y
+evalBinOp op x'@(CPair _) y'@(CPair _)
+  = Just $ case op of
+    Cmp CEQ -> CBool $ x' == y'
+    Cmp CNE -> CBool $ x' /= y'
+evalBinOp op x'@(CArray _) y'@(CArray _)
+  = Just $ case op of
+    Cmp CEQ -> CBool $ x' == y'
+    Cmp CNE -> CBool $ x' /= y'
 
 -- | Evaluates an unary operation.
 evalUnOp :: UnaryOp -> Value -> Maybe Value
@@ -97,16 +112,16 @@ evalUnOp _ Bot
   = Nothing
 evalUnOp _ Top
   = Just Top
-evalUnOp op (ConstInt x)
+evalUnOp op (CInt x)
   = case op of
-    Neg -> Just $ ConstInt (-x)
-    Chr -> Just $ ConstChar (chr x)
-evalUnOp op (ConstBool x)
+    Neg -> Just $ CInt (-x)
+    Chr -> Just $ CChar (chr x)
+evalUnOp op (CBool x)
   = case op of
-    Not -> Just $ ConstBool (not x)
-evalUnOp op (ConstChar x)
+    Not -> Just $ CBool (not x)
+evalUnOp op (CChar x)
   = case op of
-    Ord -> Just $ ConstInt (ord x)
+    Ord -> Just $ CInt (ord x)
 
 
 -- | Builds the SSA graph.
@@ -184,8 +199,7 @@ optimise func@SFunction{..}
                       } $ do
                         left <- evalValue (findAlias . siLeft $ jmp)
                         right <- evalValue (findAlias . siRight $ jmp)
-                        val <- compareValue
-                             (siCond jmp) (siLeft jmp, left) (siRight jmp, right)
+                        val <- compareValue (siCond jmp)  left right
                         return $ if val == siWhen jmp
                             then SJump (siWhere jmp)
                             else SJump . fromJust . Map.lookup i $ next
@@ -198,9 +212,9 @@ optimise func@SFunction{..}
           let jmp' = fromMaybe jmp{ siArg = findAlias $ siArg jmp } $ do
                     val <- evalValue (findAlias . siArg $ jmp)
                     case val of
-                      ConstBool x | x == siWhen jmp ->
+                      CBool x | x == siWhen jmp ->
                         return $ SJump (siWhere jmp)
-                      ConstBool x | x /= siWhen jmp ->
+                      CBool x | x /= siWhen jmp ->
                         return $ SJump . fromJust . Map.lookup i $ next
           in case ns' of
             next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
@@ -221,7 +235,7 @@ optimise func@SFunction{..}
                       } $ do
                         result <- mconcat <$> mapM evalValue siMerge
                         case result of
-                          ConstInt x -> return $ SInt siDest x
+                          CInt x -> return $ SInt siDest x
                           _ -> Nothing
           in case phi' of
             SPhi{ siMerge = [x], siDest } ->
@@ -235,10 +249,10 @@ optimise func@SFunction{..}
                       } $ do
                     left <- evalValue (findAlias siLeft)
                     right <- evalValue (findAlias siRight)
-                    result <- evalBinOp siBinOp (siLeft, left) (siRight, right)
+                    result <- evalBinOp siBinOp left right
                     case result of
-                      ConstInt x -> return $ SInt (findAlias siDest) x
-                      ConstBool x -> return $ SBool (findAlias siDest) x
+                      CInt x -> return $ SInt (findAlias siDest) x
+                      CBool x -> return $ SBool (findAlias siDest) x
                       _ -> Nothing
           in ( (i, bin') : ns'
              , vars'
@@ -249,8 +263,8 @@ optimise func@SFunction{..}
                    arg <- evalValue (findAlias siArg)
                    result <- evalUnOp siUnOp arg
                    case result of
-                      ConstInt x -> return $ SInt siDest x
-                      ConstBool x -> return $ SBool siDest x
+                      CInt x -> return $ SInt siDest x
+                      CBool x -> return $ SBool siDest x
                       _ -> Nothing
           in ( (i, un') : ns'
              , vars'
@@ -340,7 +354,7 @@ optimise func@SFunction{..}
       node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        return $ case evalBinOp siBinOp (siLeft, left) (siRight, right) of
+        return $ case evalBinOp siBinOp left right of
           Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
           Just x -> (xs, ssaNext, Map.insert siDest x vars)
 
@@ -358,28 +372,25 @@ optimise func@SFunction{..}
         , foldl (\mp x -> Map.insert x Bot mp) vars siRet
         )
 
-      -- Array assignments do not propagate information.
-      node@SWriteArray{..} -> (xs, ssaNext, Map.insert siDest Bot vars)
-
       -- Returns do nothing.
       node@SReturn{..} ->
         ( xs, [], vars )
 
       -- Constants are marked and propagated.
       node@SInt{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstInt siInt) vars)
+        (xs, ssaNext, Map.insert siDest (CInt siInt) vars)
       node@SBool{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstBool siBool) vars)
+        (xs, ssaNext, Map.insert siDest (CBool siBool) vars)
       node@SChar{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstChar siChar) vars)
+        (xs, ssaNext, Map.insert siDest (CChar siChar) vars)
 
 
       -- | Evaluate conditionals.
       node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
         left <- getValue siLeft
         right <- getValue siRight
-        expr <- compareValue siCond (siLeft, left) (siRight, right)
-        if expr == siWhen
+        expr <- compareValue siCond left right
+        if expr
           then do
             return ([(end, siWhere)], [], vars)
           else do
@@ -387,9 +398,9 @@ optimise func@SFunction{..}
       node@SUnJump{..} -> fromMaybe (cfgNext, [], vars) $ do
         expr <- getValue siArg
         case expr of
-          ConstBool x | x == siWhen ->
+          CBool x | x == siWhen ->
             return ([(end, siWhere)], [], vars)
-          ConstBool x | x /= siWhen ->
+          CBool x | x /= siWhen ->
             return ([(end, fromJust $ Map.lookup end next)], [], vars)
           _ ->
             Nothing
