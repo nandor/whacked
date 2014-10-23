@@ -122,7 +122,7 @@ getGraph blocks target
 -- Timothy J. Harvey, and Ken Kennedy. Its running time is O(N^2).
 -- If you have any doubts about this functions, RTFM.
 -- This function runs in the ST monad for performance reasons.
-getDominators :: FlowGraph -> FlowGraph -> Vector Int
+getDominators :: FlowGraph -> FlowGraph -> Vector (Maybe Int)
 getDominators graph graph' = runST $ do
   let (count, _) = Map.findMax graph
   dom <- MVector.new (count + 1)
@@ -165,12 +165,12 @@ getDominators graph graph' = runST $ do
 
   findDominators
   dom <- forM [0..count] $ (MVector.read dom)
-  return (Vector.fromList . map fromJust $ dom)
+  return $ Vector.fromList dom
 
 
 -- | Computes the dominance frontier. The dominance frontier of a node is
 -- the list of nodes that are not directly dominated by it.
-getFrontier :: FlowGraph -> FlowGraph -> Vector Int -> Map Int (Set Int)
+getFrontier :: FlowGraph -> FlowGraph -> Vector (Maybe Int) -> Map Int (Set Int)
 getFrontier graph graph' dominators
   = foldl findFrontier Map.empty [0..count]
   where
@@ -180,13 +180,13 @@ getFrontier graph graph' dominators
           Just prev | Set.size prev > 1 -> Set.foldl run ms prev
           _ -> Map.insert node Set.empty ms
       where
-        run ms runner
-          | runner == dominators ! node = ms
-          | otherwise = case Map.lookup runner ms of
-            Nothing -> run (Map.insert runner (Set.singleton node) ms) next
-            Just set -> run (Map.insert runner (Set.insert node set) ms) next
+        run ms runner = case dominators ! node of
+          Just runner' | runner' /= runner -> fromMaybe ms $ do
+            next <- dominators ! runner
+            return $ run (Map.insert runner set' ms) next
+          _ -> ms
           where
-            next = dominators ! runner
+            set' = Set.insert node (fromMaybe Set.empty $ Map.lookup runner ms)
 
 
 -- | For each block, computes which variables require PHI nodes. Starting from
@@ -251,8 +251,7 @@ newtype Generator a
            )
 
 -- | Runs the generator monad.
-runGenerator :: Generator a
-             -> (a, Scope, [(Int, SInstr)])
+runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
 runGenerator gen
   = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
           { nextTemp = 0
@@ -297,9 +296,6 @@ genExpr IUnOp{..} dest = do
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
-
--- Constant values. Emits a simple instruction which copies the constant into
--- a temporary location.
 genExpr IBool{..} dest = do
   emit $ SBool dest ieBool
   return (Bool, dest)
@@ -426,8 +422,7 @@ genInstr IFree{..} = do
   emit $ SFree t expr
 
 -- | Generates code for a function.
-genFunc :: IFunction
-        -> SFunction
+genFunc :: IFunction -> SFunction
 genFunc func@IFunction{..}
   = SFunction instrs' args ifName
   where
