@@ -118,25 +118,21 @@ getComparator op
 
 
 match :: Type -> Type -> Bool
+match (Null    ) (Poly    ) = True
+match (Poly    ) (Null    ) = True
 match (Null    ) (Pair _ _) = True
 match (Pair _ _) (Null    ) = True
 match (Poly    ) (Pair _ _) = True
 match (Pair _ _) (Poly    ) = True
-match x y
-  | x == y = True
-  | otherwise = case (x, y) of
-    (Pair x y, Pair x' y') -> x `match` x' && y `match` y'
-    _ -> False
+match (Empty   ) (Array _ ) = True
+match (Array _ ) (Empty   ) = True
+match (Array x ) (Array y ) = match x y
+match (Pair x y) (Pair z v) = match x z && match y v
+match (x       ) (y       ) = x == y
 
 
 isReadable :: Type -> Bool
-isReadable Void
-  = False
-isReadable (Pair _ _)
-  = False
-isReadable (Array _)
-  = False
-isReadable Bool
-  = False
-isReadable _
-  = True
+isReadable Int          = True
+isReadable Char         = True
+isReadable (Array Char) = True
+isReadable _            = False

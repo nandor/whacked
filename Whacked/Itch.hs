@@ -116,14 +116,12 @@ data IInstr
     , iiExpr  :: IExpr
     }
   | IAssArray
-    { iiVar   :: String
-    , iiScope :: Int
-    , iiIndex :: [IExpr]
+    { iiArray :: IExpr
+    , iiIndex :: IExpr
     , iiExpr  :: IExpr
     }
   | IAssPair
-    { iiVar   :: String
-    , iiScope :: Int
+    { iiPair  :: IExpr
     , iiElem  :: Elem
     , iiExpr  :: IExpr
     }
@@ -174,7 +172,7 @@ instance Show IExpr where
   show IChar{..}
     = show ieChar
   show IArray{..}
-    = "[...]"
+    = "[" ++ concat (intersperse "," $ map show ieElems) ++ "]"
   show IPair{..}
     = "{" ++ show ieFst ++ "," ++ show ieSnd ++ "}"
   show IIndex{..}
@@ -204,10 +202,10 @@ instance Show IInstr where
     = "    IAssVar   <" ++ iiVar ++ ":" ++ show iiScope ++ ">"
       ++ "=" ++ show iiExpr
   show IAssArray{..}
-    = "    IAssArray " ++ iiVar
-  show IAssPair{..}
-    = "    IAss" ++ show iiElem ++ "   <" ++ iiVar ++ ":" ++ show iiScope ++ ">"
+    = "    IAssArray " ++ show iiArray ++ "[" ++ show iiIndex ++ "]"
       ++ "=" ++ show iiExpr
+  show IAssPair{..}
+    = "    IAss" ++ show iiElem ++ "   " ++ show iiPair ++ "=" ++ show iiExpr
   show IPrint{..}
     = "    IPrint    " ++ show iiExpr
   show IPrintln{..}
@@ -218,3 +216,5 @@ instance Show IInstr where
     = "    IExit     " ++ show iiExpr
   show IEnd{..}
     = "    IEnd      "
+  show IFree{..}
+    = "    IFree     " ++ show iiExpr

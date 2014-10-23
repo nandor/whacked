@@ -68,6 +68,7 @@ whacked
           , "null"
           , "free"
           , "newpair"
+          , "len"
           ]
       , Token.caseSensitive   = True
       }
@@ -185,11 +186,11 @@ aExpr
     operatorTable
       = [ [ Postfix  (chainl1 (try index) $ return (flip (.)))
           ]
-        , [ Prefix (tagUn "!"   Not)
-          , Prefix (tagUn "-"   Neg)
-          , Prefix (tagUn "len" Len)
-          , Prefix (tagUn "ord" Ord)
-          , Prefix (tagUn "chr" Chr)
+        , [ Prefix (tagUn (reservedOp "!") Not)
+          , Prefix (tagUn (reservedOp "-") Neg)
+          , Prefix (tagUn (reserved "len") Len)
+          , Prefix (tagUn (reserved "ord") Ord)
+          , Prefix (tagUn (reserved "chr") Chr)
           ]
         , [ Infix (tagBin "*" Mul) AssocLeft
           , Infix (tagBin "/" Div) AssocLeft
@@ -222,14 +223,13 @@ aExpr
       reservedOp op
       return $ \lhs rhs -> ABinOp tag name lhs rhs
 
-    tagUn op name = do
+    tagUn matcher name = do
       tag <- aTag
-      reservedOp op
+      matcher
       return $ \arg -> AUnOp tag name arg
 
     atom = asum . map try $
-      [ parens aExpr
-      , do
+      [ do
           tag <- aTag
           int <- integer
           when (1 + toInteger (maxBound :: Int32) < int) $
@@ -262,6 +262,7 @@ aExpr
       , AString <$> aTag <*> stringLiteral
       , AVar <$> aTag <*> identifier
       , reserved "null" *> (ANull <$> aTag)
+      , parens aExpr
       ]
 
 

@@ -236,37 +236,10 @@ genJump target branch expr
       tell [ IUnJump target branch expr]
 
 
--- |Generates code for an asignment instruction.
-genAssignment :: ALValue -> Type -> IExpr -> Generator ()
-genAssignment ALVar{..} et expr = findVar alName >>= \case
-  Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-  Just (var, t) -> do
-    unless (t `match` et) $
-      genError alTag "type error(ALVar): mismatched types"
-    tell [ IAssVar alName var expr ]
-genAssignment ALArray{..} et eexpr = do
-  (at, aexpr) <- genExpr alArray
-  (it, iexpr) <- genExpr alIndex
-
-  unless (it `match` Int) $
-    genError alTag "type error: integer expected"
-  case at of
-    Array t -> do
-      unless (t `match` et) $
-        genError alTag "type error(ALArray): mismatched types"
-      undefined
-    _ -> do
-      genError alTag "type error: array expected"
-genAssignment ALElem{..} et eexpr = do
-  return ()
-
-
 -- |Generates code for a statement.
 genStmt :: AStatement -> Generator ()
 genStmt ASkip{..} = do
-  -- Ignore skip statements
   return ()
-
 genStmt AVarDecl{..} = do
   -- Insert variables in the scope. Checks if the variable has not been already
   -- declared in the same scope, generates an assignment instruction & places
@@ -283,7 +256,7 @@ genStmt AVarDecl{..} = do
   -- Check the types
   (et, eexpr) <- genRValue asWhat
   unless (asType `match` et) $
-    genError asTag $ "type error(AVarDecl): mismatched types"
+    genError asTag $ traceShow (asType, et) $ "type error(AVarDecl): mismatched types"
 
   -- Generate an assignment instruction.
   tell [IAssVar asName nextScope eexpr]
@@ -293,14 +266,75 @@ genStmt AVarDecl{..} = do
     { variables = (nextScope, Map.insert asName asType x) : xs
     , declarations = Set.insert (asName, nextScope, asType) declarations
     }
-
 genStmt AAssign{..} = do
   -- Generates code for assignments. Checks if the variable has been defined
   -- beforehand & checks whether the types are correct.
   (et, eexpr) <- genRValue asWhat
-  genAssignment asTo et eexpr
+  case asTo of
+    ALVar{..} -> findVar alName >>= \case
+      Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
+      Just (var, t) -> do
+        unless (t `match` et) $
+          genError alTag "type error(ALVar): mismatched types"
+        tell [ IAssVar alName var eexpr ]
+    ALArray{..} -> do
+      (at, aexpr) <- genExpr alArray
+      (it, iexpr) <- genExpr alIndex
 
+      unless (it `match` Int) $
+        genError alTag "type error: integer expected"
 
+      case at of
+        Array t -> do
+          unless (t `match` et) $
+            genError alTag "type error(ALArray): mismatched types"
+          tell [ IAssArray aexpr iexpr eexpr]
+        _ -> do
+          genError alTag "type error: array expected"
+    ALElem{..} -> do
+      (pt, pexpr) <- genExpr alPair
+      case pt of
+        Pair ft st | alElem == Fst -> do
+          unless (ft `match` et) $
+            genError alTag "type error(ALElem): mismatched types"
+          tell [ IAssPair pexpr Fst eexpr ]
+        Pair ft st | alElem == Snd -> do
+          unless (st `match` et) $
+            genError alTag "type error(ALElem): mismatched type"
+          tell [ IAssPair pexpr Snd eexpr ]
+        _ -> do
+          genError alTag "type error: pair expected"
+genStmt ARead{..} = case asTo of
+  ALVar{..} -> findVar alName >>= \case
+    Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
+    Just (var, t) -> do
+      tell [ IAssVar alName var (IRead t) ]
+  ALArray{..} -> do
+    (at, aexpr) <- genExpr alArray
+    (it, iexpr) <- genExpr alIndex
+
+    unless (it `match` Int) $
+      genError alTag "type error: integer expected"
+
+    case at of
+      Array t | isReadable t -> do
+        tell [ IAssArray aexpr iexpr (IRead t) ]
+      _ -> do
+        genError alTag "type error: cannot read type"
+  ALElem{..} -> do
+    (pt, pexpr) <- genExpr alPair
+    case pt of
+      Pair ft st | alElem == Fst && isReadable ft -> do
+        tell [ IAssPair pexpr Fst (IRead ft) ]
+      Pair ft st | alElem == Snd && isReadable st -> do
+        tell [ IAssPair pexpr Fst (IRead st) ]
+      _ -> do
+        genError alTag "type error: pair expected"
+genStmt AFree{..} = do
+  (t, expr) <- genExpr asExpr
+  unless (t `match` Poly) $
+    genError asTag $ "free can only be used on pairs"
+  tell [IFree expr]
 genStmt AReturn{..} = do
   scope@Scope{ function, functions } <- get
   case Map.lookup function functions of
@@ -310,21 +344,32 @@ genStmt AReturn{..} = do
       unless (t `match` afType) $ do
         genError asTag "invalid return type"
       tell [IReturn expr]
+genStmt AExit{..} = do
+  (t, expr) <- genExpr asExpr
+  unless (t `match` Int) $ do
+    genError asTag $ "integer expected"
+  tell [IExit expr]
 genStmt APrint{..} = do
   (t, expr) <- genExpr asExpr
   tell [IPrint expr]
 genStmt APrintln{..} = do
   (t, expr) <- genExpr asExpr
   tell [IPrintln expr]
+genStmt AIf{..} = do
+  (t, expr) <- genExpr asExpr
+  unless (t `match` Bool) $ do
+    genError asTag $ "boolean expected"
 
-genStmt ARead{..}
-  = findVar (alName asTo) >>= \case
-      Nothing -> genError asTag $ "undefined variable '" ++ (alName asTo) ++ "'"
-      Just (idx, t) -> case asTo of
-        ALVar{..} | isReadable t->
-          tell [IAssVar alName idx (IRead t)]
-        ALVar{..} ->
-          genError alTag "type cannot be read"
+  [false, end] <- replicateM 2 getLabel
+  (_, true') <- scope (mapM_ genStmt asTrue)
+  (_, false') <- scope (mapM_ genStmt asFalse)
+
+  genJump false False expr
+  tell true'
+  tell [IJump end]
+  tell [ILabel false]
+  tell false'
+  tell [ILabel end]
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
   unless (t `match` Bool) $ do
@@ -339,41 +384,9 @@ genStmt AWhile{..} = do
   tell body
   genJump start True expr
   tell [ILabel end]
-genStmt AIf{..} = do
-  (t, expr) <- genExpr asExpr
-  when (not (t `match` Bool)) $ do
-    genError asTag $ "boolean expected"
-
-  if asFalse == []
-    then do
-      end <- getLabel
-      genJump end False expr
-      (_, true') <- scope (mapM_ genStmt asTrue)
-      tell [ILabel end]
-    else do
-      [false, end] <- replicateM 2 getLabel
-      (_, true') <- scope (mapM_ genStmt asTrue)
-      (_, false') <- scope (mapM_ genStmt asFalse)
-
-      genJump false False expr
-      tell true'
-      tell [IJump end]
-      tell [ILabel false]
-      tell false'
-      tell [ILabel end]
-genStmt AFree{..} = do
-  (t, expr) <- genExpr asExpr
-  case t of
-    Pair _ _ -> tell [IFree expr]
-    _ -> genError asTag $ "free can only be used on pairs"
 genStmt ABlock{..} = do
   (_, instrs) <- scope $ mapM_ genStmt asBody
   tell instrs
-genStmt AExit{..} = do
-  (t, expr) <- genExpr asExpr
-  unless (t `match` Int) $ do
-    genError asTag $ "integer expected"
-  tell [IExit expr]
 genStmt AEnd
   = tell [IEnd]
 
@@ -382,7 +395,7 @@ genStmt AEnd
 genFunc :: AFunction -> Generator ()
 genFunc AFunction{..} = do
   -- |Put all arguments into the scope.
-  scope@Scope{ nextScope, variables, functions } <- get
+  scope@Scope{ nextScope, functions } <- get
   (args, decls) <- foldM (\(args, decls) AArg{..} ->
     case Map.lookup aaName args of
       Nothing -> return
@@ -392,8 +405,9 @@ genFunc AFunction{..} = do
       Just _ -> genError aaTag $ "duplicate argument '" ++ aaName ++ "'")
     (Map.empty, Set.empty) afArgs
   put scope
-    { variables = (nextScope, args) : variables
+    { variables = (nextScope + 1, Map.empty) : [(nextScope, args)]
     , declarations = decls
+    , nextScope = nextScope + 1
     }
 
   -- |Encode statements.
