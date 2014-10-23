@@ -85,10 +85,15 @@ data SInstr
     }
   | SWriteArray
     { siType  :: Type
-    , siDest  :: SVar
-    , siArg   :: SVar
+    , siArray :: SVar
     , siIndex :: SVar
     , siExpr  :: SVar
+    }
+  | SReadArray
+    { siType  :: Type
+    , siDest  :: SVar
+    , siArray :: SVar
+    , siIndex :: SVar
     }
   | SPhi
     { siDest  :: SVar
@@ -160,6 +165,10 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siInts
   show SEmptyArray{..}
     = show siDest ++ " <- []"
+  show SWriteArray{..}
+    = show siArray ++ "[" ++ show siIndex ++ "] <- " ++ show siExpr
+  show SReadArray{..}
+    = show siDest ++ " <- " ++ show siArray ++ "[" ++ show siIndex ++ "]"
   show SPhi{..}
     = show siDest ++ " <- phi(" ++
       (concat . intersperse "," $ map show siMerge) ++

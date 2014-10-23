@@ -325,8 +325,11 @@ genExpr IArray{..} dest = do
     xs | all (isConst Bool) xs -> do
       emit $ SBoolArray dest . map (\(IBool x) -> x) $ xs
       return (Array Int, dest)
-
-
+genExpr IIndex{..} dest = do
+  (Array t, arr) <- genTemp >>= genExpr ieArray
+  (_, idx) <- genTemp >>= genExpr ieIndex
+  emit $ SReadArray t dest arr idx
+  return (t, dest)
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
   dest <- genTemp
@@ -347,32 +350,25 @@ genExpr IRead{..} dest = case ieType of
 genInstr :: IInstr -> Generator ()
 genInstr ILabel{..} = do
   return ()
-
 genInstr IReturn{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SReturn t expr
-
 genInstr IExit{..} = do
   (_, expr) <- genTemp >>= genExpr iiExpr
   emit $ SCall [] "__exit" [expr]
-
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
   (rt, re) <- genTemp >>= genExpr iiRight
   emit $ SBinJump lt iiWhere iiCond le re
-
 genInstr IUnJump{..} = do
   (t, expr) <- genTemp >>= genExpr iiVal
   emit $ SUnJump t iiWhere iiWhen expr
-
 genInstr IJump{..} = do
   emit $ SJump iiWhere
-
 genInstr IAssVar{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
-
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ case t of
@@ -381,15 +377,18 @@ genInstr IPrint{..} = do
     Bool       -> SCall [] "__print_bool"   [expr]
     Array Char -> SCall [] "__print_string" [expr]
     _          -> SCall [] "__print_ref"    [expr]
-
 genInstr IPrintln{..} = do
   genInstr (IPrint iiExpr)
   emit $ SCall [] "__println" []
-
 genInstr IEnd{} = do
   expr <- genTemp
   emit $ SInt expr 0
   emit $ SReturn Int expr
+genInstr IAssArray{..} = do
+  (_, array) <- genTemp >>= genExpr iiArray
+  (_, idx)   <- genTemp >>= genExpr iiIndex
+  (t, expr)  <- genTemp >>= genExpr iiExpr
+  emit $ SWriteArray t array idx expr
 
 
 -- | Generates code for a function.
