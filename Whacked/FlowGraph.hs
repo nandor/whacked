@@ -2,8 +2,7 @@
 module Whacked.FlowGraph
   ( FlowGraph
   , relabel
---  , removePhi
---  , buildFlowGraph
+  , buildFlowGraph
   , allPathsReturn
   ) where
 
@@ -44,7 +43,8 @@ allPathsReturn (p:ps)
   = allPathsReturn ps
 
 
--- |Relabels the instructions after eliminating nodes.
+-- |Relabels the instructions after eliminating nodes so that all identifiers
+-- range from 0 to n, where n is the number of instructions.
 relabel :: SFunction -> SFunction
 relabel func@SFunction{..}
   = func{ sfBody = map relabel' sfBody }
@@ -66,84 +66,8 @@ relabel func@SFunction{..}
     relabel' (i, x)
       = (update i, x)
 
-{-
--- | Removes phi nodes from the code.
--- | TODO(nl1813): Fix phi renaming.
-removePhi :: SFunction -> SFunction
-removePhi func@SFunction{..}
-  = func
-    { sfBody = [ instr | Just instr <- map removePhi' sfBody ]
-    , sfArgs = map replace sfArgs
-    }
-  where
-    (alias, _) = foldr findAlias (foldl newAlias (Map.empty, 0) sfArgs) sfBody
-    findAlias (_, SPhi{..}) (alias, next)
-      = case Map.lookup siDest alias of
-          Nothing ->
-            ( foldl (\mp x -> Map.insert x (SVar next) mp)
-             (Map.insert siDest (SVar next) alias)
-             siMerge
-            , next + 1
-            )
-          Just var ->
-            ( foldl (\mp x -> Map.insert x var mp) alias siMerge
-            , next
-            )
-    findAlias (_, x) (alias, next)
-      = foldl newAlias (alias, next) (getGen x)
 
-    newAlias (alias, next) var
-      = case Map.lookup var alias of
-          Nothing -> ( Map.insert var (SVar next) alias, next + 1)
-          Just _ -> ( alias, next )
 
-    replace var
-      = fromMaybe var $ Map.lookup var alias
-
-    removePhi' (i, SPhi{..})
-      = Nothing
-    removePhi' (i, call@SCall{..})
-      = Just
-        (i, call{ siRet = map replace siRet, siArgs = map replace siArgs})
-    removePhi' (i, int@SInt{..})
-      = Just (i, int{ siDest = replace siDest })
-    removePhi' (i, chr@SChar{..})
-      = Just (i, chr{ siDest = replace siDest })
-    removePhi' (i, bool@SBool{..})
-      = Just (i, bool{ siDest = replace siDest })
-    removePhi' (i, string@SConstString{..})
-      = Just (i, string{ siDest = replace siDest })
-    removePhi' (i, write@SWriteArray{..})
-      = Just
-        ( i
-        , write
-          { siDest = replace siDest
-          , siArg = replace siArg
-          , siIndex = replace siIndex
-          , siExpr = replace siExpr
-          }
-        )
-    removePhi' (i, jmp@SBinJump{..})
-      = Just (i, jmp{ siLeft = replace siLeft, siRight = replace siRight })
-    removePhi' (i, jmp@SUnJump{..})
-      = Just (i, jmp{ siArg = replace siArg })
-    removePhi' (i, jmp@SJump{..})
-      = Just (i, jmp)
-    removePhi' (i, bin@SBinOp{..})
-      = Just (i, bin
-          { siDest = replace siDest
-          , siLeft = replace siLeft
-          , siRight = replace siRight
-          })
-    removePhi' (i, un@SUnOp{..})
-      = Just (i, un
-          { siDest = replace siDest
-          , siArg = replace siArg
-          })
-    removePhi' (i, ret@SReturn{..})
-      = Just (i, ret{ siArg = replace siArg })
--}
-{-
 -- | Builds the control flow graph.
 buildFlowGraph :: [(Int, SInstr)] -> (FlowGraph, FlowGraph)
 buildFlowGraph block
@@ -172,4 +96,3 @@ buildFlowGraph block
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
--}

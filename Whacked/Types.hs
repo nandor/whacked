@@ -133,7 +133,7 @@ binOpType _ _ _
   = Nothing
 
 
--- Return the type of an unary operation or nothing
+-- |Return the type of an unary operation or nothing
 unOpType :: UnaryOp -> Type -> Maybe Type
 unOpType Neg Int         = Just Int
 unOpType Not Bool      = Just Bool
@@ -143,7 +143,7 @@ unOpType Len (Array _) = Just Int
 unOpType _ _           = Nothing
 
 
-
+-- |Returns a function that compares two values.
 getComparator :: (Ord a, Eq a) => CondOp -> (a -> a -> Bool)
 getComparator op
   = \x y -> (x `compare` y) `elem` case op of
@@ -155,6 +155,7 @@ getComparator op
     CNE  -> [LT, GT]
 
 
+-- |Checks if two types match.
 match :: Type -> Type -> Bool
 match (Null    ) (Poly    ) = True
 match (Poly    ) (Null    ) = True
@@ -171,6 +172,7 @@ match (Pair x y) (Pair z v) = match x z && match y v
 match (x       ) (y       ) = x == y
 
 
+-- |Checks if a RValue can be read.
 isReadable :: Type -> Bool
 isReadable Int          = True
 isReadable Char         = True

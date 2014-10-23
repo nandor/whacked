@@ -1,4 +1,16 @@
 begin
-  int a[10];
+    int a = 1;
+    int b = 2;
+    int d = 3;
 
+    while d < 10 do
+        int t = b;
+        b = a;
+        a = t;
+
+        d = d + 1
+    done;
+
+    print b;
+    print a
 end

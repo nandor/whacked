@@ -218,73 +218,87 @@ instance Show SInstr where
     = "throw   " ++ show siThrow
 
 
+-- |Returns true if the instruction makes an assignment to a variable.
 isAssignment :: SInstr -> Bool
-isAssignment SBinOp{} = True
-isAssignment SCall{} = True
-isAssignment SInt{} = True
-isAssignment SPhi{} = True
-isAssignment _ = False
+isAssignment SBinOp{..}      = True
+isAssignment SUnOp{..}       = True
+isAssignment SCall{..}       = True
+isAssignment SBool{..}       = True
+isAssignment SChar{..}       = True
+isAssignment SInt{..}        = True
+isAssignment SBoolArray{..}  = True
+isAssignment SCharArray{..}  = True
+isAssignment SIntArray{..}   = True
+isAssignment SNewArray{..}   = True
+isAssignment SWriteArray{..} = False
+isAssignment SReadArray{..}  = True
+isAssignment SNewPair{..}    = True
+isAssignment SWritePair{..}  = False
+isAssignment SReadPair{..}   = True
+isAssignment SPhi{..}        = True
+isAssignment SFree{..}       = False
+isAssignment SReturn{..}     = False
+isAssignment SBinJump{..}    = False
+isAssignment SUnJump{..}     = False
+isAssignment SJump{..}       = False
+isAssignment SThrow{..}      = False
 
 
+-- |Returns the list of variables that are overwritten by a statement.
 getKill :: SInstr -> [SVar]
-{-
-getKill SCall{..}  = siRet
-getKill SBinOp{..} = [siDest]
-getKill SInt{..}   = [siDest]
-getKill SBool{..}  = [siDest]
-getKill SChar{..}  = [siDest]
-getKill SPhi{..}   = [siDest]
-getKill SUnOp{..}  = [siDest]
-getKill SWriteArray{..} = [siDest]
-getKill _ = []
--}
+getKill SBinOp{..}      = [siDest]
+getKill SUnOp{..}       = [siDest]
+getKill SCall{..}       = siRet
+getKill SBool{..}       = [siDest]
+getKill SChar{..}       = [siDest]
+getKill SInt{..}        = [siDest]
+getKill SBoolArray{..}  = [siDest]
+getKill SCharArray{..}  = [siDest]
+getKill SIntArray{..}   = [siDest]
+getKill SNewArray{..}   = [siDest]
+getKill SWriteArray{..} = []
+getKill SReadArray{..}  = [siDest]
+getKill SNewPair{..}    = [siDest]
+getKill SWritePair{..}  = []
+getKill SReadPair{..}   = [siDest]
+getKill SPhi{..}        = [siDest]
+getKill SFree{..}       = [siRef]
+getKill SReturn{..}     = []
+getKill SBinJump{..}    = []
+getKill SUnJump{..}     = []
+getKill SJump{..}       = []
+getKill SThrow{..}      = []
 
-getKill _ = undefined
 
+-- |Returns the list of variables that are used in a statement.
 getGen :: SInstr -> [SVar]
+getGen SBinOp{..}      = [siLeft, siRight]
+getGen SUnOp{..}       = [siArg]
+getGen SCall{..}       = siArgs
+getGen SBool{..}       = []
+getGen SChar{..}       = []
+getGen SInt{..}        = []
+getGen SBoolArray{..}  = []
+getGen SCharArray{..}  = []
+getGen SIntArray{..}   = []
+getGen SNewArray{..}   = []
+getGen SWriteArray{..} = [siArray, siIndex, siExpr]
+getGen SReadArray{..}  = [siArray, siIndex]
+getGen SNewPair{..}    = []
+getGen SWritePair{..}  = [siPair, siExpr]
+getGen SReadPair{..}   = [siPair]
+getGen SPhi{..}        = siMerge
+getGen SFree{..}       = [siRef]
+getGen SReturn{..}     = [siArg]
+getGen SBinJump{..}    = [siLeft, siRight]
+getGen SUnJump{..}     = [siArg]
+getGen SJump{..}       = []
+getGen SThrow{..}      = []
 
-{-
-getGen SBinOp{..}
-  = [siLeft, siRight]
-getGen SCall{..}
-  = siArgs
-getGen SPhi{..}
-  = siMerge
-getGen SReturn{..}
-  = [siArg]
-getGen SBinJump{..}
-  = [siLeft, siRight]
-getGen SUnJump{..}
-  = [siArg]
-getGen SUnOp{..}
-  = [siArg]
-getGen SPrint{..}
-  = [siArg]
-getGen SWriteArray{..}
-  = [siArg, siIndex, siExpr]
-getGen _
-  = []
--}
 
-getGen _ = undefined
-
+-- |Returns the target point of a jump instruction.
 getTarget :: SInstr -> Maybe Int
-
-{-
-getTarget SBinJump{..}
-  = Just siWhere
-getTarget SUnJump{..}
-  = Just siWhere
-getTarget SJump{..}
-  = Just siWhere
-getTarget _
-  = Nothing
--}
-
-getTarget _ = undefined
-
-isCall :: SInstr -> Bool
-isCall SCall{}
-  = True
-isCall _
-  = False
+getTarget SBinJump{..} = Just siWhere
+getTarget SUnJump{..}  = Just siWhere
+getTarget SJump{..}    = Just siWhere
+getTarget _            = Nothing

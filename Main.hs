@@ -12,10 +12,11 @@ import           System.Exit
 import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
+import           Whacked.FlowGraph
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
---import           Whacked.Optimizer.SCCP
+import           Whacked.Optimizer.SCCP
 --import           Whacked.Backend.ARM as ARM
 
 
@@ -103,8 +104,8 @@ main
               when optPrintIMF $ print itch
               let scratch = generateS $ itch
               when optPrintIMF $ print scratch
-              {-
-              let asm = ARM.compile scratch
+
+              {-let asm = ARM.compile scratch
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm
 

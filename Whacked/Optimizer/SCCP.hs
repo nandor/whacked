@@ -26,7 +26,8 @@ data Value
   | ConstInt Int
   | ConstBool Bool
   | ConstChar Char
-  | ConstString String
+  | ConstArray (Maybe (SVar, Int))
+  | ConstPair (Maybe SVar)
   deriving ( Eq, Ord, Show )
 
 
@@ -44,23 +45,21 @@ instance Monoid Value where
 
 
 -- | Compares two values.
-compareValue :: CondOp -> (SVar, Value) -> (SVar, Value) -> Maybe Bool
-compareValue _ (_, Bot) (_, _)
+compareValue :: CondOp -> Value -> Value -> Maybe Bool
+compareValue _ Bot _
   = Nothing
-compareValue _ (_, _) (_, Bot)
+compareValue _ _ Bot
   = Nothing
-compareValue op (_, ConstInt x) (_, ConstInt y)
+compareValue op (ConstInt x)  (ConstInt y)
   = Just $ (getComparator op) x y
-compareValue op (_, ConstBool x) (_, ConstBool y)
+compareValue op (ConstBool x) (ConstBool y)
   = Just $ (getComparator op) x y
-compareValue op (x, ConstString _) (y, ConstString _)
-  = Just $ (getComparator op) x y
-compareValue op (_, ConstChar x) (_, ConstChar y)
+compareValue op (ConstChar x) (ConstChar y)
   = Just $ (getComparator op) x y
 
 
 -- | Evaluates an operation.
-evalBinOp :: BinaryOp -> (SVar, Value) -> (SVar, Value) -> Maybe Value
+evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
 evalBinOp _ (_, Bot) (_, _)
   = Nothing
 evalBinOp _ (_, _) (_, Bot)
@@ -74,12 +73,10 @@ evalBinOp op (_, ConstInt x) (_, ConstInt y)
     Add -> ConstInt (x + y)
     Sub -> ConstInt (x - y)
     Mul -> ConstInt (x * y)
-    Cmp CLT  -> ConstBool (x < y)
-    Cmp CLTE -> ConstBool (x <= y)
-    Cmp CGT  -> ConstBool (x > y)
-    Cmp CGTE -> ConstBool (x >= y)
-    Cmp CEQ  -> ConstBool (x == y)
-    Cmp CNEQ -> ConstBool (x /= y)
+    Div -> ConstInt (x `div` y)
+    Mod -> ConstInt (x `mod` y)
+    Cmp x -> ConstBool (fromJust $ compareValue x (ConstInt x) (ConstInt y))
+
 evalBinOp op (_, ConstBool x) (_, ConstBool y)
   = return $ case op of
     Or -> ConstBool (x || y)
@@ -91,7 +88,7 @@ evalBinOp op (_, ConstChar x) (_, ConstChar y)
     Cmp CGT  -> ConstBool (x > y)
     Cmp CGTE -> ConstBool (x >= y)
     Cmp CEQ  -> ConstBool (x == y)
-    Cmp CNEQ -> ConstBool (x /= y)
+    Cmp CNE  -> ConstBool (x /= y)
 
 
 -- | Evaluates an unary operation.
@@ -111,6 +108,7 @@ evalUnOp op (ConstChar x)
   = case op of
     Ord -> Just $ ConstInt (ord x)
 
+
 -- | Builds the SSA graph.
 buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
 buildSSAGraph block
@@ -118,31 +116,10 @@ buildSSAGraph block
   where
     defs = foldl findDefs Map.empty block
 
-    findDefs mp (idx, SBinOp{..})
-      = Map.insert siDest idx mp
-    findDefs mp (idx, SInt{..})
-      = Map.insert siDest idx mp
-    findDefs mp (idx, SBool{..})
-      = Map.insert siDest idx mp
-    findDefs mp (idx, SPhi{..})
-      = Map.insert siDest idx mp
-    findDefs mp _
-      = mp
-
-    linkDefs mp (idx, SBinOp{..})
-      = foldl (linkTo idx) mp [siLeft, siRight]
-    linkDefs mp (idx, SCall{..})
-      = foldl (linkTo idx) mp siArgs
-    linkDefs mp (idx, SPhi{..})
-      = foldl (linkTo idx) mp siMerge
-    linkDefs mp (idx, SReturn{..})
-      = foldl (linkTo idx) mp [siVal]
-    linkDefs mp (idx, SBinJump{..})
-      = foldl (linkTo idx) mp [siLeft, siRight]
-    linkDefs mp (idx, SUnJump{..})
-      = foldl (linkTo idx) mp [siVal]
-    linkDefs mp _
-      = mp
+    findDefs mp (idx, instr)
+      = foldl (\mp x -> Map.insert x idx mp) mp (getKill instr)
+    linkDefs mp (idx, instr)
+      = foldl (linkTo idx) mp (getGen instr)
 
     linkTo idx mp var
       = case Map.lookup var defs of
@@ -152,7 +129,7 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = relabel . removePhi $ func
+  = relabel func
     { sfBody = [(i, x) | (i, x) <- body', i `Set.member` reachable]
     }
   where
@@ -218,8 +195,8 @@ optimise func@SFunction{..}
             ns' ->
               ((i, jmp') : ns', vars', alias')
         jmp@SUnJump{} ->
-          let jmp' = fromMaybe jmp{ siVal = findAlias $ siVal jmp } $ do
-                    val <- evalValue (findAlias . siVal $ jmp)
+          let jmp' = fromMaybe jmp{ siArg = findAlias $ siArg jmp } $ do
+                    val <- evalValue (findAlias . siArg $ jmp)
                     case val of
                       ConstBool x | x == siWhen jmp ->
                         return $ SJump (siWhere jmp)
@@ -291,20 +268,7 @@ optimise func@SFunction{..}
           , alias'
           )
         ret@SReturn{..} ->
-          ((i, ret{ siVal = findAlias siVal }) : ns', vars', alias')
-        print@SPrint{..} ->
-          let t = case evalValue (findAlias siArg) of
-                Just (ConstInt _) -> Int
-                Just (ConstChar _) -> Char
-                Just (ConstString _) -> String
-                Just (ConstBool _) -> Bool
-                _ -> siType
-              instr' = case t of
-                Int -> SCall [] "__print_int" [findAlias siArg]
-                Char -> SCall [] "__print_char" [findAlias siArg]
-                String -> SCall [] "__print_string" [findAlias siArg]
-                Bool -> SCall [] "__print_bool" [findAlias siArg]
-          in ((i, instr'):ns', vars', alias')
+          ((i, ret{ siArg = findAlias siArg }) : ns', vars', alias')
         _ -> ((i, instr):ns', vars', alias')
       where
         findAlias var
@@ -401,10 +365,6 @@ optimise func@SFunction{..}
       node@SReturn{..} ->
         ( xs, [], vars )
 
-      -- Print has side effects.
-      node@SPrint{..} ->
-        ( xs, [], vars )
-
       -- Constants are marked and propagated.
       node@SInt{..} ->
         (xs, ssaNext, Map.insert siDest (ConstInt siInt) vars)
@@ -412,8 +372,7 @@ optimise func@SFunction{..}
         (xs, ssaNext, Map.insert siDest (ConstBool siBool) vars)
       node@SChar{..} ->
         (xs, ssaNext, Map.insert siDest (ConstChar siChar) vars)
-      node@SConstString{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstString siStringVal) vars)
+
 
       -- | Evaluate conditionals.
       node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
@@ -426,7 +385,7 @@ optimise func@SFunction{..}
           else do
             return ([(end, fromJust $ Map.lookup end next)], [], vars)
       node@SUnJump{..} -> fromMaybe (cfgNext, [], vars) $ do
-        expr <- getValue siVal
+        expr <- getValue siArg
         case expr of
           ConstBool x | x == siWhen ->
             return ([(end, siWhere)], [], vars)
