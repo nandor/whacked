@@ -24,7 +24,7 @@ import           Whacked.Tree
 import           Whacked.Types
 
 
-import Debug.Trace
+
 -- |The scope keeps information about declared variables, functions return
 -- types, label counters and scope counters. It is wrapped into a state monad
 -- for easy access.
