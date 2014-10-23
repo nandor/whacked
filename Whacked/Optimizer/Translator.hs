@@ -350,6 +350,12 @@ genExpr IElem{..} dest = do
     Pair lt rt | ieElem == Snd -> do
       emit $ SReadPair rt Snd dest pexpr
       return (rt, dest)
+    Null -> do
+      emit $ SThrow "dereferencing null pointer"
+      return (ieType, dest)
+    Poly -> do
+      emit $ SReadPair ieType ieElem dest pexpr
+      return (ieType, dest)
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
   dest <- genTemp
@@ -367,7 +373,7 @@ genExpr IRead{..} dest = case ieType of
     return (Array Char, dest)
 genExpr INull{} dest = do
   emit $ SInt dest 0
-  return (Int, dest)
+  return (Null, dest)
 
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
@@ -420,6 +426,7 @@ genInstr IAssPair{..} = do
 genInstr IFree{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SFree t expr
+
 
 -- | Generates code for a function.
 genFunc :: IFunction -> SFunction

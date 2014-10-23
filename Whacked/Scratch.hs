@@ -141,6 +141,9 @@ data SInstr
   | SJump
     { siWhere :: Int
     }
+  | SThrow
+    { siThrow :: String
+    }
   deriving (Eq, Ord)
 
 
@@ -211,6 +214,8 @@ instance Show SInstr where
     = "jmpun  @" ++ show siWhere
   show SJump{..}
     = "jmp    @" ++ show siWhere
+  show SThrow{..}
+    = "throw   " ++ show siThrow
 
 
 isAssignment :: SInstr -> Bool
