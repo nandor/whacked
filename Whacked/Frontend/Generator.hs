@@ -307,8 +307,10 @@ genStmt AAssign{..} = do
 genStmt ARead{..} = case asTo of
   ALVar{..} -> findVar alName >>= \case
     Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-    Just (var, t) -> do
+    Just (var, t) | isReadable t -> do
       tell [ IAssVar alName var (IRead t) ]
+    _ -> do
+      genError alTag "type error: cannot read type"
   ALArray{..} -> do
     (at, aexpr) <- genExpr alArray
     (it, iexpr) <- genExpr alIndex
@@ -329,7 +331,7 @@ genStmt ARead{..} = case asTo of
       Pair ft st | alElem == Snd && isReadable st -> do
         tell [ IAssPair pexpr Fst (IRead st) ]
       _ -> do
-        genError alTag "type error: pair expected"
+        genError alTag "type error: type cannot be read"
 genStmt AFree{..} = do
   (t, expr) <- genExpr asExpr
   unless (t `match` Poly) $

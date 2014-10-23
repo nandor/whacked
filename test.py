@@ -11,11 +11,11 @@ def test(root, codes):
                 continue
             file = os.path.join(root, file)
             print("\n" + file + ":\n")
-            #with open(file, 'r') as fin:
-            #    print fin.read()
-            code = subprocess.call(["./dist/build/whacked/whacked", file])
+            code = subprocess.call(["./dist/build/whacked/whacked", file, "-I"])
             if code not in codes:
                 wrong[file] = code
+                with open(file, 'r') as fin:
+                    print fin.read()
 
     print "\nFailed tests:\n"
     for file, code in wrong.iteritems():
@@ -26,8 +26,8 @@ def main():
     """Entry point of the script."""
     subprocess.call(["cabal", "build"])
     test("../wacc_examples/invalid/syntaxErr", [100])
-    test("../wacc_examples/invalid/semanticErr", [200])
-    test("../wacc_examples/valid", [0])
+    #test("../wacc_examples/invalid/semanticErr", [200])
+    #test("../wacc_examples/valid", [0])
 
 
 
