@@ -1,6 +1,6 @@
 module Whacked.Types where
 
-
+import Debug.Trace
 -- |Binary operators.
 data BinaryOp
   = Add
@@ -82,10 +82,17 @@ binOpType (Cmp CNE) Int  Int  = Just Bool
 binOpType (Cmp CNE) Char Char = Just Bool
 binOpType (Cmp CNE) Bool Bool = Just Bool
 
-binOpType (Cmp CEQ) (Array _)  (Array _)  = Just Bool
-binOpType (Cmp CNE) (Array _)  (Array _)  = Just Bool
+binOpType (Cmp CEQ) (Array _ ) (Array _ ) = Just Bool
 binOpType (Cmp CEQ) (Pair _ _) (Pair _ _) = Just Bool
+binOpType (Cmp CEQ) (Pair _ _) (Null    ) = Just Bool
+binOpType (Cmp CEQ) (Null    ) (Pair _ _) = Just Bool
+binOpType (Cmp CNE) (Array _ ) (Array _ ) = Just Bool
 binOpType (Cmp CNE) (Pair _ _) (Pair _ _) = Just Bool
+binOpType (Cmp CNE) (Pair _ _) (Null    ) = Just Bool
+binOpType (Cmp CNE) (Null    ) (Pair _ _) = Just Bool
+
+binOpType _ _ _
+  = Nothing
 
 
 -- Return the type of an unary operation or nothing
@@ -111,10 +118,10 @@ getComparator op
 
 
 match :: Type -> Type -> Bool
-match Poly (Pair _ _)
-  = True
-match (Pair _ _) Poly
-  = True
+match (Null    ) (Pair _ _) = True
+match (Pair _ _) (Null    ) = True
+match (Poly    ) (Pair _ _) = True
+match (Pair _ _) (Poly    ) = True
 match x y
   | x == y = True
   | otherwise = case (x, y) of

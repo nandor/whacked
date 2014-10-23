@@ -167,7 +167,7 @@ aRValue
           right <- aExpr
           return $ ARPair tag left right
     , ARElem <$> aTag <*> (reserved "fst" *> aExpr) <*> pure Fst
-    , ARElem <$> aTag <*> (reserved "snd" *> aExpr) <*> pure Fst
+    , ARElem <$> aTag <*> (reserved "snd" *> aExpr) <*> pure Snd
     , do
         tag <- aTag
         reserved "call"

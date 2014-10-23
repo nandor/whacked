@@ -8,6 +8,7 @@ module Whacked.Itch where
 -- are flattened and all variables are removed and replaced by version numbers.
 -- Type information is kept in the instructions themselved.
 
+import Data.List
 import Data.Set (Set)
 import Whacked.Types
 
@@ -17,7 +18,7 @@ data IProgram
   = IProgram
     { ipFuncs :: [ IFunction ]
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data IFunction
@@ -28,7 +29,7 @@ data IFunction
     , ifBody :: [IInstr]
     , ifVars :: Set (String, Int, Type)
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data IExpr
@@ -63,8 +64,8 @@ data IExpr
     }
   | IPair
     { ieType :: Type
-    , ieLeft :: IExpr
-    , ieRight :: IExpr
+    , ieFst :: IExpr
+    , ieSnd :: IExpr
     }
   | IIndex
     { ieType  :: Type
@@ -81,10 +82,13 @@ data IExpr
     , ieName :: String
     , ieArgs :: [IExpr]
     }
+  | IRead
+    { ieType :: Type
+    }
   | INull
     {
     }
-  deriving ( Eq, Ord, Show )
+  deriving ( Eq, Ord )
 
 
 data IInstr
@@ -119,15 +123,9 @@ data IInstr
     }
   | IAssPair
     { iiVar   :: String
-    , iiSCope :: Int
+    , iiScope :: Int
     , iiElem  :: Elem
     , iiExpr  :: IExpr
-    }
-
-  | IRead
-    { iiVar   :: String
-    , iiScope :: Int
-    , iiType  :: Type
     }
   | IPrint
     { iiExpr :: IExpr
@@ -148,17 +146,75 @@ data IInstr
   deriving ( Eq, Ord )
 
 
+instance Show IProgram where
+  show IProgram{..}
+    = concat (intersperse "\n\n" $ map show ipFuncs)
+
+
+instance Show IFunction where
+  show IFunction{..}
+    = ifName ++ "(" ++ concat (intersperse "," $ map showArg ifArgs) ++ ")\n"
+      ++ concat (intersperse "\n" $ map show ifBody)
+    where
+      showArg (t, name)
+        = "<" ++ name ++ ":0>"
+
+
+instance Show IExpr where
+  show IUnOp{..}
+    = show ieUnOp ++ "(" ++ show ieArg ++ ")"
+  show IBinOp{..}
+    = "(" ++ show ieLeft ++ ")" ++ show ieBinOp ++ "(" ++ show ieRight ++ ")"
+  show IVar{..}
+    = "<" ++ ieName ++ ":" ++ show ieScope ++ ">"
+  show IBool{..}
+    = show ieBool
+  show IInt{..}
+    = show ieInt
+  show IChar{..}
+    = show ieChar
+  show IArray{..}
+    = "[...]"
+  show IPair{..}
+    = "{" ++ show ieFst ++ "," ++ show ieSnd ++ "}"
+  show IIndex{..}
+    = show ieArray ++ "[" ++ show ieIndex ++ "]"
+  show IElem{..}
+    = show iePair ++ "[" ++ show ieElem ++ "]"
+  show ICall{..}
+    = ieName ++ "(" ++ concat (intersperse "," $ map show ieArgs) ++ ")"
+  show IRead{..}
+    = "read"
+  show INull{..}
+    = "null"
+
+
 instance Show IInstr where
-  show IReturn{..}   = "IReturn   "
-  show IBinJump{..}  = "IBinJump  " ++ show iiWhere
-  show IUnJump{..}   = "IUnJump   " ++ show iiWhere
-  show IJump{..}     = "IJump     " ++ show iiWhere
-  show IAssVar{..}   = "IAssVar   " ++ iiVar
-  show IAssArray{..} = "IAssArray " ++ iiVar
-  show IAssPair{..}  = "IAssPair  "
-  show IRead{..}     = "IRead     " ++ iiVar
-  show IPrint{..}    = "IPrint    "
-  show IPrintln{..}  = "IPrintln  "
-  show ILabel{..}    = "ILabel    " ++ show iiLabel
-  show IExit{..}     = "IExit     "
-  show IEnd{..}      = "IEnd      "
+  show IReturn{..}
+    = "    IReturn   " ++ show iiExpr
+  show IBinJump{..}
+    = "    IBinJump  @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=="
+      ++ "(" ++ show iiLeft ++ ")" ++ show iiCond ++ "(" ++ show iiRight ++ ")"
+  show IUnJump{..}
+    = "    IUnJump   @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=="
+      ++ show iiVal
+  show IJump{..}
+    = "    IJump     @" ++ show iiWhere
+  show IAssVar{..}
+    = "    IAssVar   <" ++ iiVar ++ ":" ++ show iiScope ++ ">"
+      ++ "=" ++ show iiExpr
+  show IAssArray{..}
+    = "    IAssArray " ++ iiVar
+  show IAssPair{..}
+    = "    IAss" ++ show iiElem ++ "   <" ++ iiVar ++ ":" ++ show iiScope ++ ">"
+      ++ "=" ++ show iiExpr
+  show IPrint{..}
+    = "    IPrint    " ++ show iiExpr
+  show IPrintln{..}
+    = "    IPrintln  " ++ show iiExpr
+  show ILabel{..}
+    = " @" ++ show iiLabel ++ ":"
+  show IExit{..}
+    = "    IExit     " ++ show iiExpr
+  show IEnd{..}
+    = "    IEnd      "
