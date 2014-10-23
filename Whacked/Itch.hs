@@ -177,7 +177,7 @@ instance Show IExpr where
   show IIndex{..}
     = show ieArray ++ "[" ++ show ieIndex ++ "]"
   show IElem{..}
-    = show iePair ++ "[" ++ show ieElem ++ "]"
+    = show iePair ++ "." ++ show ieElem
   show ICall{..}
     = ieName ++ "(" ++ concat (intersperse "," $ map show ieArgs) ++ ")"
   show IRead{..}
@@ -201,7 +201,7 @@ instance Show IInstr where
   show IAssArray{..}
     = "    " ++ show iiArray ++ "[" ++ show iiIndex ++ "]=" ++ show iiExpr
   show IAssPair{..}
-    = "    " ++ show iiPair ++ "[" ++ show iiElem ++ "]=" ++ show iiExpr
+    = "    " ++ show iiPair ++ "." ++ show iiElem ++ "=" ++ show iiExpr
   show IPrint{..}
     = "    print    " ++ show iiExpr
   show IPrintln{..}

@@ -96,10 +96,30 @@ data SInstr
     , siArray :: SVar
     , siIndex :: SVar
     }
+  | SNewPair
+    { siType :: Type
+    , siDest :: SVar
+    }
+  | SWritePair
+    { siType :: Type
+    , siElem :: Elem
+    , siPair :: SVar
+    , siExpr :: SVar
+    }
+  | SReadPair
+    { siType :: Type
+    , siElem :: Elem
+    , siDest :: SVar
+    , siPair :: SVar
+    }
   | SPhi
     { siDest  :: SVar
     , siType  :: Type
     , siMerge :: [SVar]
+    }
+  | SFree
+    { siType :: Type
+    , siRef :: SVar
     }
   | SReturn
     { siType :: Type
@@ -170,12 +190,20 @@ instance Show SInstr where
     = show siArray ++ "[" ++ show siIndex ++ "] <- " ++ show siExpr
   show SReadArray{..}
     = show siDest ++ " <- " ++ show siArray ++ "[" ++ show siIndex ++ "]"
+  show SNewPair{..}
+    = show siDest ++ " <- new{}"
+  show SWritePair{..}
+    = show siPair ++ "." ++ show siElem ++ " <- " ++ show siExpr
+  show SReadPair{..}
+    = show siDest ++ " <- " ++ show siPair ++ "." ++ show siElem
   show SPhi{..}
     = show siDest ++ " <- phi(" ++
       (concat . intersperse "," $ map show siMerge) ++
       ")"
+  show SFree{..}
+    = "free    " ++ show siRef
   show SReturn{..}
-    = "ret    " ++ show siArg
+    = "ret     " ++ show siArg
   show SBinJump{..}
     = "jmpbin @" ++ show siWhere ++ ", " ++
       show siLeft ++ show siCond ++ show siRight

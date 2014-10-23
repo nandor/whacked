@@ -340,6 +340,22 @@ genExpr IIndex{..} dest = do
   (_, idx) <- genTemp >>= genExpr ieIndex
   emit $ SReadArray t dest arr idx
   return (t, dest)
+genExpr IPair{..} dest = do
+  (lt, lexpr) <- genTemp >>= genExpr ieFst
+  (rt, rexpr) <- genTemp >>= genExpr ieSnd
+  emit $ SNewPair (Pair lt rt) dest
+  emit $ SWritePair lt Fst dest lexpr
+  emit $ SWritePair rt Snd dest rexpr
+  return (Pair lt rt, dest)
+genExpr IElem{..} dest = do
+  (pt, pexpr) <- genTemp >>= genExpr iePair
+  case pt of
+    Pair lt rt | ieElem == Fst -> do
+      emit $ SReadPair lt Fst dest pexpr
+      return (lt, dest)
+    Pair lt rt | ieElem == Snd -> do
+      emit $ SReadPair rt Snd dest pexpr
+      return (rt, dest)
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
   dest <- genTemp
@@ -355,6 +371,10 @@ genExpr IRead{..} dest = case ieType of
   Array Char -> do
     emit $ SCall [dest] "__read_string" []
     return (Array Char, dest)
+genExpr INull{} dest = do
+  emit $ SInt dest 0
+  return (Int, dest)
+
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
 genInstr :: IInstr -> Generator ()
@@ -399,7 +419,13 @@ genInstr IAssArray{..} = do
   (_, idx)   <- genTemp >>= genExpr iiIndex
   (t, expr)  <- genTemp >>= genExpr iiExpr
   emit $ SWriteArray t array idx expr
-
+genInstr IAssPair{..} = do
+  (_, pexpr) <- genTemp >>= genExpr iiPair
+  (t, expr)  <- genTemp >>= genExpr iiExpr
+  emit $ SWritePair t iiElem pexpr expr
+genInstr IFree{..} = do
+  (t, expr) <- genTemp >>= genExpr iiExpr
+  emit $ SFree t expr
 
 -- | Generates code for a function.
 genFunc :: IFunction
