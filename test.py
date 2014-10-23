@@ -18,11 +18,6 @@ def test(root, codes, wrong, flags=None):
                 with open(file, 'r') as fin:
                     print fin.read()
 
-    print "\nFailed tests:\n"
-    for file, code in wrong.iteritems():
-        print file + ': ' + str(code)
-
-
 def main():
     """Entry point of the script."""
     subprocess.call(["cabal", "build"])
@@ -30,6 +25,15 @@ def main():
     test("../wacc_examples/invalid/syntaxErr", [100], wrong)
     test("../wacc_examples/invalid/semanticErr", [200], wrong)
     test("../wacc_examples/valid", [0], wrong, ["-I"])
+
+    print "\nFailed tests:\n"
+    fails = []
+    for fail, code in wrong.iteritems():
+        fails.append((fail, code))
+    fails.sort()
+    for file, code in fails:
+        print file + ': ' + str(code)
+
 
 
 

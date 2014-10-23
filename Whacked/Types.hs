@@ -84,6 +84,16 @@ data Elem
   deriving ( Eq, Ord, Show )
 
 
+-- Negates the comparison operator.
+invertCond :: CondOp -> CondOp
+invertCond CLT  = CGTE
+invertCond CLTE = CGT
+invertCond CGT  = CLTE
+invertCond CGTE = CLT
+invertCond CEQ  = CNE
+invertCond CNE  = CEQ
+
+
 -- |Returns the type of the result of a binary operation or Nothing.
 binOpType :: BinaryOp -> Type -> Type -> Maybe Type
 binOpType Add Int  Int  = Just Int

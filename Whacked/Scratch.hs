@@ -56,21 +56,32 @@ data SInstr
     , siFunc :: String
     , siArgs :: [SVar]
     }
-  | SConstBool
-    { siDest    :: SVar
-    , siBoolVal :: Bool
+  | SBool
+    { siDest :: SVar
+    , siBool :: Bool
     }
-  | SConstChar
-    { siDest    :: SVar
-    , siCharVal :: Char
+  | SChar
+    { siDest :: SVar
+    , siChar :: Char
     }
-  | SConstInt
-    { siDest   :: SVar
-    , siIntVal :: Int
+  | SInt
+    { siDest :: SVar
+    , siInt  :: Int
     }
-  | SConstString
-    { siDest      :: SVar
-    , siStringVal :: String
+  | SBoolArray
+    { siDest  :: SVar
+    , siBools :: [Bool]
+    }
+  | SCharArray
+    { siDest  :: SVar
+    , siChars :: [Char]
+    }
+  | SIntArray
+    { siDest :: SVar
+    , siInts :: [Int]
+    }
+  | SEmptyArray
+    { siDest :: SVar
     }
   | SWriteArray
     { siType  :: Type
@@ -91,7 +102,6 @@ data SInstr
   | SBinJump
     { siType  :: Type
     , siWhere :: Int
-    , siWhen  :: Bool
     , siCond  :: CondOp
     , siLeft  :: SVar
     , siRight :: SVar
@@ -113,7 +123,7 @@ data SInstr
 
 instance Show SVar where
   show (SVar i)
-    = "@" ++ show i
+    = "#" ++ show i
 
 
 instance Show SProgram where
@@ -137,64 +147,63 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siUnOp ++ "(" ++ show siArg ++ ")"
   show SCall{..}
     = (concat . intersperse "," $ map show siRet) ++
-      " <- call " ++
+      " <- call " ++ siFunc ++
       (concat . intersperse "," $ map show siArgs)
-  show SConstBool{..}
-    = show siDest ++ " <- " ++ show siBoolVal
-  show SConstChar{..}
-    = show siDest ++ " <- " ++ show siCharVal
-  show SConstInt{..}
-    = show siDest ++ " <- " ++ show siIntVal
-  show SConstString{..}
-    = ""
-  show SWriteArray{..}
-    = ""
-  show SPhi{..}
-    = ""
+  show SBool{..}
+    = show siDest ++ " <- " ++ show siBool
+  show SChar{..}
+    = show siDest ++ " <- " ++ show siChar
+  show SInt{..}
+    = show siDest ++ " <- " ++ show siInt
+  show SBoolArray{..}
+    = show siDest ++ " <- " ++ show siBools
+  show SCharArray{..}
+    = show siDest ++ " <- " ++ show siChars
+  show SIntArray{..}
+    = show siDest ++ " <- " ++ show siInts
   show SReturn{..}
     = "ret    " ++ show siArg
   show SBinJump{..}
-    = "jmpbin " ++ show siWhere
+    = "jmpbin @" ++ show siWhere ++ ", " ++
+      show siLeft ++ show siCond ++ show siRight
   show SUnJump{..}
-    = "jmpun  " ++ show siWhere
+    = "jmpun  @" ++ show siWhere
   show SJump{..}
-    = "jmp    " ++ show siWhere
+    = "jmp    @" ++ show siWhere
   show SPrint{..}
     = "print  " ++ show siArg
+  show SPhi{..}
+    = show siDest ++ " <- phi(" ++
+      (concat . intersperse "," $ map show siMerge) ++
+      ")"
 
 
 isAssignment :: SInstr -> Bool
 isAssignment SBinOp{} = True
 isAssignment SCall{} = True
-isAssignment SConstInt{} = True
+isAssignment SInt{} = True
 isAssignment SPhi{} = True
 isAssignment _ = False
 
 
 getKill :: SInstr -> [SVar]
-getKill SCall{..}
-  = siRet
-getKill SBinOp{..}
-  = [siDest]
-getKill SConstInt{..}
-  = [siDest]
-getKill SConstString{..}
-  = [siDest]
-getKill SConstBool{..}
-  = [siDest]
-getKill SConstChar{..}
-  = [siDest]
-getKill SPhi{..}
-  = [siDest]
-getKill SUnOp{..}
-  = [siDest]
-getKill SWriteArray{..}
-  = [siDest]
-getKill _
-  = []
+{-
+getKill SCall{..}  = siRet
+getKill SBinOp{..} = [siDest]
+getKill SInt{..}   = [siDest]
+getKill SBool{..}  = [siDest]
+getKill SChar{..}  = [siDest]
+getKill SPhi{..}   = [siDest]
+getKill SUnOp{..}  = [siDest]
+getKill SWriteArray{..} = [siDest]
+getKill _ = []
+-}
 
+getKill _ = undefined
 
 getGen :: SInstr -> [SVar]
+
+{-
 getGen SBinOp{..}
   = [siLeft, siRight]
 getGen SCall{..}
@@ -215,8 +224,13 @@ getGen SWriteArray{..}
   = [siArg, siIndex, siExpr]
 getGen _
   = []
+-}
+
+getGen _ = undefined
 
 getTarget :: SInstr -> Maybe Int
+
+{-
 getTarget SBinJump{..}
   = Just siWhere
 getTarget SUnJump{..}
@@ -225,7 +239,9 @@ getTarget SJump{..}
   = Just siWhere
 getTarget _
   = Nothing
+-}
 
+getTarget _ = undefined
 
 isCall :: SInstr -> Bool
 isCall SCall{}

@@ -120,9 +120,9 @@ buildSSAGraph block
 
     findDefs mp (idx, SBinOp{..})
       = Map.insert siDest idx mp
-    findDefs mp (idx, SConstInt{..})
+    findDefs mp (idx, SInt{..})
       = Map.insert siDest idx mp
-    findDefs mp (idx, SConstBool{..})
+    findDefs mp (idx, SBool{..})
       = Map.insert siDest idx mp
     findDefs mp (idx, SPhi{..})
       = Map.insert siDest idx mp
@@ -244,7 +244,7 @@ optimise func@SFunction{..}
                       } $ do
                         result <- mconcat <$> mapM evalValue siMerge
                         case result of
-                          ConstInt x -> return $ SConstInt siDest x
+                          ConstInt x -> return $ SInt siDest x
                           _ -> Nothing
           in case phi' of
             SPhi{ siMerge = [x], siDest } ->
@@ -260,8 +260,8 @@ optimise func@SFunction{..}
                     right <- evalValue (findAlias siRight)
                     result <- evalBinOp siBinOp (siLeft, left) (siRight, right)
                     case result of
-                      ConstInt x -> return $ SConstInt (findAlias siDest) x
-                      ConstBool x -> return $ SConstBool (findAlias siDest) x
+                      ConstInt x -> return $ SInt (findAlias siDest) x
+                      ConstBool x -> return $ SBool (findAlias siDest) x
                       _ -> Nothing
           in ( (i, bin') : ns'
              , vars'
@@ -272,8 +272,8 @@ optimise func@SFunction{..}
                    arg <- evalValue (findAlias siArg)
                    result <- evalUnOp siUnOp arg
                    case result of
-                      ConstInt x -> return $ SConstInt siDest x
-                      ConstBool x -> return $ SConstBool siDest x
+                      ConstInt x -> return $ SInt siDest x
+                      ConstBool x -> return $ SBool siDest x
                       _ -> Nothing
           in ( (i, un') : ns'
              , vars'
@@ -406,12 +406,12 @@ optimise func@SFunction{..}
         ( xs, [], vars )
 
       -- Constants are marked and propagated.
-      node@SConstInt{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstInt siIntVal) vars)
-      node@SConstBool{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstBool siBoolVal) vars)
-      node@SConstChar{..} ->
-        (xs, ssaNext, Map.insert siDest (ConstChar siCharVal) vars)
+      node@SInt{..} ->
+        (xs, ssaNext, Map.insert siDest (ConstInt siInt) vars)
+      node@SBool{..} ->
+        (xs, ssaNext, Map.insert siDest (ConstBool siBool) vars)
+      node@SChar{..} ->
+        (xs, ssaNext, Map.insert siDest (ConstChar siChar) vars)
       node@SConstString{..} ->
         (xs, ssaNext, Map.insert siDest (ConstString siStringVal) vars)
 

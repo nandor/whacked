@@ -2,8 +2,8 @@
 module Whacked.FlowGraph
   ( FlowGraph
   , relabel
-  , removePhi
-  , buildFlowGraph
+--  , removePhi
+--  , buildFlowGraph
   , allPathsReturn
   ) where
 
@@ -66,7 +66,7 @@ relabel func@SFunction{..}
     relabel' (i, x)
       = (update i, x)
 
-
+{-
 -- | Removes phi nodes from the code.
 -- | TODO(nl1813): Fix phi renaming.
 removePhi :: SFunction -> SFunction
@@ -105,11 +105,11 @@ removePhi func@SFunction{..}
     removePhi' (i, call@SCall{..})
       = Just
         (i, call{ siRet = map replace siRet, siArgs = map replace siArgs})
-    removePhi' (i, int@SConstInt{..})
+    removePhi' (i, int@SInt{..})
       = Just (i, int{ siDest = replace siDest })
-    removePhi' (i, chr@SConstChar{..})
+    removePhi' (i, chr@SChar{..})
       = Just (i, chr{ siDest = replace siDest })
-    removePhi' (i, bool@SConstBool{..})
+    removePhi' (i, bool@SBool{..})
       = Just (i, bool{ siDest = replace siDest })
     removePhi' (i, string@SConstString{..})
       = Just (i, string{ siDest = replace siDest })
@@ -142,8 +142,8 @@ removePhi func@SFunction{..}
           })
     removePhi' (i, ret@SReturn{..})
       = Just (i, ret{ siArg = replace siArg })
-
-
+-}
+{-
 -- | Builds the control flow graph.
 buildFlowGraph :: [(Int, SInstr)] -> (FlowGraph, FlowGraph)
 buildFlowGraph block
@@ -172,3 +172,4 @@ buildFlowGraph block
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+-}

@@ -224,8 +224,10 @@ genJump target branch expr@IBinOp{..}
         genJump end True ieLeft
         genJump target False ieRight
         tell [ ILabel end ]
+      Cmp op | branch -> do
+        tell [ IBinJump target op ieLeft ieRight ]
       Cmp op -> do
-        tell [ IBinJump target branch op ieLeft ieRight ]
+        tell [ IBinJump target (invertCond op) ieLeft ieRight ]
       op ->
         tell [ IUnJump target branch expr ]
 genJump target branch expr

@@ -97,7 +97,6 @@ data IInstr
     }
   | IBinJump
     { iiWhere :: Int
-    , iiWhen  :: Bool
     , iiCond  :: CondOp
     , iiLeft  :: IExpr
     , iiRight :: IExpr
@@ -191,7 +190,7 @@ instance Show IInstr where
   show IReturn{..}
     = "    ret      " ++ show iiExpr
   show IBinJump{..}
-    = "    jmpbin  @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=" ++
+    = "    jmpbin  @" ++ show iiWhere ++ "," ++
       "(" ++ show iiLeft ++ ")" ++ show iiCond ++ "(" ++ show iiRight ++ ")"
   show IUnJump{..}
     = "    jmpun   @" ++ show iiWhere ++ "," ++ show iiWhen ++ "=" ++ show iiVal
@@ -215,3 +214,12 @@ instance Show IInstr where
     = "    end      "
   show IFree{..}
     = "    free     " ++ show iiExpr
+
+
+-- |Checks if an expression is a constant of a given type.
+isConst :: Type -> IExpr -> Bool
+isConst Char IChar{} = True
+isConst Bool IBool{} = True
+isConst Int  IInt{}  = True
+isConst _ _          = False
+

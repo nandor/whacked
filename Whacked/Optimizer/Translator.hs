@@ -300,18 +300,26 @@ genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
 
+-- Constant values. Emits a simple instruction which copies the constant into
+-- a temporary location.
 genExpr IBool{..} dest = do
-  emit $ SConstBool dest ieBool
+  emit $ SBool dest ieBool
   return (Bool, dest)
 genExpr IChar{..} dest = do
-  emit $ SConstChar dest ieChar
+  emit $ SChar dest ieChar
   return (Char, dest)
 genExpr IInt{..} dest = do
-  emit $ SConstInt dest ieInt
+  emit $ SInt dest ieInt
   return (Int, dest)
---genExpr IConstString{..} dest = do
---  emit $ SConstString dest ieStringVal
---  return (String, dest)
+genExpr IArray{..} dest = do
+  case ieElems of
+    [] -> do
+      emit $ SEmptyArray dest
+      return (Empty, dest)
+    xs | all (isConst Char) xs -> do
+      emit $ SCharArray dest . map (\(IChar x) -> x) $ xs
+      return (Array Char, dest)
+
 
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
@@ -336,7 +344,7 @@ genInstr IExit{..} = do
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
   (rt, re) <- genTemp >>= genExpr iiRight
-  emit $ SBinJump lt iiWhere iiWhen iiCond le re
+  emit $ SBinJump lt iiWhere iiCond le re
 
 genInstr IUnJump{..} = do
   (t, expr) <- genTemp >>= genExpr iiVal
@@ -361,7 +369,7 @@ genInstr IPrintln{..} = do
 
 genInstr IEnd{} = do
   expr <- genTemp
-  emit $ SConstInt expr 0
+  emit $ SInt expr 0
   emit $ SReturn Int expr
 
 

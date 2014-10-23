@@ -55,9 +55,9 @@ allocate live func@SFunction{..}
           where
             add mp (var, reg)
               = Map.insertWith (++) var (reg : allRegs) mp
-        pref mp (_, SConstInt{..})
+        pref mp (_, SInt{..})
           = Map.insertWith (++) siDest allRegs mp
-        pref mp (_, SConstBool{..})
+        pref mp (_, SBool{..})
           = Map.insertWith (++) siDest allRegs mp
         pref mp (_, SReturn{..})
           = Map.insertWith (++) siVal (R0 : allRegs) mp

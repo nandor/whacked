@@ -88,9 +88,9 @@ compileInstr (_, SCall{..}) = do
   forM_ (zip siRet $ enumFrom R0) $ \(ret, reg) ->
     move (fromMaybe reg . Map.lookup ret $ regs) reg
 
-compileInstr (_, SConstInt{..}) = do
+compileInstr (_, SInt{..}) = do
   scope@Scope{ regs } <- get
-  tell [ARMLDR (fromJust $ Map.lookup siDest regs) siIntVal]
+  tell [ARMLDR (fromJust $ Map.lookup siDest regs) siInt]
 compileInstr (_, SConstString{..}) = do
   scope@Scope { regs, strings } <- get
   tell [
@@ -98,13 +98,13 @@ compileInstr (_, SConstString{..}) = do
       (fromJust $ Map.lookup siDest regs)
       ("__msg" ++ (show $ length strings))]
   put scope{ strings = siStringVal : strings }
-compileInstr (_, SConstBool{..}) = do
+compileInstr (_, SBool{..}) = do
   scope@Scope{ regs } <- get
   tell [
-    ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBoolVal then 1 else 0 ]
-compileInstr (_, SConstChar{..}) = do
+    ARMLDR (fromJust $ Map.lookup siDest regs) $ if siBool then 1 else 0 ]
+compileInstr (_, SChar{..}) = do
   scope@Scope{ regs } <- get
-  tell [ARMLDR (fromJust $ Map.lookup siDest regs) (ord siCharVal)]
+  tell [ARMLDR (fromJust $ Map.lookup siDest regs) (ord siChar)]
 compileInstr (_, SReturn{..}) = do
   scope@Scope{ regs, toSave } <- get
   move R0 (fromJust $ Map.lookup siVal regs)
