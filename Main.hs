@@ -5,8 +5,6 @@ module Main where
 
 import           Control.Applicative
 import           Control.Monad
-import           Data.List
-import           Safe
 import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
@@ -50,7 +48,7 @@ options
         (OptArg
           (\val opt -> case val of
             Nothing -> opt
-            Just val -> opt{ optOutput = val })
+            Just val' -> opt{ optOutput = val' })
           (optOutput defaultOptions))
         "Choose the output file"
     ]

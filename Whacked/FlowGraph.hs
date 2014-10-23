@@ -45,52 +45,6 @@ allPathsReturn (p:ps)
   = allPathsReturn ps
 
 
--- | Checks whether all paths terminate.
-checkFlowGraph :: IFunction -> Bool
-checkFlowGraph IFunction{..}
-  = all (\x -> Set.member x terminals) . map fst $ Map.toList body
-  where
-    body = Map.fromList $ zip [0..] ifBody
-
-    terminals = dfs [x | (x, i) <- Map.toList body, isTerminal i] Set.empty
-    dfs [] viz
-      = viz
-    dfs (x:xs) viz
-      | Set.member x viz = dfs xs viz
-      | Just xs' <- Map.lookup x prev = dfs (xs' ++ xs) (Set.insert x viz)
-      | otherwise = dfs xs (Set.insert x viz)
-    prev
-      = Map.fromList
-      . zip (tail . map fst . Map.toList $ body)
-      . map (\x -> [x])
-      $ [0..]
-
-    labels = Map.foldlWithKey getLabel Map.empty body
-    getLabel mp i ILabel{ iiLabel }
-      = Map.insert iiLabel i mp
-    getLabel mp _ _
-      = mp
-
-    prev' = Map.foldlWithKey getJump prev body
-    getJump mp i IBinJump{ iiWhere }
-      = Map.insertWith (++) i [fromJust $ Map.lookup iiWhere labels] mp
-    getJump mp i IUnJump{ iiWhere }
-      = undefined
-    getJump mp i IJump{ iiWhere }
-      = undefined
-    getJump mp _ _
-      = mp
-
-    isTerminal IReturn{}
-      = True
-    isTerminal IExit{}
-      = True
-    isTerminal IEnd{}
-      = True
-    isTerminal _
-      = False
-
-
 -- |Relabels the instructions after eliminating nodes.
 relabel :: SFunction -> SFunction
 relabel func@SFunction{..}
