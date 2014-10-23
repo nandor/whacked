@@ -33,6 +33,7 @@ data Scope
     { function     :: String
     , functions    :: Map String AFunction
     , nextScope    :: Int
+    , currentScope :: Int
     , nextLabel    :: Int
     , variables    :: [(Int, Map String Type)]
     , declarations :: Set (String, Int, Type)
@@ -72,9 +73,10 @@ runGenerator (Generator gen) scope = do
 scope :: Generator a -> Generator (a, [IInstr])
 scope gen = do
   -- Create a new variable scope by incrementing the scope counter.
-  scope@Scope{ nextScope, variables } <- get
+  scope@Scope{ nextScope, variables, currentScope } <- get
   let scope' = scope
         { nextScope = nextScope + 1
+        , currentScope = nextScope + 1
         , variables = (nextScope + 1, Map.empty) : variables
         }
   put scope'
@@ -83,7 +85,10 @@ scope gen = do
   case runGenerator gen scope' of
     Left err -> throwError err
     Right (a, scope''@Scope{ variables }, instr) -> do
-      put scope''{ variables = tail variables }
+      put scope''
+        { variables = tail variables
+        , currentScope = currentScope
+        }
       return (a, instr)
 
 
@@ -246,13 +251,13 @@ genStmt AVarDecl{..} = do
   -- Insert variables in the scope. Checks if the variable has not been already
   -- declared in the same scope, generates an assignment instruction & places
   -- the variable in the symbol table.
-  scope@Scope{ nextScope, variables = (_, x):xs, declarations } <- get
+  scope@Scope{ currentScope, variables = (_, x):xs, declarations } <- get
 
   -- There must be no other declaration in the same scope.
   var <- findVar asName
   when (isJust var) $ do
     let Just (idx, t) = var
-    when (idx == nextScope) $
+    when (idx == currentScope) $
       genError asTag $ "duplicate variable '" ++ asName ++ "'"
 
   -- Check the types
@@ -261,12 +266,12 @@ genStmt AVarDecl{..} = do
     genError asTag $ "type error(AVarDecl): mismatched types"
 
   -- Generate an assignment instruction.
-  tell [IAssVar asName nextScope eexpr]
+  tell [IAssVar asName currentScope eexpr]
 
   -- Update the symbol table.
   put scope
-    { variables = (nextScope, Map.insert asName asType x) : xs
-    , declarations = Set.insert (asName, nextScope, asType) declarations
+    { variables = (currentScope, Map.insert asName asType x) : xs
+    , declarations = Set.insert (asName, currentScope, asType) declarations
     }
 genStmt AAssign{..} = do
   -- Generates code for assignments. Checks if the variable has been defined
@@ -410,6 +415,7 @@ genFunc AFunction{..} = do
     { variables = (nextScope + 1, Map.empty) : [(nextScope, args)]
     , declarations = decls
     , nextScope = nextScope + 1
+    , currentScope = nextScope + 1
     }
 
   -- |Encode statements.
@@ -457,6 +463,7 @@ generateI (AProgram functions) = do
               . Map.filter (\x -> length x == 1)
               $ functions'
             , nextScope = 0
+            , currentScope = 0
             , nextLabel = 0
             , variables = []
             , declarations = Set.empty

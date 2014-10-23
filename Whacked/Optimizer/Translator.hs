@@ -278,9 +278,7 @@ emit instr = do
   tell [(block, instr)]
 
 
-genExpr :: IExpr
-        -> SVar
-        -> Generator (Type, SVar)
+genExpr :: IExpr -> SVar -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
   (lt, le) <- genTemp >>= genExpr ieLeft
   (rt, re) <- genTemp >>= genExpr ieRight
