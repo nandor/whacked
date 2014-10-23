@@ -256,7 +256,7 @@ genStmt AVarDecl{..} = do
   -- Check the types
   (et, eexpr) <- genRValue asWhat
   unless (asType `match` et) $
-    genError asTag $ traceShow (asType, et) $ "type error(AVarDecl): mismatched types"
+    genError asTag $ "type error(AVarDecl): mismatched types"
 
   -- Generate an assignment instruction.
   tell [IAssVar asName nextScope eexpr]
@@ -389,8 +389,6 @@ genStmt AWhile{..} = do
 genStmt ABlock{..} = do
   (_, instrs) <- scope $ mapM_ genStmt asBody
   tell instrs
-genStmt AEnd
-  = tell [IEnd]
 
 
 -- |Generates code for a function body.
@@ -414,6 +412,7 @@ genFunc AFunction{..} = do
 
   -- |Encode statements.
   mapM_ genStmt afBody
+  tell [IEnd]
 
 
 -- |Generates code for all the functions in the program. If type checking fails,

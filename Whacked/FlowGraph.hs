@@ -5,6 +5,7 @@ module Whacked.FlowGraph
   , removePhi
   , buildFlowGraph
   , checkFlowGraph
+  , allPathsReturn
   ) where
 
 
@@ -13,17 +14,84 @@ import qualified Data.Map as Map
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
+
 
 type FlowGraph
   = Map Int [Int]
 
 
--- | Relabels the instructions after eliminating nodes.
+-- |Checks if all the paths of the AST return. If not all paths return from
+-- a function, a syntax error is thrown. The only messy case is represented
+-- by if statements: either both paths return or there is a return after
+-- the if statement. The statements that are considered terminal are exit
+-- and return statements.
+allPathsReturn :: [AStatement] -> Bool
+allPathsReturn []
+  = False
+allPathsReturn (AIf{..}:ps)
+  = (allPathsReturn asTrue && allPathsReturn asFalse) || allPathsReturn ps
+allPathsReturn (ABlock{..}:ps)
+  = allPathsReturn asBody || allPathsReturn ps
+allPathsReturn (AReturn{}:ps)
+  = True
+allPathsReturn (AExit{}:ps)
+  = True
+allPathsReturn (p:ps)
+  = allPathsReturn ps
+
+
+-- | Checks whether all paths terminate.
+checkFlowGraph :: IFunction -> Bool
+checkFlowGraph IFunction{..}
+  = all (\x -> Set.member x terminals) . map fst $ Map.toList body
+  where
+    body = Map.fromList $ zip [0..] ifBody
+
+    terminals = dfs [x | (x, i) <- Map.toList body, isTerminal i] Set.empty
+    dfs [] viz
+      = viz
+    dfs (x:xs) viz
+      | Set.member x viz = dfs xs viz
+      | Just xs' <- Map.lookup x prev = dfs (xs' ++ xs) (Set.insert x viz)
+      | otherwise = dfs xs (Set.insert x viz)
+    prev
+      = Map.fromList
+      . zip (tail . map fst . Map.toList $ body)
+      . map (\x -> [x])
+      $ [0..]
+
+    labels = Map.foldlWithKey getLabel Map.empty body
+    getLabel mp i ILabel{ iiLabel }
+      = Map.insert iiLabel i mp
+    getLabel mp _ _
+      = mp
+
+    prev' = Map.foldlWithKey getJump prev body
+    getJump mp i IBinJump{ iiWhere }
+      = Map.insertWith (++) i [fromJust $ Map.lookup iiWhere labels] mp
+    getJump mp i IUnJump{ iiWhere }
+      = undefined
+    getJump mp i IJump{ iiWhere }
+      = undefined
+    getJump mp _ _
+      = mp
+
+    isTerminal IReturn{}
+      = True
+    isTerminal IExit{}
+      = True
+    isTerminal IEnd{}
+      = True
+    isTerminal _
+      = False
+
+
+-- |Relabels the instructions after eliminating nodes.
 relabel :: SFunction -> SFunction
 relabel func@SFunction{..}
   = func{ sfBody = map relabel' sfBody }
@@ -151,48 +219,3 @@ buildFlowGraph block
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
-
--- | Checks whether all paths terminate.
-checkFlowGraph :: IFunction -> Bool
-checkFlowGraph IFunction{..}
-  = all (\x -> Set.member x terminals) . map fst $ Map.toList body
-  where
-    body = Map.fromList $ zip [0..] ifBody
-
-    terminals = dfs [x | (x, i) <- Map.toList body, isTerminal i] Set.empty
-    dfs [] viz
-      = viz
-    dfs (x:xs) viz
-      | Set.member x viz = dfs xs viz
-      | Just xs' <- Map.lookup x prev = dfs (xs' ++ xs) (Set.insert x viz)
-      | otherwise = dfs xs (Set.insert x viz)
-    prev
-      = Map.fromList
-      . zip (tail . map fst . Map.toList $ body)
-      . map (\x -> [x])
-      $ [0..]
-
-    labels = Map.foldlWithKey getLabel Map.empty body
-    getLabel mp i ILabel{ iiLabel }
-      = Map.insert iiLabel i mp
-    getLabel mp _ _
-      = mp
-
-    prev' = Map.foldlWithKey getJump prev body
-    getJump mp i IBinJump{ iiWhere }
-      = Map.insertWith (++) i [fromJust $ Map.lookup iiWhere labels] mp
-    getJump mp i IUnJump{ iiWhere }
-      = undefined
-    getJump mp i IJump{ iiWhere }
-      = undefined
-    getJump mp _ _
-      = mp
-
-    isTerminal IReturn{}
-      = True
-    isTerminal IExit{}
-      = True
-    isTerminal IEnd{}
-      = True
-    isTerminal _
-      = False

@@ -18,9 +18,10 @@ import           Text.ParserCombinators.Parsec.Token (TokenParser)
 import qualified Text.ParserCombinators.Parsec.Token as Token
 import           Whacked.Tree
 import           Whacked.Types
+import           Whacked.FlowGraph
 
 
-import Debug.Trace
+
 -- |Definition of the language.
 whacked :: TokenParser st
 whacked
@@ -320,6 +321,9 @@ aFunction = do
   reserved "is"
   body <- semiSep1 aStatement
   reserved "end"
+  -- Vi Coactus, I would have made this a semantic error.
+  unless (allPathsReturn body) $ do
+    unexpected "not all control paths return"
   return $ AFunction tag args retType name body
 
 
@@ -329,7 +333,7 @@ aProgram = do
   tag <- aTag
   reserved "begin"
   functions <- many (try aFunction)
-  body <- (++ [AEnd]) <$> semiSep1 aStatement
+  body <- semiSep1 aStatement
   reserved "end"
   return $ AProgram (AFunction tag [] Void "main" body : functions)
 
