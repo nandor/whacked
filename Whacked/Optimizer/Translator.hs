@@ -319,6 +319,12 @@ genExpr IArray{..} dest = do
     xs | all (isConst Char) xs -> do
       emit $ SCharArray dest . map (\(IChar x) -> x) $ xs
       return (Array Char, dest)
+    xs | all (isConst Int) xs -> do
+      emit $ SIntArray dest . map (\(IInt x) -> x) $ xs
+      return (Array Int, dest)
+    xs | all (isConst Bool) xs -> do
+      emit $ SBoolArray dest . map (\(IBool x) -> x) $ xs
+      return (Array Int, dest)
 
 
 genExpr ICall{..} dest = do
