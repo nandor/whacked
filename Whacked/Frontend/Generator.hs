@@ -396,6 +396,8 @@ genStmt AWhile{..} = do
 genStmt ABlock{..} = do
   (_, instrs) <- scope $ mapM_ genStmt asBody
   tell instrs
+genStmt AEnd = do
+  tell [IEnd]
 
 
 -- |Generates code for a function body.
@@ -420,7 +422,6 @@ genFunc AFunction{..} = do
 
   -- |Encode statements.
   mapM_ genStmt afBody
-  tell [IEnd]
 
 
 -- |Generates code for all the functions in the program. If type checking fails,

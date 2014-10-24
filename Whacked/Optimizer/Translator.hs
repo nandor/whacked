@@ -472,8 +472,10 @@ genFunc func@IFunction{..}
         -- Place empty phi nodes for all affected variables.
         case Map.lookup idx phi of
           Nothing -> do
-            scope <- get
-            put scope{ block = idx }
+            get >>= \scope@Scope{ blocks } -> put scope
+              { block = idx
+              , blocks = Map.insert idx (SBlock [] []) blocks
+              }
             mapM_ genInstr instrs
           Just phi' -> do
             phis <- forM phi' $ \(var, idx, t) -> do

@@ -303,6 +303,20 @@ isVar (SVar _) = True
 isVar (SImm _) = False
 
 
+-- |Checks if an instruction is a call instruction.
+isCall :: SInstr -> Bool
+isCall SCall{..} = True
+isCall _         = False
+
+
+-- |Returns the target of a jump instruction.
+getTarget :: SInstr -> [Int]
+getTarget SBinJump{..} = [siWhere]
+getTarget SUnJump{..}  = [siWhere]
+getTarget SJump{..}    = [siWhere]
+getTarget _            = []
+
+
 -- |Returns the list of variables that are overwritten by a statement.
 getKill :: SInstr -> [SVar]
 getKill x

@@ -104,6 +104,7 @@ data AStatement
     { asTag  :: ATag
     , asBody :: [AStatement]
     }
+  | AEnd
   deriving (Eq, Ord, Show)
 
 

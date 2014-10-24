@@ -2,6 +2,7 @@ module Whacked.Backend.ARM.ASM where
 
 
 import Data.List
+import Whacked.Types
 
 
 
@@ -25,6 +26,19 @@ data ARMReg
   deriving (Eq, Ord, Show, Enum)
 
 
+data ARMImm
+  = ARMR ARMReg
+  | ARMI Int
+  deriving ( Eq, Ord )
+
+
+instance Show ARMImm where
+  show (ARMR reg)
+    = show reg
+  show (ARMI int)
+    = "#" ++ show int
+
+
 data ARMCond
   = ALT
   | AGT
@@ -34,6 +48,15 @@ data ARMCond
   | ANE
   | AAL
   deriving (Eq, Ord)
+
+
+toARMCond :: CondOp -> ARMCond
+toARMCond CLT  = ALT
+toARMCond CLTE = ALTE
+toARMCond CGT  = AGT
+toARMCond CGTE = AGTE
+toARMCond CEQ  = AEQ
+toARMCond CNE  = ANE
 
 
 instance Show ARMCond where
@@ -47,55 +70,57 @@ instance Show ARMCond where
 
 
 data ASM
-  = ARMLabel String
-  | ARMGlobal String
+  = ARMLabel Int
+  | ARMFunc String
   | ARMSection String
   | ARMWord Int
   | ARMAscii String
   | ARMADR ARMReg String
-  | ARMAdd ARMReg ARMReg ARMReg
-  | ARMSub ARMReg ARMReg ARMReg
+  | ARMADD ARMReg ARMReg ARMImm
+  | ARMSUB ARMReg ARMReg ARMImm
+  | ARMCMP ARMReg ARMImm
+  | ARMMOV ARMReg ARMImm
   | ARMPush [ARMReg]
   | ARMPop [ARMReg]
-  | ARMMov ARMReg ARMReg
   | ARMLDR ARMReg Int
   | ARMSTR ARMReg ARMReg ARMReg
   | ARMBL String
-  | ARMB ARMCond String
-  | ARMCmp ARMReg ARMReg
+  | ARMB ARMCond Int
   deriving (Eq, Ord)
 
 
 instance Show ASM where
   show (ARMSection section)
     = ".section " ++ section
-  show (ARMGlobal label)
-    = ".global " ++ label
   show (ARMLabel label)
-    = "" ++ label ++ ":"
+    = "L" ++ show label ++ ":"
+  show (ARMFunc label)
+    = ".global " ++ label ++ "\n" ++ label ++ ":"
   show (ARMWord x)
     = "\t.word " ++ show x
   show (ARMAscii x)
     = "\t.ascii " ++ show x
+
   show (ARMADR d label)
     = "\tLDR " ++ show d ++ ", =" ++ label
-  show (ARMAdd d n m)
+  show (ARMADD d n m)
     = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
-  show (ARMSub d n m)
+  show (ARMSUB d n m)
     = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMMOV d n)
+    = "\tMOV " ++ show d ++ ", " ++ show n
+  show (ARMCMP n m)
+    = "\tCMP " ++ show n ++ ", " ++ show m
+
   show (ARMPush rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMPop rs)
     = "\tPOP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
-  show (ARMMov d n)
-    = "\tMOV " ++ show d ++ ", " ++ show n
   show (ARMLDR d n)
     = "\tLDR " ++ show d ++ ", =" ++ show n
   show (ARMSTR d n m)
     = "\tST " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMB cond xs)
-    = "\tB" ++ show cond ++ " " ++ xs
+    = "\tB" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)
-    = "\tBL " ++ xs
-  show (ARMCmp n m)
-    = "\tCMP " ++ show n ++ ", " ++ show m
+    = "\tBL " ++ show xs

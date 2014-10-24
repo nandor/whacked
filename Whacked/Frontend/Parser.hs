@@ -335,7 +335,7 @@ aProgram = do
   functions <- many (try aFunction)
   body <- semiSep1 aStatement
   reserved "end"
-  return $ AProgram (AFunction tag [] Void "main" body : functions)
+  return $ AProgram (AFunction tag [] Void "main" (body ++ [AEnd]) : functions)
 
 
 -- |Runs the parser and return the AST or an error.

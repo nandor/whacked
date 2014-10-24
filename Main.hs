@@ -19,7 +19,7 @@ import           Whacked.Optimizer.ConstantMover
 import           Whacked.Optimizer.RemovePHI
 import           Whacked.Optimizer.Translator
 --import           Whacked.Optimizer.SCCP
---import           Whacked.Backend.ARM as ARM
+import           Whacked.Backend.ARM as ARM
 
 
 data Options
