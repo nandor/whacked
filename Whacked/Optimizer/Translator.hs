@@ -341,35 +341,35 @@ genExpr IArray{..} dest = do
       forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
         idx <- genTemp
         emit $ SInt idx i
-        emit $ SWriteArray t dest idx expr
+        emit $ SWriteArray dest idx expr
       return (Array ieType, dest)
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
   (_, idx) <- genTemp >>= genExpr ieIndex
-  emit $ SReadArray t dest arr idx
+  emit $ SReadArray dest arr idx
   return (t, dest)
 genExpr IPair{..} dest = do
   (lt, lexpr) <- genTemp >>= genExpr ieFst
   (rt, rexpr) <- genTemp >>= genExpr ieSnd
-  emit $ SNewPair (Pair lt rt) dest
-  emit $ SWritePair lt Fst dest lexpr
-  emit $ SWritePair rt Snd dest rexpr
+  emit $ SNewPair dest
+  emit $ SWritePair Fst dest lexpr
+  emit $ SWritePair Snd dest rexpr
   return (Pair lt rt, dest)
 genExpr IElem{..} dest = do
   (pt, pexpr) <- genTemp >>= genExpr iePair
   case pt of
     Pair lt rt | ieElem == Fst -> do
-      emit $ SReadPair lt Fst dest pexpr
+      emit $ SReadPair Fst dest pexpr
       return (lt, dest)
     Pair lt rt | ieElem == Snd -> do
-      emit $ SReadPair rt Snd dest pexpr
+      emit $ SReadPair Snd dest pexpr
       return (rt, dest)
     Null -> do
       emit $ SCharArray dest "dereferencing null pointer"
       emit $ SCall [] "__throw" [dest]
       return (ieType, dest)
     Poly -> do
-      emit $ SReadPair ieType ieElem dest pexpr
+      emit $ SReadPair ieElem dest pexpr
       return (ieType, dest)
 genExpr ICall{..} dest = do
   args <- mapM (\x -> genTemp >>= genExpr x) ieArgs
@@ -397,7 +397,7 @@ genInstr ILabel{..} = do
   return ()
 genInstr IReturn{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SReturn t expr
+  emit $ SReturn expr
 genInstr IExit{..} = do
   (_, expr) <- genTemp >>= genExpr iiExpr
   emit $ SCall [] "__exit" [expr]
@@ -405,11 +405,11 @@ genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
   (rt, re) <- genTemp >>= genExpr iiRight
   labels <- getLabel iiWhere
-  emit $ SBinJump lt labels iiCond le re
+  emit $ SBinJump labels iiCond le re
 genInstr IUnJump{..} = do
   (t, expr) <- genTemp >>= genExpr iiVal
   labels <- getLabel iiWhere
-  emit $ SUnJump t labels iiWhen expr
+  emit $ SUnJump labels iiWhen expr
 genInstr IJump{..} = do
   labels <- getLabel iiWhere
   emit $ SJump labels
@@ -417,7 +417,7 @@ genInstr IAssVar{..} = do
   dest <- genTemp
   (t, expr) <- genExpr iiExpr dest
   when (dest /= expr) $
-    emit $ SMov t dest expr
+    emit $ SMov dest expr
   scope@Scope{ vars } <- get
   put scope{ vars = Map.insert (iiVar, iiScope) (t, dest) vars }
 genInstr IPrint{..} = do
@@ -434,19 +434,19 @@ genInstr IPrintln{..} = do
 genInstr IEnd{} = do
   expr <- genTemp
   emit $ SInt expr 0
-  emit $ SReturn Int expr
+  emit $ SReturn expr
 genInstr IAssArray{..} = do
   (_, array) <- genTemp >>= genExpr iiArray
   (_, idx)   <- genTemp >>= genExpr iiIndex
   (t, expr)  <- genTemp >>= genExpr iiExpr
-  emit $ SWriteArray t array idx expr
+  emit $ SWriteArray array idx expr
 genInstr IAssPair{..} = do
   (_, pexpr) <- genTemp >>= genExpr iiPair
   (t, expr)  <- genTemp >>= genExpr iiExpr
-  emit $ SWritePair t iiElem pexpr expr
+  emit $ SWritePair iiElem pexpr expr
 genInstr IFree{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SFree t expr
+  emit $ SFree expr
 
 
 -- | Generates code for a function.

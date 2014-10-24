@@ -12,7 +12,6 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 
-import Debug.Trace
 
 
 -- |Computes congruence classes. Each element will be mapped to a single
@@ -54,71 +53,68 @@ congruence func@SFunction{ sfBlocks }
 
 
 -- |Removes all phi nodes.
-removePhi :: SProgram -> SProgram
-removePhi prog@SProgram{..}
-  = prog{ spFuncs = map removeFunction spFuncs }
+removePhi :: SFunction -> SFunction
+removePhi func@SFunction{..}
+  = func{ sfBlocks = Map.map removeBlock sfBlocks }
   where
-    removeFunction func@SFunction{..}
-      = func{ sfBlocks = Map.map removeBlock sfBlocks }
-      where
-        -- |Merge everything from the same congruence class.
-        cong = congruence func
-        replace i
-          | Just i' <- Map.lookup i cong = i'
-          | otherwise = i
+    -- |Merge everything from the same congruence class.
+    cong = congruence func
+    replace i
+      | Just i' <- Map.lookup i cong = i'
+      | otherwise = i
 
-        removeBlock block@SBlock{..}
-          = block{ sbPhis = [], sbInstrs = map replaceInstr sbInstrs }
+    removeBlock block@SBlock{..}
+      = block{ sbPhis = [], sbInstrs = map replaceInstr sbInstrs }
 
-        replaceInstr op@SBinOp{..}
-          = op
-            { siLeft = replace siLeft
-            , siRight = replace siRight
-            , siDest = replace siDest
+    replaceInstr op@SBinOp{..}
+      = op
+        { siLeft = replace siLeft
+        , siRight = replace siRight
+        , siDest = replace siDest
+        }
+    replaceInstr op@SUnOp{..}
+      = op{ siDest = replace siDest, siArg = replace siArg }
+    replaceInstr op@SMov{..}
+      = op{ siDest = replace siDest, siArg = replace siArg }
+    replaceInstr op@SCall{..}
+      = op{ siRet = map replace siRet, siArgs = map replace siArgs }
+    replaceInstr op@SBool{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SChar{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SInt{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SBoolArray{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SCharArray{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SIntArray{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SNewArray{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SWriteArray{..}
+      = op{ siExpr = replace siExpr
+          , siArray = replace siArray
+          , siIndex = replace siIndex
           }
-        replaceInstr op@SUnOp{..}
-          = op{ siDest = replace siDest, siArg = replace siArg }
-        replaceInstr op@SMov{..}
-          = op{ siDest = replace siDest, siArg = replace siArg }
-        replaceInstr op@SCall{..}
-          = op{ siRet = map replace siRet, siArgs = map replace siArgs }
-        replaceInstr op@SBool{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SChar{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SInt{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SBoolArray{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SCharArray{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SIntArray{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SNewArray{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SWriteArray{..}
-          = op{ siExpr = replace siExpr
-              , siArray = replace siArray
-              , siIndex = replace siIndex
-              }
-        replaceInstr op@SReadArray{..}
-          = op{ siDest = replace siDest
-              , siArray = replace siArray
-              , siIndex = replace siIndex
-              }
-        replaceInstr op@SNewPair{..}
-          = op{ siDest = replace siDest }
-        replaceInstr op@SWritePair{..}
-          = op{ siPair = replace siPair, siExpr = replace siExpr }
-        replaceInstr op@SReadPair{..}
-          = op{ siDest = replace siDest, siPair = replace siPair }
-        replaceInstr op@SFree{..}
-          = op{ siRef = replace siRef }
-        replaceInstr op@SReturn{..}
-          = op{ siArg = replace siArg }
-        replaceInstr op@SBinJump{..}
-          = op{ siLeft = replace siLeft, siRight = replace siRight }
-        replaceInstr op@SUnJump{..}
-          = op{ siArg = replace siArg }
-        replaceInstr op@SJump{..}
-          = op
+    replaceInstr op@SReadArray{..}
+      = op{ siDest = replace siDest
+          , siArray = replace siArray
+          , siIndex = replace siIndex
+          }
+    replaceInstr op@SNewPair{..}
+      = op{ siDest = replace siDest }
+    replaceInstr op@SWritePair{..}
+      = op{ siPair = replace siPair, siExpr = replace siExpr }
+    replaceInstr op@SReadPair{..}
+      = op{ siDest = replace siDest, siPair = replace siPair }
+    replaceInstr op@SFree{..}
+      = op{ siRef = replace siRef }
+    replaceInstr op@SReturn{..}
+      = op{ siArg = replace siArg }
+    replaceInstr op@SBinJump{..}
+      = op{ siLeft = replace siLeft, siRight = replace siRight }
+    replaceInstr op@SUnJump{..}
+      = op{ siArg = replace siArg }
+    replaceInstr op@SJump{..}
+      = op

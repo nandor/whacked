@@ -70,8 +70,7 @@ data SInstr
     , siArg  :: SVar
     }
   | SMov
-    { siType :: Type
-    , siDest :: SVar
+    { siDest :: SVar
     , siArg  :: SVar
     }
   | SCall
@@ -108,55 +107,49 @@ data SInstr
     , siLength :: Int
     }
   | SWriteArray
-    { siType  :: Type
-    , siArray :: SVar
+    { siArray :: SVar
     , siIndex :: SVar
     , siExpr  :: SVar
     }
   | SReadArray
-    { siType  :: Type
-    , siDest  :: SVar
+    { siDest  :: SVar
     , siArray :: SVar
     , siIndex :: SVar
     }
   | SNewPair
-    { siType :: Type
-    , siDest :: SVar
+    { siDest :: SVar
     }
   | SWritePair
-    { siType :: Type
-    , siElem :: Elem
+    { siElem :: Elem
     , siPair :: SVar
     , siExpr :: SVar
     }
   | SReadPair
-    { siType :: Type
-    , siElem :: Elem
+    { siElem :: Elem
     , siDest :: SVar
     , siPair :: SVar
     }
   | SFree
-    { siType :: Type
-    , siRef :: SVar
+    { siRef :: SVar
     }
   | SReturn
-    { siType :: Type
-    , siArg  :: SVar
+    { siArg  :: SVar
     }
   | SBinJump
-    { siType  :: Type
-    , siWhere :: Int
+    { siWhere :: Int
     , siCond  :: CondOp
     , siLeft  :: SVar
     , siRight :: SVar
     }
   | SUnJump
-    { siType  :: Type
-    , siWhere :: Int
+    { siWhere :: Int
     , siWhen  :: Bool
     , siArg   :: SVar
     }
   | SJump
+    { siWhere :: Int
+    }
+  | SLabel
     { siWhere :: Int
     }
   deriving (Eq, Ord)
@@ -193,7 +186,6 @@ instance Show SPhi where
     = show spDest ++ " <- phi(" ++
       (concat . intersperse "," $ map show spMerge) ++
       ")"
-
 
 
 instance Show SInstr where
@@ -244,6 +236,12 @@ instance Show SInstr where
     = "jmp @" ++ show siWhere
 
 
+-- |Applies a function to all functions.
+mapF :: (SFunction -> SFunction) -> SProgram -> SProgram
+mapF f prog@SProgram{..}
+    = prog{ spFuncs = map f spFuncs }
+
+
 -- |Returns true if the instruction makes an assignment to a variable.
 isAssignment :: SInstr -> Bool
 isAssignment SBinOp{..}      = True
@@ -268,51 +266,61 @@ isAssignment SUnJump{..}     = False
 isAssignment SJump{..}       = False
 
 
+-- |Returns true if a SVar is not an immediate.
+isVar :: SVar -> Bool
+isVar (SVar _) = True
+isVar (SImm _) = False
+
+
 -- |Returns the list of variables that are overwritten by a statement.
 getKill :: SInstr -> [SVar]
-getKill SBinOp{..}      = [siDest]
-getKill SUnOp{..}       = [siDest]
-getKill SMov{..}        = [siDest]
-getKill SCall{..}       = siRet
-getKill SBool{..}       = [siDest]
-getKill SChar{..}       = [siDest]
-getKill SInt{..}        = [siDest]
-getKill SBoolArray{..}  = [siDest]
-getKill SCharArray{..}  = [siDest]
-getKill SIntArray{..}   = [siDest]
-getKill SNewArray{..}   = [siDest]
-getKill SWriteArray{..} = []
-getKill SReadArray{..}  = [siDest]
-getKill SNewPair{..}    = [siDest]
-getKill SWritePair{..}  = []
-getKill SReadPair{..}   = [siDest]
-getKill SFree{..}       = [siRef]
-getKill SReturn{..}     = []
-getKill SBinJump{..}    = []
-getKill SUnJump{..}     = []
-getKill SJump{..}       = []
+getKill x
+  = filter isVar $ case x of
+    SBinOp{..}      -> [siDest]
+    SUnOp{..}       -> [siDest]
+    SMov{..}        -> [siDest]
+    SCall{..}       -> siRet
+    SBool{..}       -> [siDest]
+    SChar{..}       -> [siDest]
+    SInt{..}        -> [siDest]
+    SBoolArray{..}  -> [siDest]
+    SCharArray{..}  -> [siDest]
+    SIntArray{..}   -> [siDest]
+    SNewArray{..}   -> [siDest]
+    SWriteArray{..} -> []
+    SReadArray{..}  -> [siDest]
+    SNewPair{..}    -> [siDest]
+    SWritePair{..}  -> []
+    SReadPair{..}   -> [siDest]
+    SFree{..}       -> [siRef]
+    SReturn{..}     -> []
+    SBinJump{..}    -> []
+    SUnJump{..}     -> []
+    SJump{..}       -> []
 
 
 -- |Returns the list of variables that are used in a statement.
 getGen :: SInstr -> [SVar]
-getGen SBinOp{..}      = [siLeft, siRight]
-getGen SUnOp{..}       = [siArg]
-getGen SMov{..}        = [siArg]
-getGen SCall{..}       = siArgs
-getGen SBool{..}       = []
-getGen SChar{..}       = []
-getGen SInt{..}        = []
-getGen SBoolArray{..}  = []
-getGen SCharArray{..}  = []
-getGen SIntArray{..}   = []
-getGen SNewArray{..}   = []
-getGen SWriteArray{..} = [siArray, siIndex, siExpr]
-getGen SReadArray{..}  = [siArray, siIndex]
-getGen SNewPair{..}    = []
-getGen SWritePair{..}  = [siPair, siExpr]
-getGen SReadPair{..}   = [siPair]
-getGen SFree{..}       = [siRef]
-getGen SReturn{..}     = [siArg]
-getGen SBinJump{..}    = [siLeft, siRight]
-getGen SUnJump{..}     = [siArg]
-getGen SJump{..}       = []
+getGen x
+  = filter isVar $ case x of
+    SBinOp{..}      -> [siLeft, siRight]
+    SUnOp{..}       -> [siArg]
+    SMov{..}        -> [siArg]
+    SCall{..}       -> siArgs
+    SBool{..}       -> []
+    SChar{..}       -> []
+    SInt{..}        -> []
+    SBoolArray{..}  -> []
+    SCharArray{..}  -> []
+    SIntArray{..}   -> []
+    SNewArray{..}   -> []
+    SWriteArray{..} -> [siArray, siIndex, siExpr]
+    SReadArray{..}  -> [siArray, siIndex]
+    SNewPair{..}    -> []
+    SWritePair{..}  -> [siPair, siExpr]
+    SReadPair{..}   -> [siPair]
+    SFree{..}       -> [siRef]
+    SReturn{..}     -> [siArg]
+    SBinJump{..}    -> [siLeft, siRight]
+    SUnJump{..}     -> [siArg]
+    SJump{..}       -> []

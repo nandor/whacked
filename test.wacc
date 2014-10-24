@@ -1,4 +1,8 @@
 begin
+    int f() is
+        return 4
+    end
+
     int c = 0;
     int q = 0;
     int a = 1;

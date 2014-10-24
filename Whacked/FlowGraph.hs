@@ -76,28 +76,3 @@ buildFlowGraph func@SFunction{..}
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
-
-
--- |Relabels the instructions after eliminating nodes so that all identifiers
--- range from 0 to n, where n is the number of instructions.
-{-relabel :: SFunction -> SFunction
-relabel func@SFunction{..}
-  = func{ sfBody = map relabel' sfBody }
-  where
-    labels = Map.fromList (genLabels 0 0 (map fst sfBody))
-    genLabels n cnt (x:xs)
-      = zip [n..] (replicate (x - n + 1) cnt) ++ genLabels (x + 1) (cnt + 1) xs
-    genLabels n _ []
-      = []
-
-    update x = fromJust $ Map.lookup x labels
-
-    relabel' (i, jmp@SBinJump{..})
-      = (update i, jmp{ siWhere = update siWhere })
-    relabel' (i, jmp@SUnJump{..})
-      = (update i, jmp{ siWhere = update siWhere })
-    relabel' (i, jmp@SJump{..})
-      = (update i, jmp{ siWhere = update siWhere })
-    relabel' (i, x)
-      = (update i, x)
--}
