@@ -1,8 +1,8 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
 module Whacked.FlowGraph
   ( FlowGraph
-  , relabel
-  , buildFlowGraph
+  --, relabel
+  --, buildFlowGraph
   , allPathsReturn
   ) where
 
@@ -45,7 +45,7 @@ allPathsReturn (p:ps)
 
 -- |Relabels the instructions after eliminating nodes so that all identifiers
 -- range from 0 to n, where n is the number of instructions.
-relabel :: SFunction -> SFunction
+{-relabel :: SFunction -> SFunction
 relabel func@SFunction{..}
   = func{ sfBody = map relabel' sfBody }
   where
@@ -65,11 +65,11 @@ relabel func@SFunction{..}
       = (update i, jmp{ siWhere = update siWhere })
     relabel' (i, x)
       = (update i, x)
-
+-}
 
 
 -- | Builds the control flow graph.
-buildFlowGraph :: [(Int, SInstr)] -> (FlowGraph, FlowGraph)
+{-buildFlowGraph :: [(Int, SInstr)] -> (FlowGraph, FlowGraph)
 buildFlowGraph block
   = (cfg, cfg')
   where
@@ -96,3 +96,4 @@ buildFlowGraph block
 
     rev cfg' node out
       = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+-}

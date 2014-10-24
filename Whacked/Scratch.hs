@@ -18,6 +18,7 @@ import           Whacked.Types
 -- variable versions.
 data SVar
   = SVar Int
+  | SImm Int
   deriving ( Eq, Ord )
 
 
@@ -30,9 +31,26 @@ data SProgram
 
 data SFunction
   = SFunction
-    { sfBody :: [(Int, SInstr)]
-    , sfArgs :: [SVar]
-    , sfName :: String
+    { sfBlocks :: Map Int SBlock
+    , sfArgs   :: [SVar]
+    , sfName   :: String
+    }
+  deriving ( Eq, Ord )
+
+
+data SBlock
+  = SBlock
+    { sbPhis   :: [SPhi]
+    , sbInstrs :: [SInstr]
+    }
+  deriving ( Eq, Ord )
+
+
+data SPhi
+  = SPhi
+    { spDest  :: SVar
+    , spType  :: Type
+    , spMerge :: [SVar]
     }
   deriving ( Eq, Ord )
 
@@ -112,11 +130,6 @@ data SInstr
     , siDest :: SVar
     , siPair :: SVar
     }
-  | SPhi
-    { siDest  :: SVar
-    , siType  :: Type
-    , siMerge :: [SVar]
-    }
   | SFree
     { siType :: Type
     , siRef :: SVar
@@ -142,13 +155,15 @@ data SInstr
     { siWhere :: Int
     }
   | SThrow
-    { siThrow :: String
+    { siThrow :: SVar
     }
   deriving (Eq, Ord)
 
 
 instance Show SVar where
   show (SVar i)
+    = "$" ++ show i
+  show (SImm i)
     = "#" ++ show i
 
 
@@ -160,10 +175,23 @@ instance Show SProgram where
 instance Show SFunction where
   show SFunction{..}
     = sfName ++ "(" ++ concat (intersperse "," $ map show sfArgs) ++ ")\n"
-      ++ concat (intersperse "\n" $ map showInstr sfBody)
+      ++ concat (intersperse "\n" $ map showBlock . Map.toList $ sfBlocks)
     where
-      showInstr (i, x)
-        = printf "%4d    %s" i (show x)
+      showBlock (i, x)
+        = printf "%4d:\n%s" i (show x)
+
+
+instance Show SBlock where
+  show SBlock{..}
+    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbPhis) ++
+      "\n" ++
+      (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
+
+
+instance Show SPhi where
+  show SPhi{..}
+    = show spDest ++ " <- " ++ (concat . intersperse "," $ map show spMerge)
+
 
 
 instance Show SInstr where
@@ -199,23 +227,19 @@ instance Show SInstr where
     = show siPair ++ "." ++ show siElem ++ " <- " ++ show siExpr
   show SReadPair{..}
     = show siDest ++ " <- " ++ show siPair ++ "." ++ show siElem
-  show SPhi{..}
-    = show siDest ++ " <- phi(" ++
-      (concat . intersperse "," $ map show siMerge) ++
-      ")"
   show SFree{..}
-    = "free    " ++ show siRef
+    = "free " ++ show siRef
   show SReturn{..}
-    = "ret     " ++ show siArg
+    = "ret " ++ show siArg
   show SBinJump{..}
     = "jmpbin @" ++ show siWhere ++ ", " ++
       show siLeft ++ show siCond ++ show siRight
   show SUnJump{..}
-    = "jmpun  @" ++ show siWhere
+    = "jmpun @" ++ show siWhere
   show SJump{..}
-    = "jmp    @" ++ show siWhere
+    = "jmp @" ++ show siWhere
   show SThrow{..}
-    = "throw   " ++ show siThrow
+    = "throw " ++ show siThrow
 
 
 -- |Returns true if the instruction makes an assignment to a variable.
@@ -235,7 +259,6 @@ isAssignment SReadArray{..}  = True
 isAssignment SNewPair{..}    = True
 isAssignment SWritePair{..}  = False
 isAssignment SReadPair{..}   = True
-isAssignment SPhi{..}        = True
 isAssignment SFree{..}       = False
 isAssignment SReturn{..}     = False
 isAssignment SBinJump{..}    = False
@@ -261,7 +284,6 @@ getKill SReadArray{..}  = [siDest]
 getKill SNewPair{..}    = [siDest]
 getKill SWritePair{..}  = []
 getKill SReadPair{..}   = [siDest]
-getKill SPhi{..}        = [siDest]
 getKill SFree{..}       = [siRef]
 getKill SReturn{..}     = []
 getKill SBinJump{..}    = []
@@ -287,7 +309,6 @@ getGen SReadArray{..}  = [siArray, siIndex]
 getGen SNewPair{..}    = []
 getGen SWritePair{..}  = [siPair, siExpr]
 getGen SReadPair{..}   = [siPair]
-getGen SPhi{..}        = siMerge
 getGen SFree{..}       = [siRef]
 getGen SReturn{..}     = [siArg]
 getGen SBinJump{..}    = [siLeft, siRight]

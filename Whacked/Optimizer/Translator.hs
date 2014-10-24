@@ -1,7 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving,
              LambdaCase,
              NamedFieldPuns,
-             RecordWildCards #-}
+             RecordWildCards,
+             TupleSections #-}
 module Whacked.Optimizer.Translator
   ( generateS
   ) where
@@ -10,7 +11,6 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.ST
-import           Control.Monad.Writer
 import           Data.List ((\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
@@ -231,36 +231,37 @@ getPhiNodes vars blocks frontier
 -- for variables.
 data Scope
   = Scope
-    { nextTemp  :: Int
-    , nextInstr :: Int
-    , block     :: Int
-    , vars      :: Map (String, Int) (Type, SVar)
-    , vars'     :: Map SVar (String, Int)
+    { nextTemp :: Int
+    , block    :: Int
+    , vars     :: Map (String, Int) (Type, SVar)
+    , vars'    :: Map SVar (String, Int)
+    , blocks   :: Map Int SBlock
+    , labels   :: Map Int Int
     }
   deriving ( Eq, Ord, Show )
 
 
 -- |Monads stack out of a state and a writer.
 newtype Generator a
-  = Generator { run :: StateT Scope (Writer [(Int, SInstr)]) a }
+  = Generator { run :: State Scope a }
   deriving ( Applicative
            , Functor
            , Monad
            , MonadState Scope
-           , MonadWriter [(Int, SInstr)]
            )
 
 -- | Runs the generator monad.
-runGenerator :: Generator a -> (a, Scope, [(Int, SInstr)])
-runGenerator gen
-  = let ((a, scope), instrs) = runWriter . runStateT (run gen) $ Scope
+runGenerator :: Map Int Int -> Generator a -> (a, Scope)
+runGenerator labels gen
+  = let (a, scope) = runState (run gen) $ Scope
           { nextTemp = 0
-          , nextInstr = 0
           , block = 0
           , vars = Map.empty
           , vars' = Map.empty
+          , blocks = Map.empty
+          , labels = labels
           }
-    in (a, scope, instrs)
+    in (a, scope)
 
 
 genTemp :: Generator SVar
@@ -272,9 +273,22 @@ genTemp = do
 
 emit :: SInstr -> Generator ()
 emit instr = do
-  scope@Scope{ nextInstr, block } <- get
-  put scope{ nextInstr = nextInstr + 1 }
-  tell [(block, instr)]
+  scope@Scope{ blocks, block } <- get
+  put $ case Map.lookup block blocks of
+    Nothing -> scope
+      { blocks = Map.insert block (SBlock [] [ instr ]) blocks
+      }
+    Just sblock@SBlock{ sbInstrs } -> scope
+      { blocks = Map.insert block sblock
+        { sbInstrs = sbInstrs ++ [instr]
+        } blocks
+      }
+
+
+getLabel :: Int -> Generator Int
+getLabel idx = do
+  Scope{ labels } <- get
+  return $ fromJust (Map.lookup idx labels)
 
 
 genExpr :: IExpr -> SVar -> Generator (Type, SVar)
@@ -351,7 +365,8 @@ genExpr IElem{..} dest = do
       emit $ SReadPair rt Snd dest pexpr
       return (rt, dest)
     Null -> do
-      emit $ SThrow "dereferencing null pointer"
+      emit $ SCharArray dest "dereferencing null pointer"
+      emit $ SThrow dest
       return (ieType, dest)
     Poly -> do
       emit $ SReadPair ieType ieElem dest pexpr
@@ -389,12 +404,15 @@ genInstr IExit{..} = do
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
   (rt, re) <- genTemp >>= genExpr iiRight
-  emit $ SBinJump lt iiWhere iiCond le re
+  labels <- getLabel iiWhere
+  emit $ SBinJump lt labels iiCond le re
 genInstr IUnJump{..} = do
   (t, expr) <- genTemp >>= genExpr iiVal
-  emit $ SUnJump t iiWhere iiWhen expr
+  labels <- getLabel iiWhere
+  emit $ SUnJump t labels iiWhen expr
 genInstr IJump{..} = do
-  emit $ SJump iiWhere
+  labels <- getLabel iiWhere
+  emit $ SJump labels
 genInstr IAssVar{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   scope@Scope{ vars } <- get
@@ -431,79 +449,61 @@ genInstr IFree{..} = do
 -- | Generates code for a function.
 genFunc :: IFunction -> SFunction
 genFunc func@IFunction{..}
-  = SFunction instrs' args ifName
+  = SFunction (Map.mapWithKey computePhi blocks') args ifName
   where
-    (blocks, target) = getBlocks ifBody
-    (graph, graph') = getGraph blocks target
+    (blocks, labels) = getBlocks ifBody
+    (graph, graph') = getGraph blocks labels
     dominators = getDominators graph graph'
     frontier = getFrontier graph graph' dominators
     phi = getPhiNodes ifVars blocks frontier
 
-    ((indices, vars', vars, args), _, instrs) = runGenerator $ do
+    ((args, phis), scope@Scope{ blocks = blocks' }) = runGenerator labels $ do
       args <- forM ifArgs $ \(t, name) -> do
         expr <- genTemp
         scope@Scope{ vars } <- get
         put scope{ vars = Map.insert (name, 0) (t, expr) vars }
         return expr
 
-      indices <- forM (Map.toList blocks) $ \(idx, instrs) -> do
-        -- Update the block index & get start index of block.
-        blockStart <- get >>= \scope@Scope{ nextInstr } -> do
-          put scope{ block = idx }
-          return nextInstr
-
-        -- Place phi nodes for all affected variables.
+      phis <- forM (Map.toList blocks) $ \(idx, instrs) -> do
+        -- Place empty phi nodes for all affected variables.
         case Map.lookup idx phi of
-          Nothing -> return ()
-          Just phi' -> forM_ phi' $ \(var, idx, t) -> do
-            expr <- genTemp
-            scope@Scope{ vars, vars' } <- get
-            put scope
-              { vars = Map.insert (var, idx) (t, expr) vars
-              , vars' = Map.insert expr (var, idx) vars'
+          Nothing -> do
+            scope <- get
+            put scope{ block = idx }
+            mapM_ genInstr instrs
+          Just phi' -> do
+            phis <- forM phi' $ \(var, idx, t) -> do
+              expr <- genTemp
+              scope@Scope{ vars, vars', blocks } <- get
+              put scope
+                { vars = Map.insert (var, idx) (t, expr) vars
+                , vars' = Map.insert expr (var, idx) vars'
+                }
+              return $ SPhi expr t []
+
+            get >>= \scope@Scope{ blocks } -> put scope
+              { block = idx
+              , blocks = Map.insert idx (SBlock phis []) blocks
               }
-            emit $ SPhi expr t []
 
-        -- Generate code.
-        mapM_ genInstr instrs
+            mapM_ genInstr instrs
 
-        -- Return information about the variables.
-        Scope{ vars } <- get
-        return (idx, (blockStart, vars))
+        -- Returns a snapshot of variable versions.
+        (idx, ) . vars <$> get
 
-      Scope{ vars', vars } <- get
-      return (indices, vars', vars, args)
+      return (args, phis)
 
-    target' = Map.fromList indices
-    instrs' = zip [0..] $ map relabel instrs
+    phis' = Map.fromList phis
+    computePhi idx block@SBlock{..}
+      = block{ sbPhis = map computePhi' sbPhis }
+      where
+        computePhi' phi@SPhi{..} = fromJust $ do
+          x <- Map.lookup spDest (vars' scope)
+          prev <- Set.toList <$> Map.lookup idx graph'
+          return phi{ spMerge = [y | Just y <- map (lookupVar x) prev] }
 
-    -- The previous pass writes block IDs to jump instructions, so those
-    -- targets are replaced with instruction IDs in this pass.
-    relabel (block, jump@SBinJump{..})
-      = jump{ siWhere = lookupLabel siWhere}
-    relabel (block, jump@SUnJump{..})
-      = jump{ siWhere = lookupLabel siWhere}
-    relabel (block, jump@SJump{..})
-      = jump{ siWhere = lookupLabel siWhere}
-    relabel (block, phi@SPhi{..})
-      = phi
-        { siMerge = fromMaybe [] $ do
-          x <- Map.lookup siDest vars'
-          prev <- Set.toList <$> Map.lookup block graph'
-          return [y | Just y <- map (lookupVar x) prev]
-        }
-    relabel (_, x)
-      = x
-
-    lookupVar var block = do
-      (_, vars) <- Map.lookup block target'
-      (_, var') <- Map.lookup var vars
-      return var'
-
-    lookupLabel i = fromJust $ do
-      block <- Map.lookup i target
-      (instr, _) <- Map.lookup block target'
-      return instr
+        lookupVar var block
+          = snd <$> (Map.lookup block phis' >>= Map.lookup var)
 
 
 -- | Generates unoptimised Scratchy code for a program.

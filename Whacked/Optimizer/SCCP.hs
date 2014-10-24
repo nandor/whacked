@@ -16,6 +16,8 @@ import           Whacked.Types
 import           Whacked.FlowGraph
 
 
+import Debug.Trace
+
 
 -- |Values used in the lattice for sparse conditional constant propagation.
 -- Due to the fact that the input code is type checked, when combining two
@@ -106,7 +108,8 @@ evalBinOp op x'@(CArray _) y'@(CArray _)
     Cmp CEQ -> CBool $ x' == y'
     Cmp CNE -> CBool $ x' /= y'
 
--- | Evaluates an unary operation.
+
+-- |Evaluates an unary operation.
 evalUnOp :: UnaryOp -> Value -> Maybe Value
 evalUnOp _ Bot
   = Nothing
@@ -124,7 +127,9 @@ evalUnOp op (CChar x)
     Ord -> Just $ CInt (ord x)
 
 
--- | Builds the SSA graph.
+-- |Builds the SSA graph. In the SSA graph, edges exist between declarations
+-- and uses of variables. Information about values is propagated downwards
+-- in the SSA graph.
 buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
 buildSSAGraph block
   = (map fst . Map.toList $ defs, foldl linkDefs Map.empty $ block)
@@ -136,20 +141,17 @@ buildSSAGraph block
     linkDefs mp (idx, instr)
       = foldl (linkTo idx) mp (getGen instr)
 
-    linkTo idx mp var
-      = case Map.lookup var defs of
-        Nothing -> mp
-        Just from -> Map.insertWith (++) from [idx] mp
+    linkTo idx mp var = fromMaybe mp $ do
+      from <- Map.lookup var defs
+      return $ Map.insertWith (++) from [idx] mp
 
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = relabel func
-    { sfBody = [(i, x) | (i, x) <- body', i `Set.member` reachable]
-    }
+  = traceShow (mark', vars') func
+  -- { sfBody = [(i, x) | (i, x) <- body', i `Set.member` reachable]
+  --  }
   where
-    bodyReduced = Map.fromList body'
-    (body', varDecl, alias) = reduce sfBody Map.empty Map.empty
     (cfg, cfg') = buildFlowGraph sfBody
     (vars, ssa) = buildSSAGraph sfBody
     code = Map.fromList sfBody
@@ -162,141 +164,6 @@ optimise func@SFunction{..}
       Set.empty
       (Map.fromList . zip vars . repeat $ Top)
     mark' = Set.map snd mark
-
-    -- Removes all expressions that are not used. An expression is used if
-    -- in the SSA graph there is a path from it to a jump, call or return
-    -- instructions.
-    reachable = dfs [i | (i, x) <- body', isRoot x] Set.empty
-    isRoot SBinJump{} = True
-    isRoot SReturn{} = True
-    isRoot SUnJump{} = True
-    isRoot SCall{} = True
-    isRoot SJump{} = True
-    isRoot _ = False
-
-    dfs (x:xs) visited
-      |  x `Set.member` visited
-        = dfs xs visited
-      | Just instr <- Map.lookup x bodyReduced
-        = dfs (findDecl (getGen instr) ++ xs) (Set.insert x visited)
-      | otherwise
-        = dfs xs visited
-      where
-        findDecl vars
-          = concatMap (\x -> fromMaybe [] ((:[]) <$> Map.lookup x varDecl)) vars
-    dfs [] visited
-      = visited
-
-    -- Replaces computable binary expressions with constants and removes
-    -- redundant jump instructions.
-    reduce ((i, instr):ns) vars alias
-      | not (i `Set.member` mark') = reduce ns vars alias
-      | otherwise = case instr of
-        jmp@SBinJump{} ->
-          let jmp' = fromMaybe jmp
-                      { siLeft = findAlias $ siLeft jmp
-                      , siRight = findAlias $ siRight jmp
-                      } $ do
-                        left <- evalValue (findAlias . siLeft $ jmp)
-                        right <- evalValue (findAlias . siRight $ jmp)
-                        val <- compareValue (siCond jmp)  left right
-                        return $ if val == siWhen jmp
-                            then SJump (siWhere jmp)
-                            else SJump . fromJust . Map.lookup i $ next
-          in case ns' of
-            next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
-              (next:ns', vars', alias')
-            ns' ->
-              ((i, jmp') : ns', vars', alias')
-        jmp@SUnJump{} ->
-          let jmp' = fromMaybe jmp{ siArg = findAlias $ siArg jmp } $ do
-                    val <- evalValue (findAlias . siArg $ jmp)
-                    case val of
-                      CBool x | x == siWhen jmp ->
-                        return $ SJump (siWhere jmp)
-                      CBool x | x /= siWhen jmp ->
-                        return $ SJump . fromJust . Map.lookup i $ next
-          in case ns' of
-            next@(x, _) : ns' | i <= siWhere jmp' && siWhere jmp' <= x ->
-              (next:ns', vars', alias')
-            ns' ->
-              ((i, jmp') : ns', vars', alias')
-        jmp@SJump{..} ->
-          case ns' of
-            next@(x, _) : ns' | x >= siWhere -> (next:ns', vars', alias')
-            ns' -> ((i, jmp) : ns', vars', alias')
-        phi@SPhi{..} ->
-          let phi' = fromMaybe phi
-                      { siMerge
-                          = nub
-                          . filter ((`Map.member` vars))
-                          . map findAlias
-                          $ siMerge
-                      } $ do
-                        result <- mconcat <$> mapM evalValue siMerge
-                        case result of
-                          CInt x -> return $ SInt siDest x
-                          _ -> Nothing
-          in case phi' of
-            SPhi{ siMerge = [x], siDest } ->
-              reduce ns vars (Map.insert siDest (findAlias x) alias)
-            _ -> ((i, phi') : ns', vars', alias')
-        bin@SBinOp{..} ->
-          let bin' = fromMaybe bin
-                      { siLeft = findAlias siLeft
-                      , siRight = findAlias siRight
-                      , siDest = findAlias siDest
-                      } $ do
-                    left <- evalValue (findAlias siLeft)
-                    right <- evalValue (findAlias siRight)
-                    result <- evalBinOp siBinOp left right
-                    case result of
-                      CInt x -> return $ SInt (findAlias siDest) x
-                      CBool x -> return $ SBool (findAlias siDest) x
-                      _ -> Nothing
-          in ( (i, bin') : ns'
-             , vars'
-             , alias'
-             )
-        un@SUnOp{..} ->
-          let un' = fromMaybe un $ do
-                   arg <- evalValue (findAlias siArg)
-                   result <- evalUnOp siUnOp arg
-                   case result of
-                      CInt x -> return $ SInt siDest x
-                      CBool x -> return $ SBool siDest x
-                      _ -> Nothing
-          in ( (i, un') : ns'
-             , vars'
-             , alias'
-             )
-
-        call@SCall{..} ->
-          ( ( i
-            , call
-              { siArgs = map findAlias siArgs
-              , siRet = map findAlias siRet
-              }
-            ) : ns'
-          , vars'
-          , alias'
-          )
-        ret@SReturn{..} ->
-          ((i, ret{ siArg = findAlias siArg }) : ns', vars', alias')
-        _ -> ((i, instr):ns', vars', alias')
-      where
-        findAlias var
-          = fromMaybe var . Map.lookup var $ alias
-        (ns', vars', alias')
-          = reduce ns (foldr (\x -> Map.insert x i) vars (getKill instr)) alias
-    reduce [] vars alias
-      = ([], vars, alias)
-
-    -- Used in the reduction step to evaluate a value.
-    evalValue var
-      = case Map.lookup var vars' of
-          Just Bot -> Nothing
-          x -> x
 
     traverse (edge@(start, end):xs) ys mark vars
       = case Map.lookup end code of
@@ -383,6 +250,8 @@ optimise func@SFunction{..}
         (xs, ssaNext, Map.insert siDest (CBool siBool) vars)
       node@SChar{..} ->
         (xs, ssaNext, Map.insert siDest (CChar siChar) vars)
+      node@SCharArray{..} ->
+        (xs, ssaNext, Map.insert siDest (CArray (Just (siDest, length siChars))) vars)
 
 
       -- | Evaluate conditionals.
@@ -417,17 +286,14 @@ optimise func@SFunction{..}
             Top -> Nothing
             x -> Just x
 
-    anyOtherExecuted mark start end
-      = case Map.lookup end cfg' of
-        Nothing -> False
-        Just nodes ->
-          let marked x = x /= (start, end) && Set.member x mark
-          in any marked . zip nodes $ repeat end
+    anyOtherExecuted mark start end = fromMaybe False $ do
+      nodes <- Map.lookup end cfg'
+      let marked x = x /= (start, end) && Set.member x mark
+      return $ any marked . zip nodes $ repeat end
 
-    anyExecuted mark end
-      = case Map.lookup end cfg' of
-        Nothing -> False
-        Just nodes -> any (\x -> Set.member (x, end) mark) nodes
+    anyExecuted mark end = fromMaybe False $ do
+      nodes <- Map.lookup end cfg'
+      return $ any (\x -> Set.member (x, end) mark) nodes
 
 
 sccp :: SProgram -> SProgram

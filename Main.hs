@@ -16,7 +16,7 @@ import           Whacked.FlowGraph
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Translator
-import           Whacked.Optimizer.SCCP
+--import           Whacked.Optimizer.SCCP
 --import           Whacked.Backend.ARM as ARM
 
 
