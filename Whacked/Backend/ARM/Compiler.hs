@@ -16,14 +16,10 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Maybe
 import           Whacked.Backend.ARM.ASM
-import           Whacked.Backend.ARM.Allocator
 import           Whacked.Scratch
 import           Whacked.Types
-import           Whacked.LiveVariables
 
 
-
-import Debug.Trace
 data Scope
   = Scope
     { regs :: Map SVar ARMReg
@@ -91,13 +87,13 @@ compileInstr (_, SCall{..}) = do
 compileInstr (_, SInt{..}) = do
   scope@Scope{ regs } <- get
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) siInt]
-compileInstr (_, SConstString{..}) = do
+{-compileInstr (_, SConstString{..}) = do
   scope@Scope { regs, strings } <- get
   tell [
     ARMADR
       (fromJust $ Map.lookup siDest regs)
       ("__msg" ++ (show $ length strings))]
-  put scope{ strings = siStringVal : strings }
+  put scope{ strings = siStringVal : strings }-}
 compileInstr (_, SBool{..}) = do
   scope@Scope{ regs } <- get
   tell [
@@ -107,7 +103,7 @@ compileInstr (_, SChar{..}) = do
   tell [ARMLDR (fromJust $ Map.lookup siDest regs) (ord siChar)]
 compileInstr (_, SReturn{..}) = do
   scope@Scope{ regs, toSave } <- get
-  move R0 (fromJust $ Map.lookup siVal regs)
+  move R0 (fromJust $ Map.lookup siArg regs)
   tell [ARMPop $ toSave ++ [PC]]
 compileInstr (_, SBinJump{..}) = do
   scope@Scope{ regs } <- get
@@ -121,7 +117,7 @@ compileInstr (_, SBinJump{..}) = do
     CLTE -> tell [ARMB ALTE $ "L" ++ show siWhere]
     CGTE -> tell [ARMB AGTE $ "L" ++ show siWhere]
     CEQ  -> tell [ARMB AEQ  $ "L" ++ show siWhere]
-    CNEQ -> tell [ARMB ANE  $ "L" ++ show siWhere]
+    CNE  -> tell [ARMB ANE  $ "L" ++ show siWhere]
 compileInstr (_, SUnJump{..})
   = return ()
 compileInstr (_, SJump{..}) = do
@@ -154,13 +150,6 @@ compileFunc func@SFunction{..} = do
       -- Place a label if anything jumps here.
       when (i `Set.member` target) $ do
         tell [ARMLabel $ "L" ++ show i]
-
-      case getKill instr of
-        [x] | not $ isCall instr -> do
-          when (Set.member x (fromJust $ Map.lookup i live')) $ do
-            compileInstr (i, instr)
-        _ ->
-          compileInstr (i, instr)
 
   Scope{ strings } <- get
   tell [ARMSection ".data"]

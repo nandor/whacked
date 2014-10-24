@@ -29,11 +29,27 @@ data SProgram
   deriving ( Eq, Ord )
 
 
+data SFlatProgram
+  = SFlatProgram
+    { sfpFuncs :: [SFlatFunction]
+    }
+  deriving ( Eq, Ord )
+
+
 data SFunction
   = SFunction
     { sfBlocks :: Map Int SBlock
     , sfArgs   :: [SVar]
     , sfName   :: String
+    }
+  deriving ( Eq, Ord )
+
+
+data SFlatFunction
+  = SFlatFunction
+    { sffInstrs :: [(Int, SInstr)]
+    , sffArgs   :: [SVar]
+    , sffName   :: String
     }
   deriving ( Eq, Ord )
 
@@ -167,6 +183,11 @@ instance Show SProgram where
     = concat . intersperse "\n\n" . map show $ spFuncs
 
 
+instance Show SFlatProgram where
+  show SFlatProgram{..}
+    = concat . intersperse "\n\n" . map show $ sfpFuncs
+
+
 instance Show SFunction where
   show SFunction{..}
     = sfName ++ "(" ++ concat (intersperse "," $ map show sfArgs) ++ ")\n"
@@ -174,6 +195,16 @@ instance Show SFunction where
     where
       showBlock (i, x)
         = printf "%4d:\n%s" i (show x)
+
+
+instance Show SFlatFunction where
+  show SFlatFunction{..}
+    = sffName ++ "(" ++ concat (intersperse "," $ map show sffArgs) ++ ")\n"
+      ++ concat (intersperse "\n" $ map showInstr $ sffInstrs)
+    where
+      showInstr (i, x)
+        = printf "%4d:   %s" i (show x)
+
 
 
 instance Show SBlock where

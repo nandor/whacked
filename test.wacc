@@ -1,6 +1,6 @@
 begin
-    int f() is
-        return 4
+    int f(int a) is
+        return a + 4
     end
 
     int c = 0;
@@ -14,7 +14,8 @@ begin
         b = a;
         a = t;
 
-        d = d + 1
+        int q = call f(1);
+        d = d + q
     done;
 
     print b;

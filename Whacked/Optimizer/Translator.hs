@@ -5,6 +5,7 @@
              TupleSections #-}
 module Whacked.Optimizer.Translator
   ( generateS
+  , flattenS
   ) where
 
 import           Control.Applicative
@@ -513,3 +514,30 @@ genFunc func@IFunction{..}
 generateS :: IProgram -> SProgram
 generateS IProgram{..}
   = SProgram (map genFunc ipFuncs)
+
+
+-- | Flattens the program, removing blocks.
+flattenS :: SProgram -> SFlatProgram
+flattenS SProgram{..}
+  = SFlatProgram (map flatten spFuncs)
+  where
+    flatten SFunction{..}
+      = SFlatFunction (map relabel instrs') sfArgs sfName
+      where
+        (mp, _, instrs')
+          = Map.foldlWithKey transform (Map.empty, 0, []) $ sfBlocks
+
+        transform (mp, next, acc) idx SBlock{..}
+          = ( Map.insert idx next mp
+            , next + length sbInstrs
+            , acc ++ (zip [next..] sbInstrs)
+            )
+
+        relabel (i, op@SJump{..})
+          = (i, op{ siWhere = fromJust $ Map.lookup siWhere mp })
+        relabel (i, op@SBinJump{..})
+          = (i, op{ siWhere = fromJust $ Map.lookup siWhere mp })
+        relabel (i, op@SUnJump{..})
+          = (i, op{ siWhere = fromJust $ Map.lookup siWhere mp })
+        relabel (i, x)
+          = (i, x)

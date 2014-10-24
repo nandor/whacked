@@ -1,7 +1,6 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
-module Whacked.Optimizer.ARMifier
+module Whacked.Optimizer.ConstantMover
   ( moveConstants
-  , flattenS
   ) where
 
 import           Control.Applicative
@@ -58,9 +57,3 @@ moveConstants func@SFunction{..}
           (vars, instr:instrs)
       where
         replaceVar var = fromMaybe var $ Map.lookup var vars
-
-
--- |Flattens the whole program. Removes functions that are never called.
-flattenS :: SProgram -> [Int]
-flattenS prog@SProgram{..}
-  = []

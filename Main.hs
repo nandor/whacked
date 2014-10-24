@@ -15,7 +15,7 @@ import           Whacked.Scratch
 import           Whacked.FlowGraph
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
-import           Whacked.Optimizer.ARMifier
+import           Whacked.Optimizer.ConstantMover
 import           Whacked.Optimizer.RemovePHI
 import           Whacked.Optimizer.Translator
 --import           Whacked.Optimizer.SCCP
@@ -114,8 +114,6 @@ main
 
               {-let asm = ARM.compile scratch
               when optPrintASM $ do
-                  mapM_ (putStrLn . show) asm
-
-              writeFile optOutput (concat . intersperse "\n" . map show $ asm)-}
+                  mapM_ (putStrLn . show) asm -}
 
     (_, _, errs) -> usage
