@@ -148,12 +148,10 @@ buildSSAGraph block
 
 optimise :: SFunction -> SFunction
 optimise func@SFunction{..}
-  = traceShow (mark', vars') func
-  -- { sfBody = [(i, x) | (i, x) <- body', i `Set.member` reachable]
-  --  }
+  = traceShow (cfg,)
   where
-    (cfg, cfg') = buildFlowGraph sfBody
-    (vars, ssa) = buildSSAGraph sfBody
+    (cfg, cfg') = buildFlowGraph func
+    {-(vars, ssa) = buildSSAGraph sfBody
     code = Map.fromList sfBody
     next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
 
@@ -294,7 +292,7 @@ optimise func@SFunction{..}
     anyExecuted mark end = fromMaybe False $ do
       nodes <- Map.lookup end cfg'
       return $ any (\x -> Set.member (x, end) mark) nodes
-
+    -}
 
 sccp :: SProgram -> SProgram
 sccp SProgram{..}

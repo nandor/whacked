@@ -1,4 +1,6 @@
 begin
+    int c = 0;
+    int q = 0;
     int a = 1;
     int b = 2;
     int d = 3;

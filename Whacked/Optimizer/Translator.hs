@@ -366,7 +366,7 @@ genExpr IElem{..} dest = do
       return (rt, dest)
     Null -> do
       emit $ SCharArray dest "dereferencing null pointer"
-      emit $ SThrow dest
+      emit $ SCall [] "__throw" [dest]
       return (ieType, dest)
     Poly -> do
       emit $ SReadPair ieType ieElem dest pexpr
@@ -414,9 +414,12 @@ genInstr IJump{..} = do
   labels <- getLabel iiWhere
   emit $ SJump labels
 genInstr IAssVar{..} = do
-  (t, expr) <- genTemp >>= genExpr iiExpr
+  dest <- genTemp
+  (t, expr) <- genExpr iiExpr dest
+  when (dest /= expr) $
+    emit $ SMov t dest expr
   scope@Scope{ vars } <- get
-  put scope{ vars = Map.insert (iiVar, iiScope) (t, expr) vars }
+  put scope{ vars = Map.insert (iiVar, iiScope) (t, dest) vars }
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ case t of

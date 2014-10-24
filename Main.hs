@@ -15,6 +15,7 @@ import           Whacked.Scratch
 import           Whacked.FlowGraph
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
+import           Whacked.Optimizer.RemovePHI
 import           Whacked.Optimizer.Translator
 --import           Whacked.Optimizer.SCCP
 --import           Whacked.Backend.ARM as ARM
@@ -102,7 +103,7 @@ main
               exitWith $ ExitFailure 200
             Right itch -> do
               when optPrintIMF $ print itch
-              let scratch = generateS $ itch
+              let scratch = removePhi . generateS $ itch
               when optPrintIMF $ print scratch
 
               {-let asm = ARM.compile scratch

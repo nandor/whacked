@@ -69,6 +69,11 @@ data SInstr
     , siUnOp :: UnaryOp
     , siArg  :: SVar
     }
+  | SMov
+    { siType :: Type
+    , siDest :: SVar
+    , siArg  :: SVar
+    }
   | SCall
     { siRet  :: [SVar]
     , siFunc :: String
@@ -154,9 +159,6 @@ data SInstr
   | SJump
     { siWhere :: Int
     }
-  | SThrow
-    { siThrow :: SVar
-    }
   deriving (Eq, Ord)
 
 
@@ -183,14 +185,14 @@ instance Show SFunction where
 
 instance Show SBlock where
   show SBlock{..}
-    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbPhis) ++
-      "\n" ++
-      (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
+    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
 
 
 instance Show SPhi where
   show SPhi{..}
-    = show spDest ++ " <- " ++ (concat . intersperse "," $ map show spMerge)
+    = show spDest ++ " <- phi(" ++
+      (concat . intersperse "," $ map show spMerge) ++
+      ")"
 
 
 
@@ -199,6 +201,8 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siLeft ++ show siBinOp ++ show siRight
   show SUnOp{..}
     = show siDest ++ " <- " ++ show siUnOp ++ "(" ++ show siArg ++ ")"
+  show SMov{..}
+    = show siDest ++ " <- " ++ show siArg
   show SCall{..}
     = (concat . intersperse "," $ map show siRet) ++
       " <- call " ++ siFunc ++
@@ -238,8 +242,6 @@ instance Show SInstr where
     = "jmpun @" ++ show siWhere
   show SJump{..}
     = "jmp @" ++ show siWhere
-  show SThrow{..}
-    = "throw " ++ show siThrow
 
 
 -- |Returns true if the instruction makes an assignment to a variable.
@@ -264,13 +266,13 @@ isAssignment SReturn{..}     = False
 isAssignment SBinJump{..}    = False
 isAssignment SUnJump{..}     = False
 isAssignment SJump{..}       = False
-isAssignment SThrow{..}      = False
 
 
 -- |Returns the list of variables that are overwritten by a statement.
 getKill :: SInstr -> [SVar]
 getKill SBinOp{..}      = [siDest]
 getKill SUnOp{..}       = [siDest]
+getKill SMov{..}        = [siDest]
 getKill SCall{..}       = siRet
 getKill SBool{..}       = [siDest]
 getKill SChar{..}       = [siDest]
@@ -289,13 +291,13 @@ getKill SReturn{..}     = []
 getKill SBinJump{..}    = []
 getKill SUnJump{..}     = []
 getKill SJump{..}       = []
-getKill SThrow{..}      = []
 
 
 -- |Returns the list of variables that are used in a statement.
 getGen :: SInstr -> [SVar]
 getGen SBinOp{..}      = [siLeft, siRight]
 getGen SUnOp{..}       = [siArg]
+getGen SMov{..}        = [siArg]
 getGen SCall{..}       = siArgs
 getGen SBool{..}       = []
 getGen SChar{..}       = []
@@ -314,12 +316,3 @@ getGen SReturn{..}     = [siArg]
 getGen SBinJump{..}    = [siLeft, siRight]
 getGen SUnJump{..}     = [siArg]
 getGen SJump{..}       = []
-getGen SThrow{..}      = []
-
-
--- |Returns the target point of a jump instruction.
-getTarget :: SInstr -> Maybe Int
-getTarget SBinJump{..} = Just siWhere
-getTarget SUnJump{..}  = Just siWhere
-getTarget SJump{..}    = Just siWhere
-getTarget _            = Nothing

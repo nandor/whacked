@@ -2,7 +2,7 @@
 module Whacked.FlowGraph
   ( FlowGraph
   --, relabel
-  --, buildFlowGraph
+  , buildFlowGraph
   , allPathsReturn
   ) where
 
@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Safe
 import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
@@ -43,6 +44,40 @@ allPathsReturn (p:ps)
   = allPathsReturn ps
 
 
+-- |Builds the control flow graph. If there is an edge between two blocks i and
+-- j, it means that there is a jump instruction between those two blocks.
+buildFlowGraph :: SFunction -> (FlowGraph, FlowGraph)
+buildFlowGraph func@SFunction{..}
+  = (cfg, cfg')
+  where
+    cfg = Map.fromList (build . Map.toList $ sfBlocks)
+    cfg' = Map.foldlWithKey rev Map.empty cfg
+
+    build []
+      = []
+    build ((idx, SBlock{..}):(idx', y):bs)
+      = case lastMay sbInstrs of
+        Nothing           -> (idx, [idx']) : tail
+        Just SBinJump{..} -> (idx, [idx', siWhere]) : tail
+        Just SUnJump{..}  -> (idx, [idx', siWhere]) : tail
+        Just SJump{..}    -> (idx, [siWhere]) : tail
+        Just SReturn{..}  -> tail
+        Just _            -> (idx, [idx']) : tail
+      where
+        tail = build $ (idx', y) : bs
+    build ((idx, SBlock{..}):[])
+      = case lastMay sbInstrs of
+        Nothing           -> []
+        Just SBinJump{..} -> [(idx, [siWhere])]
+        Just SUnJump{..}  -> [(idx, [siWhere])]
+        Just SJump{..}    -> [(idx, [siWhere])]
+        Just SReturn{..}  -> []
+        Just _            -> []
+
+    rev cfg' node out
+      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+
+
 -- |Relabels the instructions after eliminating nodes so that all identifiers
 -- range from 0 to n, where n is the number of instructions.
 {-relabel :: SFunction -> SFunction
@@ -65,35 +100,4 @@ relabel func@SFunction{..}
       = (update i, jmp{ siWhere = update siWhere })
     relabel' (i, x)
       = (update i, x)
--}
-
-
--- | Builds the control flow graph.
-{-buildFlowGraph :: [(Int, SInstr)] -> (FlowGraph, FlowGraph)
-buildFlowGraph block
-  = (cfg, cfg')
-  where
-    cfg = Map.fromList . zip (map fst block) . map build $ block
-    cfg' = Map.foldlWithKey rev Map.empty cfg
-    next
-      = Map.fromList $ zip (map fst block) (tail . map (\(x, _) -> [x]) $ block)
-
-    (count, _) = last block
-
-    build (idx, SReturn{..})
-      = []
-    build (idx, SJump{..})
-      = [siWhere]
-    build (idx, SBinJump{..})
-      | idx < count = siWhere : fromMaybe [] (Map.lookup idx next)
-      | otherwise = [siWhere]
-    build (idx, SUnJump{..})
-      | idx < count = siWhere : fromMaybe [] (Map.lookup idx next)
-      | otherwise = [siWhere]
-    build (idx, _)
-      | idx < count = fromMaybe [] (Map.lookup idx next)
-      | otherwise = []
-
-    rev cfg' node out
-      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
 -}
