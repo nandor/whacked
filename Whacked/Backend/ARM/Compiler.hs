@@ -126,8 +126,8 @@ compileInstr (_, SWriteArray{..}) = do
   tell [ARMSTR R0 R0 R1]
 
 
-compileFunc :: SFunction -> Compiler ()
-compileFunc func@SFunction{..} = do
+compileFunc :: SFlatFunction -> Compiler ()
+compileFunc func@SFlatFunction{..} = do
   let regs = allocate live func
       live = liveVariables func
       live' = Map.map snd live
@@ -165,13 +165,13 @@ compileFunc func@SFunction{..} = do
   tell code
 
 
-compileProg :: SProgram -> Compiler ()
+compileProg :: SFlatProgram -> Compiler ()
 compileProg SProgram{..} = do
   forM_ spFuncs $ \func -> do
     compileFunc func
 
 
-compile :: SProgram -> [ASM]
+compile :: SFlatProgram -> [ASM]
 compile program
   = execWriter . evalStateT (run $ compileProg program) $ scope
   where

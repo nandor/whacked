@@ -112,8 +112,8 @@ main
 
               when optPrintIMF $ print scratch
 
-              {-let asm = ARM.compile scratch
+              let asm = ARM.compile scratch
               when optPrintASM $ do
-                  mapM_ (putStrLn . show) asm -}
+                  mapM_ (putStrLn . show) asm
 
     (_, _, errs) -> usage
