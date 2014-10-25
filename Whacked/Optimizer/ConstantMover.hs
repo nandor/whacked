@@ -53,6 +53,8 @@ moveConstants func@SFunction{..}
           (vars, op{ siIndex = replaceVar siIndex }:instrs)
         op@SBinJump{..} ->
           (vars, op{ siRight = replaceVar siRight }:instrs)
+        op@SReturn{..} ->
+          (vars, op{ siArg = replaceVar siArg }:instrs)
         _ ->
           (vars, instr:instrs)
       where

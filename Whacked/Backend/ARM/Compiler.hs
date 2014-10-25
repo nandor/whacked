@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards,
+             NamedFieldPuns,
+             GeneralizedNewtypeDeriving,
+             LambdaCase #-}
 module Whacked.Backend.ARM.Compiler
   ( compile
   ) where
@@ -60,13 +63,16 @@ toLabel i = do
   return (i + labelBase)
 
 
-move :: SVar -> SVar -> Compiler ()
-move a b
-  | a == b = return ()
-  | otherwise = do
-    a' <- toReg a
-    b' <- toImm b
-    tell [ ARMMOV a' b' ]
+move :: Either ARMReg SVar -> SVar -> Compiler ()
+move (Right a) b = do
+  a' <- toReg a
+  toImm b >>= \case
+    ARMI imm -> tell [ ARMMOV a' (ARMI imm) ]
+    ARMR reg -> when (reg /= a') $ tell [ ARMMOV a' (ARMR reg) ]
+move (Left a) b = do
+  toImm b >>= \case
+    ARMI imm -> tell [ ARMMOV a (ARMI imm) ]
+    ARMR reg -> when (a /= reg) $ tell [ ARMMOV a (ARMR reg) ]
 
 
 compileInstr :: SInstr -> Compiler ()
@@ -93,27 +99,35 @@ compileInstr SBinJump{..} = do
   tell [ ARMCMP left right ]
   tell [ ARMB  (toARMCond siCond) label]
 compileInstr SMov{..} = do
-  dest <- toReg siDest
-  arg <- toImm siArg
-  tell [ ARMMOV dest arg ]
+  move (Right siDest) siArg
 compileInstr SCall{..} = do
   tell [ ARMBL siFunc]
 compileInstr SReturn{..} = do
-  return ()
+  move (Left R0) siArg
+  save <- toSave <$> get
+  tell [ ARMPOP (Set.toList . Set.fromList $ PC : save) ]
+
 
 compileFunc :: SFlatFunction -> Compiler ()
 compileFunc func@SFlatFunction{..} = do
-  let liveOut = map (snd . snd) . Map.toList . liveVariables $ func
+  let liveOut = map (Set.toList . snd . snd) . Map.toList . liveVariables $ func
       targets = Set.fromList $ concatMap (getTarget . snd) sffInstrs
+      regPref = getPreferredRegs liveOut func
+      regAlloc = allocRegs liveOut func regPref
 
-  tell [ ARMFunc sffName ]
+  -- Emit the function header.
+  traceShow (regPref, regAlloc) $ tell [ ARMFunc sffName ]
+  save <- toSave <$> get
+  tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
+
+  -- Emit instructions.
   forM_ (zip liveOut sffInstrs) $ \(out, (i, instr)) -> do
     when (i `Set.member` targets) $ do
       label <- toLabel i
       tell [ ARMLabel label ]
 
     case getKill instr of
-      [x] | not (isCall instr) && not (x `Set.member` out) -> return ()
+      [x] | not (isCall instr) && not (x `elem` out) -> return ()
       _ -> compileInstr instr
 
   -- Update the label counter.

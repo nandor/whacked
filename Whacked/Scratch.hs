@@ -262,7 +262,7 @@ instance Show SInstr where
     = "jmpbin @" ++ show siWhere ++ ", " ++
       show siLeft ++ show siCond ++ show siRight
   show SUnJump{..}
-    = "jmpun @" ++ show siWhere
+    = "jmpun @" ++ show siWhere ++ ", " ++ show siWhen ++ "=" ++ show siArg
   show SJump{..}
     = "jmp @" ++ show siWhere
 

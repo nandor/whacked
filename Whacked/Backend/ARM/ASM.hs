@@ -19,11 +19,20 @@ data ARMReg
   | R9
   | R10
   | R11
-  | BP
+  | R12
   | SP
   | LR
   | PC
-  deriving (Eq, Ord, Show, Enum)
+  deriving ( Eq, Ord, Show, Enum )
+
+
+data ARMStk
+  = ARMStk Int
+  deriving ( Eq, Ord, Show )
+
+
+type ARMLoc
+  = Either ARMReg ARMStk
 
 
 data ARMImm
@@ -80,8 +89,8 @@ data ASM
   | ARMSUB ARMReg ARMReg ARMImm
   | ARMCMP ARMReg ARMImm
   | ARMMOV ARMReg ARMImm
-  | ARMPush [ARMReg]
-  | ARMPop [ARMReg]
+  | ARMPUSH [ARMReg]
+  | ARMPOP [ARMReg]
   | ARMLDR ARMReg Int
   | ARMSTR ARMReg ARMReg ARMReg
   | ARMBL String
@@ -112,9 +121,9 @@ instance Show ASM where
   show (ARMCMP n m)
     = "\tCMP " ++ show n ++ ", " ++ show m
 
-  show (ARMPush rs)
+  show (ARMPUSH rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
-  show (ARMPop rs)
+  show (ARMPOP rs)
     = "\tPOP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMLDR d n)
     = "\tLDR " ++ show d ++ ", =" ++ show n
