@@ -27,15 +27,24 @@ data ARMReg
 
 
 data ARMLoc
-  = ARMLocReg ARMReg
-  | ARMLocStk Int
-  | ARMArgIn Int
+  = ARMLocReg    ARMReg
+  | ARMLocStk    Int
+  | ARMLocArgIn  Int
+  | ARMLocArgOut Int
   deriving ( Eq, Ord )
 
 
-argInLocation :: [ARMLoc]
-argInLocation
-  = [ARMLocReg x | x <- enumFromTo R0 R3 ] ++ [ ARMArgIn x | x <- [1..] ]
+argInLocation :: Int -> [ARMLoc]
+argInLocation count
+  = [ARMLocReg x | x <- enumFromTo R0 R3 ] ++
+    [ARMLocArgIn x | x <- [(count - 5), (count - 6)..0] ]
+
+
+argOutLocation :: Int -> [ARMLoc]
+argOutLocation count
+  = [ARMLocReg x | x <- enumFromTo R0 R3 ] ++
+    [ARMLocArgOut x | x <- [0..count - 5] ]
+
 
 
 instance Show ARMLoc where
@@ -43,7 +52,7 @@ instance Show ARMLoc where
     = show x
   show (ARMLocStk x)
     = "%s" ++ show x
-  show (ARMArgIn x)
+  show (ARMLocArgIn x)
     = "%i" ++ show x
 
 
@@ -103,11 +112,12 @@ data ASM
   | ARMStoreMem  ARMReg ARMReg Int
   | ARMMov       ARMReg ARMImm
 
-
-  | ARMADR ARMReg String
   | ARMAdd ARMReg ARMReg ARMImm
   | ARMSub ARMReg ARMReg ARMImm
   | ARMCmp ARMReg ARMImm
+  | ARMTst ARMReg ARMImm
+
+  | ARMADR ARMReg String
   | ARMPUSH [ARMReg]
   | ARMPOP  [ARMReg]
 
@@ -145,6 +155,8 @@ instance Show ASM where
     = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMCmp n m)
     = "\tCMP " ++ show n ++ ", " ++ show m
+  show (ARMTst n m)
+    = "\tTST " ++ show n ++ ", " ++ show m
 
   show (ARMPUSH rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"

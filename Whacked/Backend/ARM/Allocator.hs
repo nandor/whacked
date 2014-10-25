@@ -62,14 +62,14 @@ getPreferredRegs live func@SFlatFunction{..}
     -- Mapping of arguments.
     args
       = foldr (\(x, y) -> Map.insert x (y : argRegs ++ allRegs)) Map.empty
-      $ zip sffArgs argInLocation
+      $ zip sffArgs (argInLocation $ length sffArgs)
 
     -- For each live variable, associates the list of all registers as
     -- available.
     allowRegs mp (live, op@SCall{..})
       = foldr (\(x, y) -> Map.insertWith (++) x [y])
         (putRegs live (getKill op ++ getGen op) allRegs mp)
-      $ zip siArgs argInLocation
+      $ zip siArgs argRegs
     allowRegs mp (live, op@SReturn{..})
       = putRegs live (getGen op) (ARMLocReg R0:allRegs) mp
     allowRegs mp (live, op)

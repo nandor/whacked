@@ -34,8 +34,6 @@ data Scope
     , regStack  :: Int
     , argStack  :: Int
     , varStack  :: Int
-    , tmpStack  :: Int
-    , spareRegs :: [ARMReg]
     }
   deriving (Eq, Ord, Show)
 
@@ -54,74 +52,107 @@ getLabel i = do
   return (i + labelBase)
 
 
--- |Returns the location of a variable.
-getLoc :: SVar -> Compiler ARMLoc
-getLoc var
-  = get >>= \Scope{ regs } -> return (fromJust $ Map.lookup var regs)
+-- |Copies an argument to its proper location. Does this using a minimal
+-- number of instructions.
+moveLocToVar :: ARMLoc -> SVar -> Compiler ()
+moveLocToVar (ARMLocReg reg) var
+  = get >>= \Scope{..} -> case Map.lookup var regs of
+      Nothing ->
+        return ()
+      Just (ARMLocReg reg') -> do
+        when (reg' /= reg) $
+          tell [ ARMMov reg' (ARMR reg) ]
+      Just (ARMLocStk stk) -> do
+        tell [ ARMStoreMem reg SP $ -stk * 4 ]
+moveLocToVar (ARMLocArgIn stk) var
+  = get >>= \Scope{..} -> case Map.lookup var regs of
+      Nothing ->
+        return ()
+      Just (ARMLocReg reg') -> do
+        tell [ ARMLoadMem reg' SP $ -(regStack + varStack + stk) * 4 ]
+      Just (ARMLocStk stk') -> do
+        tell [ ARMLoadMem R12 SP $ -(regStack + varStack + stk) * 4 ]
+        tell [ ARMStoreMem R12 SP $ -stk' * 4 ]
+
+-- |Copies a variable to into one of the registers that is going to be passed
+-- as an argument to another function.
+moveVarToLoc :: SVar -> ARMLoc -> Compiler ()
+moveVarToLoc var (ARMLocReg reg)
+  = get >>= \Scope{..} -> case Map.lookup var regs of
+      Nothing ->
+        return ()
+      Just (ARMLocReg reg') -> do
+        when (reg' /= reg) $
+          tell [ ARMMov reg (ARMR reg') ]
+      Just (ARMLocStk stk) -> do
+          tell [ ARMLoadMem reg SP $ -stk * 4 ]
+moveVarToLoc var (ARMLocArgOut stk)
+  = get >>= \Scope{..} -> case Map.lookup var regs of
+      Nothing ->
+        return ()
+      Just (ARMLocReg reg') -> do
+        tell [ ARMStoreMem reg' SP $ (stk + 1) * 4 ]
+      Just (ARMLocStk stk') -> do
+        tell [ ARMLoadMem R12 SP $ -stk' * 4 ]
+        tell [ ARMStoreMem R12 SP $ (stk + 1) * 4 ]
 
 
--- |Returns the next temporary register.
-getTemp :: Compiler ARMReg
-getTemp = do
-  scope@Scope{ spareRegs } <- get
-  put scope{ spareRegs = tail spareRegs }
-  return (head spareRegs)
+-- |Copies the result of an operation to the stack or does nothing if the
+-- variable was originally in a register.
+storeReg :: SVar -> ARMReg -> Compiler ()
+storeReg var reg
+  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
+    ARMLocReg reg' -> move reg' (ARMR reg)
+    ARMLocStk idx -> tell [ ARMStoreMem reg SP (-idx * 4) ]
 
 
--- |Restores temporary registers.
-restore :: Compiler ()
-restore = do
-  scope <- get
-  put scope{ spareRegs = enumFromTo R10 R12 }
-
-
--- |Moves an argument into a register/stack location.
-moveArgument :: ARMLoc -> SVar -> Compiler ()
-moveArgument (ARMLocReg arg) var
-  = getLoc var >>= \case
-    ARMLocReg reg -> do
-      when (arg /= reg) $
-        tell [ ARMMov reg (ARMR arg) ]
+-- |Copies an immediate value to a memory location.
+storeImm :: SVar -> ARMImm -> ARMReg -> Compiler ()
+storeImm var imm tmp
+  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
+    ARMLocReg reg' -> move reg' imm
     ARMLocStk idx -> do
-      tell [ ARMStoreMem arg SP idx ]
-moveArgument (ARMArgIn arg) var
-  = getLoc var >>= \case
-    ARMLocReg reg -> do
-      tell [ ARMLoadMem reg SP arg ]
+      move tmp imm
+      tell [ ARMStoreMem tmp SP (-idx * 4) ]
+
+
+-- |Returns a register to use as an input operand for an instruction.
+fetchReg :: SVar -> ARMReg -> Compiler ARMReg
+fetchReg (SImm i) reg = do
+  tell [ ARMMov reg (ARMI i) ]
+  return reg
+fetchReg var reg
+  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
+    ARMLocReg reg  -> return reg
     ARMLocStk idx -> do
-      tell [ ARMLoadMem R12 SP arg ]
-      tell [ ARMStoreMem R12 SP idx ]
+      tell [ ARMLoadMem reg SP (-idx * 4) ]
+      return reg
+
+
+-- |Returns either a constant immediate or a register to use as the second
+-- operand of an instruction.
+fetchImm :: SVar -> ARMReg -> Compiler ARMImm
+fetchImm (SImm i) reg
+  = return $ ARMI i
+fetchImm var reg
+  = ARMR <$> fetchReg var reg
+
+
+-- |Moves an immediate into a register.
+move :: ARMReg -> ARMImm -> Compiler ()
+move reg (ARMR reg') = do
+  when (reg' /= reg) $
+    tell [ ARMMov reg (ARMR reg') ]
+move reg imm = do
+  tell [ ARMMov reg imm ]
 
 {-
 
 -- |Returns the location of a variable or a temp register if it is on the stack.
 
--- |Returns a register to use as an input operand for an instruction.
-getReg :: SVar -> Compiler ARMReg
-getReg var
-  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
-    ARMLocReg reg  -> return reg
-    ARMLocStk idx -> do
-      tell [ ARMLoadMem R12 SP (idx * 4) ]
-      return R12
 
 
--- |Returns either a constant immediate or a register to use as the second
--- operand of an instruction.
-getImm :: SVar -> Compiler ARMImm
-getImm (SImm i)
-  = return $ ARMI i
-getImm var
-  = ARMR <$> getReg var
 
-
--- |Copies the result of an operation to the stack or does nothing if the
--- variable was originally in a register.
-moveDest :: SVar -> ARMReg -> Compiler ()
-moveDest var reg
-  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
-    ARMLocReg reg' -> when (reg /= reg') $ tell [ ARMMov reg' (ARMR reg) ]
-    ARMLocStk idx -> tell [ ARMStoreMem reg SP (idx * 4) ]
 
 
 -- |Restores the set of spare registers.
@@ -141,53 +172,77 @@ move reg imm = do
 
 -- |Generates ARM assembly for an instruction.
 compileInstr :: SInstr -> Compiler ()
-{-
 compileInstr SInt{..} = do
-  dest <- getDest siDest
+  dest <- fetchReg siDest R12
   if fitsInImm siInt
     then tell [ ARMMov dest (ARMI siInt) ]
     else tell [ ARMLoadConst dest siInt ]
-  moveDest siDest dest
+  storeReg siDest dest
 compileInstr SBool{..} = do
-  dest <- getDest siDest
+  dest <- fetchReg siDest R12
   tell [ ARMMov dest (ARMI $ fromEnum siBool) ]
-  moveDest siDest dest
+  storeReg siDest dest
 compileInstr SChar{..} = do
-  dest <- getDest siDest
+  dest <- fetchReg siDest R12
   tell [ ARMMov dest (ARMI $ ord siChar) ]
-  moveDest siDest dest
+  storeReg siDest dest
 compileInstr SBinOp{..} = do
-  dest <- getDest siDest
-  left <- getReg siLeft
+  dest <- fetchReg siDest R12
+  left <- fetchReg siLeft R11
   case siBinOp of
     Add -> do
-      imm <- getImm siRight
+      imm <- fetchImm siRight R10
       tell [ ARMAdd dest left imm ]
     Sub -> do
-      imm <- getImm siRight
+      imm <- fetchImm siRight R10
       tell [ ARMSub dest left imm ]
-  moveDest siDest dest
-  restore
+  storeReg siDest dest
 compileInstr SBinJump{..} = do
-  left <- getReg siLeft
-  imm <- getImm siRight
+  left <- fetchReg siLeft R12
+  imm  <- fetchImm siRight R11
   label <- getLabel siWhere
   tell [ ARMCmp left imm ]
   tell [ ARMB (toARMCond siCond) label ]
-  restore
-compileInstr SMov{..} = do
-  dest <- getDest siDest
-  arg <- getImm siArg
-  move dest arg
-  moveDest siDest dest
-  restore
+compileInstr SUnJump{..} = do
+  arg <- fetchReg siArg R12
+  label <- getLabel siWhere
+  tell [ ARMTst arg (ARMR arg) ]
+  tell [ ARMB ANE label ]
+compileInstr SMov{ siArg = (SImm x), ..} = do
+  storeImm siDest (ARMI x) R12
+compileInstr SMov{ siArg = x@(SVar _), ..} = do
+  Scope{..} <- get
+  case fromJust $ Map.lookup siDest regs of
+    ARMLocReg reg -> do
+      var <- fetchReg x reg
+      storeReg siDest var
+    ARMLocStk stk -> do
+      var <- fetchReg x R12
+      storeReg siDest var
 compileInstr SCall{..} = do
-  tell [ ARMBL siFunc]-}
+  -- Copy arguments to registers & stack.
+  forM_ (zip siArgs (argOutLocation $ length siArgs)) $ \(from, to) -> do
+    moveVarToLoc from to
+
+  -- Call the function.
+  when (length siArgs > 4) $ do
+    tell [ARMSub SP SP (ARMI $ (length siArgs - 4) * 4)]
+  tell [ ARMBL siFunc]
+  when (length siArgs > 4) $ do
+    tell [ARMAdd SP SP (ARMI $ (length siArgs - 4) * 4)]
+
+  -- Move returns values to registers / stack.
+  forM_ (zip siRet [ARMLocReg x | x <- enumFromTo R0 R3]) $ \(to, from) -> do
+    moveLocToVar from to
 compileInstr SReturn{..} = do
-  save <- toSave <$> get
-  tell [ ARMPOP (Set.toList . Set.fromList $ PC : save) ]
-compileInstr _ = do
-  return ()
+  arg <- fetchImm siArg R0
+  Scope{ toSave, varStack } <- get
+  when (varStack /= 0) $
+    tell [ ARMAdd SP SP (ARMI $ varStack * 4) ]
+  move R0 arg
+  tell [ ARMPOP (Set.toList . Set.fromList $ PC : toSave) ]
+compileInstr x = do
+  traceShow x $ undefined
 
 -- |Generates code for a function.
 compileFunc :: SFlatFunction -> Compiler ()
@@ -210,16 +265,21 @@ compileFunc func@SFlatFunction{..} = do
     , regs = regAlloc
     , regStack = 1 + length usedRegs
     , argStack = max 0 (length sffArgs - 4)
-    , varStack = 0
-    , tmpStack = 0
+    , varStack = stackSpace
     }
 
   -- Emit the function header.
-  traceShow regAlloc $ tell [ ARMFunc sffName ]
+  tell [ ARMFunc sffName ]
 
   -- Push on the stack all modified registers.
   save <- toSave <$> get
   tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
+  when (stackSpace /= 0) $
+    tell [ ARMSub SP SP (ARMI $ stackSpace * 4) ]
+
+  -- Copy arguments to their proper location.
+  forM_ (zip (argInLocation $ length sffArgs) sffArgs) $ \(from, to) -> do
+    moveLocToVar from to
 
   -- Emit instructions.
   forM_ (zip liveOut sffInstrs) $ \(out, (i, instr)) -> do
@@ -255,6 +315,4 @@ compile program
         , regStack  = 0
         , argStack  = 0
         , varStack  = 0
-        , tmpStack  = 0
-        , spareRegs = [R9, R10, R11]
         }
