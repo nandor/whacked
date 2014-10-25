@@ -29,8 +29,7 @@ import Debug.Trace
 
 data Scope
   = Scope
-    { regs :: Map SVar ARMReg
-    , live :: Map Int (Set SVar)
+    { regs :: Map SVar ARMLoc
     , toSave :: [ARMReg]
     , strings :: [String]
     , labelBase :: Int
@@ -49,12 +48,14 @@ toImm :: SVar -> Compiler ARMImm
 toImm (SImm i)
   = return (ARMI i)
 toImm var
-  = return (ARMR R0)    -- TODO
+  = ARMR <$> toReg var
 
 
 toReg :: SVar -> Compiler ARMReg
 toReg var
-  = return R0
+  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
+      Left reg -> return reg
+      Right stk -> error "Not implemented."
 
 
 toLabel :: Int -> Compiler Int
@@ -106,8 +107,6 @@ compileInstr SReturn{..} = do
   move (Left R0) siArg
   save <- toSave <$> get
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : save) ]
-compileInstr _ = do
-  return ()
 
 
 compileFunc :: SFlatFunction -> Compiler ()
@@ -116,9 +115,19 @@ compileFunc func@SFlatFunction{..} = do
       targets = Set.fromList $ concatMap (getTarget . snd) sffInstrs
       regPref = getPreferredRegs liveOut func
       regAlloc = allocRegs liveOut func regPref
+      usedRegs
+        = [x
+          | Left x <- map snd (Map.toList regAlloc)
+          , not (x `elem` (enumFromTo R0 R3))
+          ]
+
+  get >>= \scope@Scope{..} -> put scope
+    { toSave = usedRegs
+    , regs = regAlloc
+    }
 
   -- Emit the function header.
-  traceShow (regAlloc) $ tell [ ARMFunc sffName ]
+  tell [ ARMFunc sffName ]
   save <- toSave <$> get
   tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
 
@@ -150,7 +159,6 @@ compile program
     scope
       = Scope
         { regs = Map.empty
-        , live = Map.empty
         , toSave = []
         , strings = []
         , labelBase = 0
