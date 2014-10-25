@@ -110,12 +110,18 @@ data ASM
   | ARMLoadConst ARMReg Int
   | ARMLoadMem   ARMReg ARMReg Int
   | ARMStoreMem  ARMReg ARMReg Int
-  | ARMMov       ARMReg ARMImm
 
-  | ARMAdd ARMReg ARMReg ARMImm
-  | ARMSub ARMReg ARMReg ARMImm
-  | ARMCmp ARMReg ARMImm
-  | ARMTst ARMReg ARMImm
+  | ARMAdd ARMCond ARMReg ARMReg ARMImm
+  | ARMSub ARMCond ARMReg ARMReg ARMImm
+  | ARMOrr ARMCond ARMReg ARMReg ARMImm
+  | ARMAnd ARMCond ARMReg ARMReg ARMImm
+  | ARMCmp ARMCond ARMReg ARMImm
+  | ARMTst ARMCond ARMReg ARMImm
+  | ARMMov ARMCond ARMReg ARMImm
+  | ARMMvn ARMCond ARMReg ARMImm
+  | ARMNeg ARMCond ARMReg ARMImm
+
+  | ARMSmull ARMCond ARMReg ARMReg ARMReg ARMReg
 
   | ARMADR ARMReg String
   | ARMPUSH [ARMReg]
@@ -145,18 +151,32 @@ instance Show ASM where
     = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
   show (ARMStoreMem d base off)
     = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
-  show (ARMMov d n)
-    = "\tMOV " ++ show d ++ ", " ++ show n
 
 
-  show (ARMAdd d n m)
-    = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
-  show (ARMSub d n m)
-    = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
-  show (ARMCmp n m)
-    = "\tCMP " ++ show n ++ ", " ++ show m
-  show (ARMTst n m)
-    = "\tTST " ++ show n ++ ", " ++ show m
+  show (ARMAdd cond d n m)
+    = "\tADD" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMSub cond d n m)
+    = "\tSUB" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMOrr cond d n m)
+    = "\tORR" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMAnd cond d n m)
+    = "\tAND" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMCmp cond d m)
+    = "\tCMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+  show (ARMTst cond d m)
+    = "\tTST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+  show (ARMMov cond d n)
+    = "\tMOV" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+  show (ARMMvn cond d n)
+    = "\tMVN" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+  show (ARMNeg cond d n)
+    = "\tNEG" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+
+
+  show (ARMSmull cond lo hi m s)
+    = "\tSMULL" ++ show cond ++ " " ++
+      show lo ++ ", " ++ show hi ++ ", " ++
+      show m ++ ", " ++ show s
 
   show (ARMPUSH rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"

@@ -61,7 +61,7 @@ moveLocToVar (ARMLocReg reg) var
         return ()
       Just (ARMLocReg reg') -> do
         when (reg' /= reg) $
-          tell [ ARMMov reg' (ARMR reg) ]
+          tell [ ARMMov AAL reg' (ARMR reg) ]
       Just (ARMLocStk stk) -> do
         tell [ ARMStoreMem reg SP $ -stk * 4 ]
 moveLocToVar (ARMLocArgIn stk) var
@@ -83,7 +83,7 @@ moveVarToLoc var (ARMLocReg reg)
         return ()
       Just (ARMLocReg reg') -> do
         when (reg' /= reg) $
-          tell [ ARMMov reg (ARMR reg') ]
+          tell [ ARMMov AAL reg (ARMR reg') ]
       Just (ARMLocStk stk) -> do
           tell [ ARMLoadMem reg SP $ -stk * 4 ]
 moveVarToLoc var (ARMLocArgOut stk)
@@ -119,7 +119,7 @@ storeImm var imm tmp
 -- |Returns a register to use as an input operand for an instruction.
 fetchReg :: SVar -> ARMReg -> Compiler ARMReg
 fetchReg (SImm i) reg = do
-  tell [ ARMMov reg (ARMI i) ]
+  tell [ ARMMov AAL reg (ARMI i) ]
   return reg
 fetchReg var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
@@ -142,9 +142,9 @@ fetchImm var reg
 move :: ARMReg -> ARMImm -> Compiler ()
 move reg (ARMR reg') = do
   when (reg' /= reg) $
-    tell [ ARMMov reg (ARMR reg') ]
+    tell [ ARMMov AAL reg (ARMR reg') ]
 move reg imm = do
-  tell [ ARMMov reg imm ]
+  tell [ ARMMov AAL reg imm ]
 
 {-
 
@@ -175,39 +175,65 @@ compileInstr :: SInstr -> Compiler ()
 compileInstr SInt{..} = do
   dest <- fetchReg siDest R12
   if fitsInImm siInt
-    then tell [ ARMMov dest (ARMI siInt) ]
+    then tell [ ARMMov AAL dest (ARMI siInt) ]
     else tell [ ARMLoadConst dest siInt ]
   storeReg siDest dest
 compileInstr SBool{..} = do
   dest <- fetchReg siDest R12
-  tell [ ARMMov dest (ARMI $ fromEnum siBool) ]
+  tell [ ARMMov AAL dest (ARMI $ fromEnum siBool) ]
   storeReg siDest dest
 compileInstr SChar{..} = do
   dest <- fetchReg siDest R12
-  tell [ ARMMov dest (ARMI $ ord siChar) ]
+  tell [ ARMMov AAL dest (ARMI $ ord siChar) ]
   storeReg siDest dest
+compileInstr SCharArray{..} = do
+  traceShow () $ return ()
 compileInstr SBinOp{..} = do
   dest <- fetchReg siDest R12
   left <- fetchReg siLeft R11
   case siBinOp of
     Add -> do
-      imm <- fetchImm siRight R10
-      tell [ ARMAdd dest left imm ]
+      imm <- fetchImm siRight R12
+      tell [ ARMAdd AAL dest left imm ]
     Sub -> do
-      imm <- fetchImm siRight R10
-      tell [ ARMSub dest left imm ]
+      imm <- fetchImm siRight R12
+      tell [ ARMSub AAL dest left imm ]
+    Or  -> do
+      imm <- fetchImm siRight R12
+      tell [ ARMOrr AAL dest left imm ]
+    And -> do
+      imm <- fetchImm siRight R12
+      tell [ ARMAnd AAL dest left imm ]
+    Mul -> do
+      arg <- fetchReg siRight R12
+      tell [ ARMSmull AAL dest R12 left arg ]
+    Cmp op -> do
+      imm <- fetchImm siRight R12
+      tell [ ARMCmp AAL left imm ]
+      tell [ ARMMov (toARMCond op) dest (ARMI 1) ]
+
   storeReg siDest dest
+compileInstr SUnOp{..} = do
+  dest <- fetchReg siDest R12
+  arg  <- fetchImm siArg R12
+  case siUnOp of
+    Not -> tell [ ARMMvn AAL dest arg ]
+    Neg -> tell [ ARMNeg AAL dest arg ]
+
 compileInstr SBinJump{..} = do
   left <- fetchReg siLeft R12
   imm  <- fetchImm siRight R11
   label <- getLabel siWhere
-  tell [ ARMCmp left imm ]
+  tell [ ARMCmp AAL left imm ]
   tell [ ARMB (toARMCond siCond) label ]
 compileInstr SUnJump{..} = do
   arg <- fetchReg siArg R12
   label <- getLabel siWhere
-  tell [ ARMTst arg (ARMR arg) ]
+  tell [ ARMTst AAL arg (ARMR arg) ]
   tell [ ARMB ANE label ]
+compileInstr SJump{..} = do
+  label <- getLabel siWhere
+  tell [ ARMB AAL label ]
 compileInstr SMov{ siArg = (SImm x), ..} = do
   storeImm siDest (ARMI x) R12
 compileInstr SMov{ siArg = x@(SVar _), ..} = do
@@ -226,10 +252,10 @@ compileInstr SCall{..} = do
 
   -- Call the function.
   when (length siArgs > 4) $ do
-    tell [ARMSub SP SP (ARMI $ (length siArgs - 4) * 4)]
+    tell [ARMSub AAL SP SP (ARMI $ (length siArgs - 4) * 4)]
   tell [ ARMBL siFunc]
   when (length siArgs > 4) $ do
-    tell [ARMAdd SP SP (ARMI $ (length siArgs - 4) * 4)]
+    tell [ARMAdd AAL SP SP (ARMI $ (length siArgs - 4) * 4)]
 
   -- Move returns values to registers / stack.
   forM_ (zip siRet [ARMLocReg x | x <- enumFromTo R0 R3]) $ \(to, from) -> do
@@ -238,11 +264,11 @@ compileInstr SReturn{..} = do
   arg <- fetchImm siArg R0
   Scope{ toSave, varStack } <- get
   when (varStack /= 0) $
-    tell [ ARMAdd SP SP (ARMI $ varStack * 4) ]
+    tell [ ARMAdd AAL SP SP (ARMI $ varStack * 4) ]
   move R0 arg
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : toSave) ]
 compileInstr x = do
-  traceShow x $ undefined
+  traceShow x undefined
 
 -- |Generates code for a function.
 compileFunc :: SFlatFunction -> Compiler ()
@@ -275,7 +301,7 @@ compileFunc func@SFlatFunction{..} = do
   save <- toSave <$> get
   tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
   when (stackSpace /= 0) $
-    tell [ ARMSub SP SP (ARMI $ stackSpace * 4) ]
+    tell [ ARMSub AAL SP SP (ARMI $ stackSpace * 4) ]
 
   -- Copy arguments to their proper location.
   forM_ (zip (argInLocation $ length sffArgs) sffArgs) $ \(from, to) -> do

@@ -26,7 +26,6 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
 
 -- | Control flow graph structure.
 type FlowGraph
@@ -342,7 +341,7 @@ genExpr IArray{..} dest = do
       forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
         idx <- genTemp
         emit $ SInt idx i
-        emit $ SWriteArray dest idx expr
+        emit $ SWriteArray dest idx expr (t `elem` [Char, Bool])
       return (Array ieType, dest)
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
@@ -440,7 +439,7 @@ genInstr IAssArray{..} = do
   (_, array) <- genTemp >>= genExpr iiArray
   (_, idx)   <- genTemp >>= genExpr iiIndex
   (t, expr)  <- genTemp >>= genExpr iiExpr
-  emit $ SWriteArray array idx expr
+  emit $ SWriteArray array idx expr (t `elem` [Char, Bool])
 genInstr IAssPair{..} = do
   (_, pexpr) <- genTemp >>= genExpr iiPair
   (t, expr)  <- genTemp >>= genExpr iiExpr

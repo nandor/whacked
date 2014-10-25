@@ -126,6 +126,7 @@ data SInstr
     { siArray :: SVar
     , siIndex :: SVar
     , siExpr  :: SVar
+    , siByte  :: Bool
     }
   | SReadArray
     { siDest  :: SVar
