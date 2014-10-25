@@ -72,8 +72,8 @@ instance Show ARMCond where
   show AAL  = ""
   show AGT  = "GT"
   show ALT  = "LT"
-  show AGTE = "GT"
-  show ALTE = "LT"
+  show AGTE = "GTE"
+  show ALTE = "LTE"
   show AEQ  = "EQ"
   show ANE  = "NE"
 
