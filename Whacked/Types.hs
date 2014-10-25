@@ -1,6 +1,9 @@
 module Whacked.Types where
 
-import Debug.Trace
+import           Data.Bits
+
+
+
 -- |Binary operators.
 data BinaryOp
   = Add
@@ -178,3 +181,10 @@ isReadable Int          = True
 isReadable Char         = True
 isReadable (Array Char) = True
 isReadable _            = False
+
+
+
+-- |Checks if the variable can be encoded in an ARM instruction.
+fitsInImm :: Int -> Bool
+fitsInImm x
+  = ((x `shiftR` 16) .&. 0xFFFFFF00) == 0

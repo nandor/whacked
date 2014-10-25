@@ -4,7 +4,6 @@ module Whacked.Optimizer.ConstantMover
   ) where
 
 import           Control.Applicative
-import           Data.Bits
 import           Data.Map(Map)
 import qualified Data.Map as Map
 import           Data.Maybe
@@ -12,14 +11,7 @@ import           Data.Set(Set)
 import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
-
-import Debug.Trace
-
-
--- |Checks if the variable can be encoded in an ARM instruction.
-fitsInReg :: Int -> Bool
-fitsInReg x
-  = ((x `shiftR` 16) .&. 0xFFFFFF00) == 0
+import           Whacked.Types
 
 
 -- |Pushes immediate constants into instructions. Due to the fact that ARM
@@ -45,7 +37,7 @@ moveConstants func@SFunction{..}
           (vars, op{ siArg = replaceVar siArg }:instrs)
         op@SBool{..} ->
           (Map.insert siDest (SImm $ fromEnum siBool) vars, op:instrs)
-        op@SInt{..} | fitsInReg siInt ->
+        op@SInt{..} | fitsInImm siInt ->
           (Map.insert siDest (SImm $ siInt) vars, op:instrs)
         op@SWriteArray{..} ->
           (vars, op{ siIndex = replaceVar siIndex }:instrs)

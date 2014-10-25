@@ -17,7 +17,6 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.Backend.ARM.ASM
 
-import Debug.Trace
 
 
 liveVariables :: SFlatFunction -> Map Int (Set SVar, Set SVar)
@@ -104,12 +103,10 @@ getPreferredRegs live func@SFlatFunction{..}
     -- so local variables will be placed in higher registers first. Function
     -- arguments & return values will have R0-R3 first, so the allocator will
     -- know that those are their preferred registers.
-    allRegs
-      = reverse $ enumFromTo R0 R11
+    allRegs = reverse $ enumFromTo R0 R9
 
     -- Registers used to pass arguments to functions.
-    argRegs
-      = enumFromTo R0 R3
+    argRegs = enumFromTo R0 R3
 
 
 -- |Tries to allocate hardware registers for all variables in the program.
@@ -137,7 +134,11 @@ allocRegs live func@SFlatFunction{..} pref
 
     -- List of registers that can be mapped to R0 - R3.
     lowVars
-      = sortr [ x | x <- liveVars, (minimum <$> Map.lookup x pref) < Just R4 ]
+      = sortr [ x | x <- liveVars, (Map.lookup x pref >>= minimum') < Just R4 ]
+    minimum' []
+      = Nothing
+    minimum' xs
+      = Just (minimum xs)
 
     -- Sorts the registers by number of uses.
     sortr = sortBy (flip (compare `on` (`Map.lookup` useCount)))

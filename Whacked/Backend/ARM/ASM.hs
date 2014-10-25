@@ -84,14 +84,21 @@ data ASM
   | ARMSection String
   | ARMWord Int
   | ARMAscii String
+
+
+  | ARMLoadConst ARMReg Int
+  | ARMLoadMem   ARMReg ARMReg Int
+  | ARMStoreMem  ARMReg ARMReg Int
+  | ARMMov       ARMReg ARMImm
+
+
   | ARMADR ARMReg String
-  | ARMADD ARMReg ARMReg ARMImm
-  | ARMSUB ARMReg ARMReg ARMImm
-  | ARMCMP ARMReg ARMImm
-  | ARMMOV ARMReg ARMImm
+  | ARMAdd ARMReg ARMReg ARMImm
+  | ARMSub ARMReg ARMReg ARMImm
+  | ARMCmp ARMReg ARMImm
   | ARMPUSH [ARMReg]
-  | ARMPOP [ARMReg]
-  | ARMLDR ARMReg Int
+  | ARMPOP  [ARMReg]
+
   | ARMSTR ARMReg ARMReg ARMReg
   | ARMBL String
   | ARMB ARMCond Int
@@ -110,23 +117,27 @@ instance Show ASM where
   show (ARMAscii x)
     = "\t.ascii " ++ show x
 
-  show (ARMADR d label)
-    = "\tLDR " ++ show d ++ ", =" ++ label
-  show (ARMADD d n m)
-    = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
-  show (ARMSUB d n m)
-    = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
-  show (ARMMOV d n)
+  show (ARMLoadConst d const)
+    = "\tLDR " ++ show d ++ ", =" ++ show const
+  show (ARMLoadMem d base off)
+    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
+  show (ARMStoreMem d base off)
+    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
+  show (ARMMov d n)
     = "\tMOV " ++ show d ++ ", " ++ show n
-  show (ARMCMP n m)
+
+
+  show (ARMAdd d n m)
+    = "\tADD " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMSub d n m)
+    = "\tSUB " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+  show (ARMCmp n m)
     = "\tCMP " ++ show n ++ ", " ++ show m
 
   show (ARMPUSH rs)
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMPOP rs)
     = "\tPOP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
-  show (ARMLDR d n)
-    = "\tLDR " ++ show d ++ ", =" ++ show n
   show (ARMSTR d n m)
     = "\tST " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMB cond xs)
