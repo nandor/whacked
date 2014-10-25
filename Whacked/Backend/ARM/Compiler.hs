@@ -106,6 +106,8 @@ compileInstr SReturn{..} = do
   move (Left R0) siArg
   save <- toSave <$> get
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : save) ]
+compileInstr _ = do
+  return ()
 
 
 compileFunc :: SFlatFunction -> Compiler ()
@@ -116,7 +118,7 @@ compileFunc func@SFlatFunction{..} = do
       regAlloc = allocRegs liveOut func regPref
 
   -- Emit the function header.
-  traceShow (regPref, regAlloc) $ tell [ ARMFunc sffName ]
+  traceShow (regAlloc) $ tell [ ARMFunc sffName ]
   save <- toSave <$> get
   tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
 

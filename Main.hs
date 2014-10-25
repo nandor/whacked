@@ -106,7 +106,7 @@ main
               when optPrintIMF $ print itch
 
               let scratch = flattenS
-                          . mapF (moveConstants . removePhi)
+                          . mapF (removePhi . moveConstants)
                           . generateS
                           $ itch
 

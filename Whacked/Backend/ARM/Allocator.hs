@@ -7,6 +7,7 @@ module Whacked.Backend.ARM.Allocator
 
 import           Control.Applicative
 import           Data.List
+import           Data.Function
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe
@@ -54,10 +55,15 @@ liveVariables func@SFlatFunction{..}
 -- the variable can be placed. The registers are ordered by preference.
 getPreferredRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMReg]
 getPreferredRegs live func@SFlatFunction{..}
-  = Map.map nub $ foldl banRegs (foldl allowRegs Map.empty instrs) instrs
+  = Map.map nub $ foldl banRegs (foldl allowRegs args instrs) instrs
   where
     -- Pairs of live variables & instructions.
     instrs = zip live . map snd $ sffInstrs
+
+    -- Mapping of arguments.
+    args
+      = foldr (\(x, y) -> Map.insert x (y : enumFromTo R4 R11)) Map.empty
+      $ zip sffArgs argRegs
 
     -- For each live variable, associates the list of all registers as
     -- available.
@@ -107,6 +113,68 @@ getPreferredRegs live func@SFlatFunction{..}
 
 
 -- |Tries to allocate hardware registers for all variables in the program.
-allocRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMReg] -> Map SVar ARMReg
+allocRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMReg] -> Map SVar ARMLoc
 allocRegs live func@SFlatFunction{..} pref
-  = Map.empty
+  = Map.unions [lowAlloc, alloc, stack]
+  where
+    -- Counts the number each variable is used.
+    useCount
+      = foldl (\mp x -> Map.insertWith (+) x 1 mp) Map.empty
+      . concatMap (getGen . snd)
+      $ sffInstrs
+
+    -- List of all live variables.
+    liveVars = Set.toList . Set.fromList . concat $ live
+
+    -- For each variable, generates a list of vars which conflict with it.
+    conflict
+      = foldl addConflicts Map.empty live
+      where
+        addConflicts mp xs
+          = foldl addLink mp [(x, y) | x <- xs, y <- xs, x /= y]
+        addLink mp (x, y)
+          = Map.insertWith Set.union x (Set.singleton y) mp
+
+    -- List of registers that can be mapped to R0 - R3.
+    lowVars
+      = sortr [ x | x <- liveVars, (minimum <$> Map.lookup x pref) < Just R4 ]
+
+    -- Sorts the registers by number of uses.
+    sortr = sortBy (flip (compare `on` (`Map.lookup` useCount)))
+
+    -- First assign low vars to low regs.
+    (lowAlloc, lowLeft, lowRegs)
+      = assign lowVars (enumFromTo R0 R3)
+    -- Then assign the rest to normal regs.
+    (alloc, varsLeft, _)
+      = assign (sortr $ lowLeft ++ (liveVars \\ lowVars))
+      $ lowRegs ++ enumFromTo R4 R11
+    -- Assign the rest to the stack.
+    stack
+      = Map.fromList . zip varsLeft . map (Right . ARMStk) $ [0..]
+
+    -- Checks if a var can be assigned to a reg.
+    canAlloc v reg
+      = elem reg . fromMaybe [] $ Map.lookup v pref
+
+    -- Assigns variables to a candidate list of registers.
+    assign vars []
+      = (Map.empty, vars, [])
+    assign [] regs
+      = (Map.empty, [], regs)
+    assign vars (r:rs)
+      = (Map.union mp' mp'', vars'', regs'')
+      where
+        (mp', vars') = assign' vars r Set.empty
+        (mp'', vars'', regs'') = assign vars' rs
+
+        assign' (v:vs) reg set
+          | not (canAlloc v reg) || Set.member v set
+            = let (mp, vs') = assign' vs reg set in (mp, v:vs')
+          | otherwise
+            = let (mp, vs') = assign' vs reg (Set.union set ban)
+              in (Map.insert v (Left reg) mp, vs')
+          where
+            ban = fromMaybe Set.empty $ Map.lookup v conflict
+        assign' [] reg set
+          = (Map.empty, [])
