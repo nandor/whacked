@@ -216,6 +216,20 @@ instance Show IInstr where
     = "    free     " ++ show iiExpr
 
 
+-- |Approximates the number of temporaries used by an expression.
+height :: IExpr -> Int
+height IBinOp{..}
+  = 1 + max (height ieLeft) (height ieRight)
+height IIndex{..}
+  = 1 + max (height ieArray) (height ieIndex)
+height ICall{..}
+  = 1 + maximum (map height ieArgs)
+height IUnOp{..}
+  = 0
+height _
+  = 1
+
+
 -- |Checks if an expression is a constant of a given type.
 isConst :: Type -> IExpr -> Bool
 isConst Char IChar{} = True

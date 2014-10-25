@@ -87,6 +87,11 @@ data Elem
   deriving ( Eq, Ord, Show )
 
 
+isCommutative :: BinaryOp -> Bool
+isCommutative x
+  = x `elem` [Add, Mul, And, Or, Cmp CEQ, Cmp CNE]
+
+
 -- |Returns the size in bytes of an element.
 sizeof :: Type -> Int
 sizeof (Int     ) = 4

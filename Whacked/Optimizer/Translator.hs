@@ -293,8 +293,16 @@ getLabel idx = do
 
 genExpr :: IExpr -> SVar -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
-  (lt, le) <- genTemp >>= genExpr ieLeft
-  (rt, re) <- genTemp >>= genExpr ieRight
+  (rt, re, lt, le) <-
+    if isCommutative ieBinOp && height ieLeft < height ieRight
+      then do
+        (rt, re) <- genTemp >>= genExpr ieRight
+        (lt, le) <- genTemp >>= genExpr ieLeft
+        return (rt, re, lt, le)
+      else do
+        (lt, le) <- genTemp >>= genExpr ieLeft
+        (rt, re) <- genTemp >>= genExpr ieRight
+        return (rt, re, lt, le)
   emit $ SBinOp lt dest ieBinOp le re
   return (fromJust $ binOpType ieBinOp lt rt, dest)
 genExpr IUnOp{..} dest = do
