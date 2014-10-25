@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns, RecordWildCards #-}
-module Whacked.Optimizer.ConstantMover
+module Whacked.Optimizer.Simplifier
   ( moveConstants
+  , simplify
   ) where
 
 import           Control.Applicative
@@ -12,6 +13,7 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
+
 
 
 -- |Pushes immediate constants into instructions. Due to the fact that ARM
@@ -51,3 +53,28 @@ moveConstants func@SFunction{..}
           (vars, instr:instrs)
       where
         replaceVar var = fromMaybe var $ Map.lookup var vars
+
+
+-- |Replaces some instructions with calls to functions from glibc or custom
+-- wrapper functions.
+simplify :: SFunction -> SFunction
+simplify func@SFunction{..}
+  = mapI replace func
+  where
+    replace op@SBinOp{..}
+      = case siBinOp of
+          Div -> SCall [siDest] "__aeabi_idiv" [siLeft, siRight]
+          Mod -> SCall [SVar (-1), siDest] "__aeabi_idivmode" [siLeft, siRight]
+          x -> op
+    replace op@SUnOp{..}
+      = case siUnOp of
+          Len -> SReadArray siDest siArg (SImm (-1))
+          x -> op
+    replace SNewArray{..}
+      = SCall [siDest] "__alloc" [SImm siLength]
+    replace SNewPair{..}
+      = SCall [siDest] "__alloc" [SImm 8]
+    replace SFree{..}
+      = SCall [] "__free" [siRef]
+    replace x
+      = x

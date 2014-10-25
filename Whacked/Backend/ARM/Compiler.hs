@@ -63,16 +63,16 @@ moveLocToVar (ARMLocReg reg) var
         when (reg' /= reg) $
           tell [ ARMMov AAL reg' (ARMR reg) ]
       Just (ARMLocStk stk) -> do
-        tell [ ARMStoreMem reg SP $ -stk * 4 ]
+        tell [ ARMStr reg SP $ ARMI (-stk * 4) ]
 moveLocToVar (ARMLocArgIn stk) var
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
         return ()
       Just (ARMLocReg reg') -> do
-        tell [ ARMLoadMem reg' SP $ -(regStack + varStack + stk) * 4 ]
+        tell [ ARMLdr reg' SP $ ARMI (-(regStack + varStack + stk) * 4) ]
       Just (ARMLocStk stk') -> do
-        tell [ ARMLoadMem R12 SP $ -(regStack + varStack + stk) * 4 ]
-        tell [ ARMStoreMem R12 SP $ -stk' * 4 ]
+        tell [ ARMLdr R12 SP $ ARMI (-(regStack + varStack + stk) * 4) ]
+        tell [ ARMStr R12 SP $ ARMI (-stk' * 4) ]
 
 -- |Copies a variable to into one of the registers that is going to be passed
 -- as an argument to another function.
@@ -85,17 +85,24 @@ moveVarToLoc var (ARMLocReg reg)
         when (reg' /= reg) $
           tell [ ARMMov AAL reg (ARMR reg') ]
       Just (ARMLocStk stk) -> do
-          tell [ ARMLoadMem reg SP $ -stk * 4 ]
+          tell [ ARMLdr reg SP $ ARMI (-stk * 4) ]
 moveVarToLoc var (ARMLocArgOut stk)
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
         return ()
       Just (ARMLocReg reg') -> do
-        tell [ ARMStoreMem reg' SP $ (stk + 1) * 4 ]
+        tell [ ARMStr reg' SP $ ARMI ((stk + 1) * 4) ]
       Just (ARMLocStk stk') -> do
-        tell [ ARMLoadMem R12 SP $ -stk' * 4 ]
-        tell [ ARMStoreMem R12 SP $ (stk + 1) * 4 ]
+        tell [ ARMLdr R12 SP $ ARMI (-stk' * 4) ]
+        tell [ ARMStr R12 SP $ ARMI ((stk + 1) * 4) ]
 
+
+-- |Returns the register mapped to a value or a default temprary register.
+findReg :: SVar -> ARMReg -> Compiler ARMReg
+findReg var reg
+  = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
+    ARMLocReg reg' -> return reg'
+    _ -> return reg
 
 -- |Copies the result of an operation to the stack or does nothing if the
 -- variable was originally in a register.
@@ -103,7 +110,7 @@ storeReg :: SVar -> ARMReg -> Compiler ()
 storeReg var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
     ARMLocReg reg' -> move reg' (ARMR reg)
-    ARMLocStk idx -> tell [ ARMStoreMem reg SP (-idx * 4) ]
+    ARMLocStk idx -> tell [ ARMStr reg SP $ ARMI (-idx * 4) ]
 
 
 -- |Copies an immediate value to a memory location.
@@ -113,7 +120,7 @@ storeImm var imm tmp
     ARMLocReg reg' -> move reg' imm
     ARMLocStk idx -> do
       move tmp imm
-      tell [ ARMStoreMem tmp SP (-idx * 4) ]
+      tell [ ARMStr tmp SP $ ARMI (-idx * 4) ]
 
 
 -- |Returns a register to use as an input operand for an instruction.
@@ -125,7 +132,7 @@ fetchReg var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
     ARMLocReg reg  -> return reg
     ARMLocStk idx -> do
-      tell [ ARMLoadMem reg SP (-idx * 4) ]
+      tell [ ARMLdr reg SP $ ARMI (-idx * 4) ]
       return reg
 
 
@@ -146,50 +153,31 @@ move reg (ARMR reg') = do
 move reg imm = do
   tell [ ARMMov AAL reg imm ]
 
-{-
-
--- |Returns the location of a variable or a temp register if it is on the stack.
-
-
-
-
-
-
--- |Restores the set of spare registers.
-restore :: Compiler ()
-restore
-  = get >>= \scope -> put scope{ spareRegs = [R9, R10, R11] }
-
-
--- |Emits a move instructions if the arguments are different.
-move :: ARMReg -> ARMImm -> Compiler ()
-move reg (ARMR reg') = do
-  when (reg /= reg') $
-    tell [ ARMMov reg (ARMR reg')]
-move reg imm = do
-  tell [ ARMMov reg imm ]
--}
 
 -- |Generates ARM assembly for an instruction.
 compileInstr :: SInstr -> Compiler ()
 compileInstr SInt{..} = do
-  dest <- fetchReg siDest R12
+  dest <- findReg siDest R12
   if fitsInImm siInt
     then tell [ ARMMov AAL dest (ARMI siInt) ]
     else tell [ ARMLoadConst dest siInt ]
   storeReg siDest dest
 compileInstr SBool{..} = do
-  dest <- fetchReg siDest R12
+  dest <- findReg siDest R12
   tell [ ARMMov AAL dest (ARMI $ fromEnum siBool) ]
   storeReg siDest dest
 compileInstr SChar{..} = do
-  dest <- fetchReg siDest R12
+  dest <- findReg siDest R12
   tell [ ARMMov AAL dest (ARMI $ ord siChar) ]
   storeReg siDest dest
 compileInstr SCharArray{..} = do
   traceShow () $ return ()
+compileInstr SBoolArray{..} = do
+  traceShow () $ return ()
+compileInstr SIntArray{..} = do
+  traceShow () $ return ()
 compileInstr SBinOp{..} = do
-  dest <- fetchReg siDest R12
+  dest <- findReg siDest R12
   left <- fetchReg siLeft R11
   case siBinOp of
     Add -> do
@@ -211,15 +199,13 @@ compileInstr SBinOp{..} = do
       imm <- fetchImm siRight R12
       tell [ ARMCmp AAL left imm ]
       tell [ ARMMov (toARMCond op) dest (ARMI 1) ]
-
   storeReg siDest dest
 compileInstr SUnOp{..} = do
-  dest <- fetchReg siDest R12
+  dest <- findReg siDest R12
   arg  <- fetchImm siArg R12
   case siUnOp of
     Not -> tell [ ARMMvn AAL dest arg ]
     Neg -> tell [ ARMNeg AAL dest arg ]
-
 compileInstr SBinJump{..} = do
   left <- fetchReg siLeft R12
   imm  <- fetchImm siRight R11
@@ -245,6 +231,25 @@ compileInstr SMov{ siArg = x@(SVar _), ..} = do
     ARMLocStk stk -> do
       var <- fetchReg x R12
       storeReg siDest var
+compileInstr SReadArray{..} = do
+  dest <- findReg siDest R12
+  array <- fetchReg siArray R12
+  index <- fetchReg siIndex R11
+  tell [ ARMLdr dest array (ARMR index) ]
+  storeReg siDest dest
+compileInstr SWriteArray{..} = do
+  array <- fetchReg siArray R12
+  index <- fetchReg siIndex R11
+  expr <- fetchReg siExpr R10
+  tell [ ARMStr expr array (ARMR index) ]
+compileInstr SWritePair{..} = do
+  pair <- fetchReg siPair R12
+  elem <- fetchReg siExpr R11
+  tell [ ARMStr elem pair (ARMI $ if siElem == Fst then 0 else 4) ]
+compileInstr SReadPair{..} = do
+  dest <- findReg siDest R12
+  pair <- fetchReg siPair R12
+  tell [ ARMLdr dest pair (ARMI $ if siElem == Fst then 0 else 4) ]
 compileInstr SCall{..} = do
   -- Copy arguments to registers & stack.
   forM_ (zip siArgs (argOutLocation $ length siArgs)) $ \(from, to) -> do
@@ -269,6 +274,7 @@ compileInstr SReturn{..} = do
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : toSave) ]
 compileInstr x = do
   traceShow x undefined
+
 
 -- |Generates code for a function.
 compileFunc :: SFlatFunction -> Compiler ()

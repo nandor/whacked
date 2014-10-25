@@ -108,8 +108,8 @@ data ASM
 
 
   | ARMLoadConst ARMReg Int
-  | ARMLoadMem   ARMReg ARMReg Int
-  | ARMStoreMem  ARMReg ARMReg Int
+  | ARMLdr   ARMReg ARMReg ARMImm
+  | ARMStr  ARMReg ARMReg ARMImm
 
   | ARMAdd ARMCond ARMReg ARMReg ARMImm
   | ARMSub ARMCond ARMReg ARMReg ARMImm
@@ -147,10 +147,10 @@ instance Show ASM where
 
   show (ARMLoadConst d const)
     = "\tLDR " ++ show d ++ ", =" ++ show const
-  show (ARMLoadMem d base off)
-    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
-  show (ARMStoreMem d base off)
-    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", #" ++ show off ++ "]"
+  show (ARMLdr d base off)
+    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+  show (ARMStr d base off)
+    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
 
 
   show (ARMAdd cond d n m)

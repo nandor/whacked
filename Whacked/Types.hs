@@ -87,6 +87,19 @@ data Elem
   deriving ( Eq, Ord, Show )
 
 
+-- |Returns the size in bytes of an element.
+sizeof :: Type -> Int
+sizeof (Int     ) = 4
+sizeof (Bool    ) = 1
+sizeof (Char    ) = 1
+sizeof (Array _ ) = 4
+sizeof (Pair _ _) = 8
+sizeof (Poly    ) = 8
+sizeof (Empty   ) = 4
+sizeof (Null    ) = 4
+sizeof (Void    ) = 0
+
+
 -- Negates the comparison operator.
 invertCond :: CondOp -> CondOp
 invertCond CLT  = CGTE

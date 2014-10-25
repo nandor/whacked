@@ -271,7 +271,16 @@ instance Show SInstr where
 -- |Applies a function to all functions.
 mapF :: (SFunction -> SFunction) -> SProgram -> SProgram
 mapF f prog@SProgram{..}
-    = prog{ spFuncs = map f spFuncs }
+  = prog{ spFuncs = map f spFuncs }
+
+
+-- |Maps a function over all instructions.
+mapI :: (SInstr -> SInstr) -> SFunction -> SFunction
+mapI f func@SFunction{..}
+  = func
+    { sfBlocks
+        = Map.map (\b@SBlock{..} -> b{ sbInstrs = map f sbInstrs }) sfBlocks
+    }
 
 
 -- |Returns true if the instruction makes an assignment to a variable.

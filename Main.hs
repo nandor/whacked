@@ -15,7 +15,7 @@ import           Whacked.Scratch
 import           Whacked.FlowGraph
 import           Whacked.Frontend.Parser
 import           Whacked.Frontend.Generator
-import           Whacked.Optimizer.ConstantMover
+import           Whacked.Optimizer.Simplifier
 import           Whacked.Optimizer.RemovePHI
 import           Whacked.Optimizer.Translator
 --import           Whacked.Optimizer.SCCP
@@ -106,7 +106,7 @@ main
               when optPrintIMF $ print itch
 
               let scratch = flattenS
-                          . mapF (removePhi . moveConstants)
+                          . mapF (simplify . removePhi . moveConstants)
                           . generateS
                           $ itch
 

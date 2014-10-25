@@ -295,13 +295,7 @@ genExpr :: IExpr -> SVar -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
   (lt, le) <- genTemp >>= genExpr ieLeft
   (rt, re) <- genTemp >>= genExpr ieRight
-  case ieBinOp of
-    Div -> emit $ SCall [dest] "__aeabi_idiv" [le, re]
-    Mod -> do
-      dest' <- genTemp
-      emit $ SCall [dest', dest] "__aeabi_idivmod" [le, re]
-    _ -> do
-      emit $ SBinOp lt dest ieBinOp le re
+  emit $ SBinOp lt dest ieBinOp le re
   return (fromJust $ binOpType ieBinOp lt rt, dest)
 genExpr IUnOp{..} dest = do
   (t, expr) <- genTemp >>= genExpr ieArg
@@ -334,7 +328,7 @@ genExpr IArray{..} dest = do
       emit $ SBoolArray dest . map (\(IBool x) -> x) $ xs
       return (Array Int, dest)
     _ -> do
-      emit $ SNewArray dest (length ieElems)
+      emit $ SNewArray dest (length ieElems * (sizeof ieType))
       elems <- forM ieElems $ \elem -> do
         expr <- genTemp
         genExpr elem expr
