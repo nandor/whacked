@@ -31,7 +31,10 @@ data Scope
     , toSave    :: [ARMReg]
     , strings   :: [String]
     , labelBase :: Int
-    , stackSize :: Int
+    , regStack  :: Int
+    , argStack  :: Int
+    , varStack  :: Int
+    , tmpStack  :: Int
     , spareRegs :: [ARMReg]
     }
   deriving (Eq, Ord, Show)
@@ -51,23 +54,60 @@ getLabel i = do
   return (i + labelBase)
 
 
+-- |Returns the location of a variable.
+getLoc :: SVar -> Compiler ARMLoc
+getLoc var
+  = get >>= \Scope{ regs } -> return (fromJust $ Map.lookup var regs)
+
+
+-- |Returns the next temporary register.
+getTemp :: Compiler ARMReg
+getTemp = do
+  scope@Scope{ spareRegs } <- get
+  put scope{ spareRegs = tail spareRegs }
+  return (head spareRegs)
+
+
+-- |Restores temporary registers.
+restore :: Compiler ()
+restore = do
+  scope <- get
+  put scope{ spareRegs = enumFromTo R10 R12 }
+
+
+-- |Moves an argument into a register/stack location.
+moveArgument :: ARMLoc -> SVar -> Compiler ()
+moveArgument (ARMLocReg arg) var
+  = getLoc var >>= \case
+    ARMLocReg reg -> do
+      when (arg /= reg) $
+        tell [ ARMMov reg (ARMR arg) ]
+    ARMLocStk idx -> do
+      tell [ ARMStoreMem arg SP idx ]
+moveArgument (ARMArgIn arg) var
+  = getLoc var >>= \case
+    ARMLocReg reg -> do
+      tell [ ARMLoadMem reg SP arg ]
+    ARMLocStk idx -> do
+      tell [ ARMLoadMem R12 SP arg ]
+      tell [ ARMStoreMem R12 SP idx ]
+
+{-
+
 -- |Returns the location of a variable or a temp register if it is on the stack.
-getDest :: SVar -> Compiler ARMReg
-getDest var
-  = get >>= \Scope{ regs } -> return $ case fromJust $ Map.lookup var regs of
-    Left reg -> reg
-    Right _  -> R12
 
-
+-- |Returns a register to use as an input operand for an instruction.
 getReg :: SVar -> Compiler ARMReg
 getReg var
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
-    Left reg  -> return reg
-    Right (ARMStk idx) -> do
+    ARMLocReg reg  -> return reg
+    ARMLocStk idx -> do
       tell [ ARMLoadMem R12 SP (idx * 4) ]
       return R12
 
 
+-- |Returns either a constant immediate or a register to use as the second
+-- operand of an instruction.
 getImm :: SVar -> Compiler ARMImm
 getImm (SImm i)
   = return $ ARMI i
@@ -80,8 +120,8 @@ getImm var
 moveDest :: SVar -> ARMReg -> Compiler ()
 moveDest var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
-    Left reg' -> when (reg /= reg') $ tell [ ARMMov reg' (ARMR reg) ]
-    Right (ARMStk idx) -> tell [ ARMStoreMem reg SP (idx * 4) ]
+    ARMLocReg reg' -> when (reg /= reg') $ tell [ ARMMov reg' (ARMR reg) ]
+    ARMLocStk idx -> tell [ ARMStoreMem reg SP (idx * 4) ]
 
 
 -- |Restores the set of spare registers.
@@ -97,10 +137,11 @@ move reg (ARMR reg') = do
     tell [ ARMMov reg (ARMR reg')]
 move reg imm = do
   tell [ ARMMov reg imm ]
-
+-}
 
 -- |Generates ARM assembly for an instruction.
 compileInstr :: SInstr -> Compiler ()
+{-
 compileInstr SInt{..} = do
   dest <- getDest siDest
   if fitsInImm siInt
@@ -141,11 +182,12 @@ compileInstr SMov{..} = do
   moveDest siDest dest
   restore
 compileInstr SCall{..} = do
-  tell [ ARMBL siFunc]
+  tell [ ARMBL siFunc]-}
 compileInstr SReturn{..} = do
   save <- toSave <$> get
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : save) ]
-
+compileInstr _ = do
+  return ()
 
 -- |Generates code for a function.
 compileFunc :: SFlatFunction -> Compiler ()
@@ -154,24 +196,28 @@ compileFunc func@SFlatFunction{..} = do
       targets = Set.fromList $ concatMap (getTarget . snd) sffInstrs
       regPref = getPreferredRegs liveOut func
       regAlloc = allocRegs liveOut func regPref
+
       usedRegs
-        = [x
-          | Left x <- map snd (Map.toList regAlloc)
+        = [ x
+          | ARMLocReg x <- map snd (Map.toList regAlloc)
           , not (x `elem` (enumFromTo R0 R3))
           ]
       stackSpace
-        = length [ x | (reg, Right x) <- Map.toList regAlloc ]
+        = length . nub $ [ x | (reg,  ARMLocStk x) <- Map.toList regAlloc ]
 
   get >>= \scope@Scope{..} -> put scope
     { toSave = usedRegs
     , regs = regAlloc
-    , stackSize = stackSpace
+    , regStack = 1 + length usedRegs
+    , argStack = max 0 (length sffArgs - 4)
+    , varStack = 0
+    , tmpStack = 0
     }
 
   -- Emit the function header.
-  tell [ ARMFunc sffName ]
-  when (stackSpace /= 0) $ do
-    tell [ ARMSub SP SP (ARMI $ stackSpace * 4) ]
+  traceShow regAlloc $ tell [ ARMFunc sffName ]
+
+  -- Push on the stack all modified registers.
   save <- toSave <$> get
   tell [ ARMPUSH (Set.toList . Set.fromList $ LR : save) ]
 
@@ -206,6 +252,9 @@ compile program
         , toSave    = []
         , strings   = []
         , labelBase = 0
-        , stackSize = 0
+        , regStack  = 0
+        , argStack  = 0
+        , varStack  = 0
+        , tmpStack  = 0
         , spareRegs = [R9, R10, R11]
         }

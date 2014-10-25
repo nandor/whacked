@@ -17,7 +17,7 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.Backend.ARM.ASM
 
-
+import Debug.Trace
 
 liveVariables :: SFlatFunction -> Map Int (Set SVar, Set SVar)
 liveVariables func@SFlatFunction{..}
@@ -52,7 +52,7 @@ liveVariables func@SFlatFunction{..}
 
 -- |For each live variable in the program, computes a list of registers where
 -- the variable can be placed. The registers are ordered by preference.
-getPreferredRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMReg]
+getPreferredRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMLoc]
 getPreferredRegs live func@SFlatFunction{..}
   = Map.map nub $ foldl banRegs (foldl allowRegs args instrs) instrs
   where
@@ -61,17 +61,17 @@ getPreferredRegs live func@SFlatFunction{..}
 
     -- Mapping of arguments.
     args
-      = foldr (\(x, y) -> Map.insert x (y : enumFromTo R4 R11)) Map.empty
-      $ zip sffArgs argRegs
+      = foldr (\(x, y) -> Map.insert x (y : argRegs ++ allRegs)) Map.empty
+      $ zip sffArgs argInLocation
 
     -- For each live variable, associates the list of all registers as
     -- available.
     allowRegs mp (live, op@SCall{..})
       = foldr (\(x, y) -> Map.insertWith (++) x [y])
         (putRegs live (getKill op ++ getGen op) allRegs mp)
-      $ zip siArgs argRegs
+      $ zip siArgs argInLocation
     allowRegs mp (live, op@SReturn{..})
-      = putRegs live (getGen op) (R0:allRegs) mp
+      = putRegs live (getGen op) (ARMLocReg R0:allRegs) mp
     allowRegs mp (live, op)
       = putRegs live (getKill op ++ getGen op) allRegs mp
 
@@ -103,16 +103,14 @@ getPreferredRegs live func@SFlatFunction{..}
     -- so local variables will be placed in higher registers first. Function
     -- arguments & return values will have R0-R3 first, so the allocator will
     -- know that those are their preferred registers.
-    allRegs = reverse $ enumFromTo R0 R9
-
-    -- Registers used to pass arguments to functions.
-    argRegs = enumFromTo R0 R3
+    allRegs = [ ARMLocReg x | x <- reverse $ enumFromTo R0 R9 ]
+    argRegs = [ ARMLocReg x | x <- enumFromTo R0 R3 ]
 
 
 -- |Tries to allocate hardware registers for all variables in the program.
-allocRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMReg] -> Map SVar ARMLoc
+allocRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMLoc] -> Map SVar ARMLoc
 allocRegs live func@SFlatFunction{..} pref
-  = Map.unions [lowAlloc, alloc, stack]
+  = Map.union lowAlloc alloc
   where
     -- Counts the number each variable is used.
     useCount
@@ -133,8 +131,10 @@ allocRegs live func@SFlatFunction{..} pref
           = Map.insertWith Set.union x (Set.singleton y) mp
 
     -- List of registers that can be mapped to R0 - R3.
-    lowVars
-      = sortr [ x | x <- liveVars, (Map.lookup x pref >>= minimum') < Just R4 ]
+    lowVars = sortr
+      [ x
+      | x <- liveVars, (Map.lookup x pref >>= minimum') < Just (ARMLocReg R4)
+      ]
     minimum' []
       = Nothing
     minimum' xs
@@ -145,16 +145,17 @@ allocRegs live func@SFlatFunction{..} pref
 
     -- First assign low vars to low regs.
     (lowAlloc, lowLeft, lowRegs)
-      = assign lowVars (enumFromTo R0 R3)
+      = assign lowVars [ARMLocReg x | x <- enumFromTo R0 R3]
     -- Then assign the rest to normal regs.
-    (alloc, varsLeft, _)
+    (alloc, _, _)
       = assign (sortr $ lowLeft ++ (liveVars \\ lowVars))
-      $ lowRegs ++ enumFromTo R4 R11
-    -- Assign the rest to the stack.
-    stack
-      = Map.fromList . zip varsLeft . map (Right . ARMStk) $ [0..]
+      $ lowRegs ++
+        [ARMLocReg x | x <- enumFromTo R4 R9] ++
+        [ARMLocStk x | x <- [0..]]
 
     -- Checks if a var can be assigned to a reg.
+    canAlloc v (ARMLocStk _)
+      = True
     canAlloc v reg
       = elem reg . fromMaybe [] $ Map.lookup v pref
 
@@ -174,7 +175,7 @@ allocRegs live func@SFlatFunction{..} pref
             = let (mp, vs') = assign' vs reg set in (mp, v:vs')
           | otherwise
             = let (mp, vs') = assign' vs reg (Set.union set ban)
-              in (Map.insert v (Left reg) mp, vs')
+              in (Map.insert v reg mp, vs')
           where
             ban = fromMaybe Set.empty $ Map.lookup v conflict
         assign' [] reg set

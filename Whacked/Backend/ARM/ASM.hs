@@ -26,13 +26,25 @@ data ARMReg
   deriving ( Eq, Ord, Show, Enum )
 
 
-data ARMStk
-  = ARMStk Int
-  deriving ( Eq, Ord, Show )
+data ARMLoc
+  = ARMLocReg ARMReg
+  | ARMLocStk Int
+  | ARMArgIn Int
+  deriving ( Eq, Ord )
 
 
-type ARMLoc
-  = Either ARMReg ARMStk
+argInLocation :: [ARMLoc]
+argInLocation
+  = [ARMLocReg x | x <- enumFromTo R0 R3 ] ++ [ ARMArgIn x | x <- [1..] ]
+
+
+instance Show ARMLoc where
+  show (ARMLocReg x)
+    = show x
+  show (ARMLocStk x)
+    = "%s" ++ show x
+  show (ARMArgIn x)
+    = "%i" ++ show x
 
 
 data ARMImm
@@ -143,4 +155,4 @@ instance Show ASM where
   show (ARMB cond xs)
     = "\tB" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)
-    = "\tBL " ++ show xs
+    = "\tBL " ++ xs

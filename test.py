@@ -22,9 +22,9 @@ def main():
     """Entry point of the script."""
     subprocess.call(["cabal", "build"])
     wrong = {}
-    test("../wacc_examples/invalid/syntaxErr", [100], wrong, ["-I", "-P"])
-    test("../wacc_examples/invalid/semanticErr", [200], wrong, ["-I", "-P"])
-    test("../wacc_examples/valid", [0], wrong, ["-I", "-P"])
+    test("../wacc_examples/invalid/syntaxErr", [100], wrong, ["-P"])
+    test("../wacc_examples/invalid/semanticErr", [200], wrong, ["-P"])
+    test("../wacc_examples/valid", [0], wrong, ["-P"])
 
     print "\nFailed tests:\n"
     fails = []
