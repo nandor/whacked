@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, NamedFieldPuns, RecordWildCards #-}
+{-# LANGUAGE LambdaCase, NamedFieldPuns, RecordWildCards, TupleSections #-}
 module Whacked.Optimizer.SCCP where
 
 import           Control.Applicative
@@ -165,12 +165,22 @@ buildSSAGraph func@SFunction{..}
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = traceShow (func, vars') $ func
+  = traceShow (func, vars', executed) $ func
   where
-    (cfg, cfg') = buildFlowGraph func
-    (blockDefs, ssa) = buildSSAGraph func
+    (cfgGraph, cfgGraph') = buildFlowGraph func
+    (blockDefs, ssaGraph) = buildSSAGraph func
     (start, _) = Map.findMin sfBlocks
     vars = concat . map snd . Map.toList $ blockDefs
+
+    nextBlocks
+      = let indices = map fst . Map.toList $ blockDefs
+        in Map.fromList . zip indices $ tail indices
+    next end
+      = case Map.lookup end nextBlocks of
+          Nothing -> []
+          Just x -> [(end, x)]
+    ssaNext end
+      = fromMaybe [] $ map (end,) <$> Map.lookup end ssaGraph
 
     (executed, vars') = sccp'
       [(start, start)]                         -- Edge entering the start node.
@@ -192,15 +202,14 @@ sccp func@SFunction{..}
         = sccp' cfg (ssa0 ++ ssa) executed vars'
       | otherwise
         -- If no other edges were executed, evaluate everything.
-        = sccp' (cfg0 ++ cfg1 ++ cfg) (ssa0 ++ ssa1 ++ ssa) executed' vars''
+        = sccp' (cfg' ++ cfg) (ssa0 ++ ssa1 ++ ssa) executed' vars''
       where
         executed' = Set.insert edge executed
-        ssa' = ssa0 ++ ssa1
-        cfg' = cfg0 ++ ssa0
+        cfg' = if cfg0 ++ cfg1 == [] then next end else cfg0 ++ cfg1
         (cfg0, ssa0, vars')
-          = evaluatePhis edge executed vars
+          = evaluatePhis edge executed' vars
         (cfg1, ssa1, vars'')
-          = evaluateInstrs edge executed vars
+          = evaluateInstrs edge executed' vars'
 
     sccp' [] (edge@(start, end):ssa) executed vars
       | not (anyExecuted executed end)
@@ -212,11 +221,10 @@ sccp func@SFunction{..}
         -- start block.
         = sccp' (cfg0 ++ cfg1) (ssa0 ++ ssa1 ++ ssa) executed vars''
       where
-        executed' = Set.insert edge executed
         (cfg0, ssa0, vars')
           = evaluatePhis edge executed vars
         (cfg1, ssa1, vars'')
-          = evaluateInstrs edge executed vars
+          = evaluateInstrs edge executed vars'
 
     sccp' [] [] executed vars
       = (executed, vars)
@@ -224,9 +232,29 @@ sccp func@SFunction{..}
 
     -- Evaluates all phi nodes from a block.
     evaluatePhis edge@(start, end) executed vars
-      = ([], [], traceShow "PHI" $ vars)
+      = foldl addPhi ([], [], vars) phis
       where
         Just SBlock{..} = Map.lookup end sfBlocks
+        phis = map evalPhi sbPhis
+
+        evalPhi SPhi{..}
+          = (spDest, merge)
+          where
+            merge
+              = mconcat
+              . map (fromMaybe Top . (`lookupValue` vars) . snd)
+              . filter (\(x, _) -> (x, end) `Set.member` executed)
+              $ spMerge
+
+        addPhi (cfg, ssa, vars) (var, val)
+          = case Map.lookup var vars of
+            Just x | x == val || x == Bot ->
+              (cfg, ssa, vars)
+            _ ->
+              ( cfg
+              , ssa ++ ssaNext end
+              , Map.insert var val vars
+              )
 
     -- Evaluates all instructions from a block.
     evaluateInstrs edge@(start, end) executed vars
@@ -234,14 +262,27 @@ sccp func@SFunction{..}
       where
         Just SBlock{..} = Map.lookup end sfBlocks
 
-        evalInstr (cfg, ssa, vars) SBinOp{..}
-          = traceShow "SBinOp" undefined
+        evalInstr arg@(cfg, ssa, vars) SBinOp{..} = fromMaybe arg $ do
+          left <- lookupValue siLeft vars
+          right <- lookupValue siRight vars
+          return $ case evalBinOp siBinOp left right of
+            Nothing ->
+              (cfg, ssa ++ ssaNext end, Map.insert siDest Bot vars)
+            Just x  -> case lookupValue siDest vars of
+              Just y | y == x || y == Bot ->
+                (cfg, ssa, vars)
+              _ ->
+                (cfg, ssa ++ ssaNext end, Map.insert siDest x vars)
+
         evalInstr (cfg, ssa, vars) SUnOp{..}
           = traceShow "SUnOp" undefined
         evalInstr (cfg, ssa, vars) SMov{..}
           = traceShow "SMov" undefined
         evalInstr (cfg, ssa, vars) SCall{..}
-          = traceShow "SCall" undefined
+          = ( cfg
+            , ssa ++ ssaNext end
+            , foldl (\mp x -> Map.insert x Bot mp) vars siRet
+            )
 
         evalInstr (cfg, ssa, vars) SBool{..}
           = (cfg, ssa, Map.insert siDest (CBool siBool) vars)
@@ -267,13 +308,20 @@ sccp func@SFunction{..}
         evalInstr (cfg, ssa, vars) SFree{..}
           = traceShow "SFree" undefined
         evalInstr (cfg, ssa, vars) SReturn{..}
-          = traceShow "SReturn" undefined
-        evalInstr (cfg, ssa, vars) SBinJump{..}
-          = traceShow "SBinJump" undefined
+          = (cfg, ssa, vars)
+
+        evalInstr arg@(cfg, ssa, vars) op@SBinJump{..} = fromMaybe arg $ do
+          left <- lookupValue siLeft vars
+          right <- lookupValue siRight vars
+          case compareValue siCond left right of
+            Just True  -> Just ((end, siWhere) : cfg, [], vars)
+            Just False -> Just (next end ++ cfg, [], vars)
+            Nothing    -> Just ((end, siWhere) : next end ++ cfg, [], vars)
+
         evalInstr (cfg, ssa, vars) SUnJump{..}
           = traceShow "SUnJump" undefined
         evalInstr (cfg, ssa, vars) SJump{..}
-          = traceShow "SJump" undefined
+          = ((end, siWhere) : cfg, [], vars)
 
     {-traverse (edge@(start, end):xs) ys mark vars
       = case Map.lookup end code of
@@ -395,10 +443,16 @@ sccp func@SFunction{..}
             x -> Just x
     -}
 
+    -- Finds a value in the var pool. Only returns it if is well defined.
+    lookupValue var vars
+      = Map.lookup var vars >>= \case
+          Top -> Nothing
+          x -> Just x
+
     -- Checks if any edges going to any other than (start, end) were marked
     -- as executed previously.
     anyOtherExecuted mark start end = fromMaybe False $ do
-      nodes <- Map.lookup end cfg'
+      nodes <- Map.lookup end cfgGraph'
       return
         . any (\x -> x /= (start, end) && Set.member x mark)
         . zip nodes
@@ -406,7 +460,7 @@ sccp func@SFunction{..}
 
     -- Checks if any of the edges entering the node were executed or not.
     anyExecuted mark end = fromMaybe False $ do
-      nodes <- Map.lookup end cfg'
+      nodes <- Map.lookup end cfgGraph'
       return
         . any (\x -> Set.member (x, end) mark)
         $ nodes

@@ -10,7 +10,8 @@ begin
         else
             a = 3;
             b = 3
-        fi
+        fi;
+        c = c + 1
     done;
 
     print a;
