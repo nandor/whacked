@@ -54,10 +54,19 @@ liveVariables func@SFlatFunction{..}
 -- the variable can be placed. The registers are ordered by preference.
 getPreferredRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMLoc]
 getPreferredRegs live func@SFlatFunction{..}
-  = Map.map nub $ foldl banRegs (foldl allowRegs args instrs) instrs
+  = Map.filterWithKey (\x _ -> x `Set.member` liveSet)
+  . Map.map nub
+  . foldl banRegs (foldl allowRegs args instrs)
+  $ instrs
   where
     -- Pairs of live variables & instructions.
     instrs = zip live . map snd $ sffInstrs
+
+    -- Set of live variables.
+    liveSet
+      = (Set.fromList . concat $ live)
+        `Set.union`
+        Set.fromList sffArgs
 
     -- Mapping of arguments.
     args
@@ -119,7 +128,7 @@ allocRegs live func@SFlatFunction{..} pref
       $ sffInstrs
 
     -- List of all live variables.
-    liveVars = Set.toList . Set.fromList . concat $ live
+    liveVars = Set.toList . Set.fromList $ (sffArgs ++ (concat live))
 
     -- For each variable, generates a list of vars which conflict with it.
     conflict

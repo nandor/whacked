@@ -206,6 +206,8 @@ compileInstr SUnOp{..} = do
   case siUnOp of
     Not -> tell [ ARMMvn AAL dest arg ]
     Neg -> tell [ ARMNeg AAL dest arg ]
+    Ord -> move dest arg
+    Chr -> move dest arg -- TODO(nl1813): Check for overflow.
 compileInstr SBinJump{..} = do
   left <- fetchReg siLeft R12
   imm  <- fetchImm siRight R11
@@ -234,14 +236,14 @@ compileInstr SMov{ siArg = x@(SVar _), ..} = do
 compileInstr SReadArray{..} = do
   dest <- findReg siDest R12
   array <- fetchReg siArray R12
-  index <- fetchReg siIndex R11
-  tell [ ARMLdr dest array (ARMR index) ]
+  index <- fetchImm siIndex R11
+  tell [ ARMLdr dest array index ]
   storeReg siDest dest
 compileInstr SWriteArray{..} = do
   array <- fetchReg siArray R12
-  index <- fetchReg siIndex R11
-  expr <- fetchReg siExpr R10
-  tell [ ARMStr expr array (ARMR index) ]
+  expr <- fetchReg siExpr R11
+  index <- fetchImm siIndex R11
+  tell [ ARMStr expr array index ]
 compileInstr SWritePair{..} = do
   pair <- fetchReg siPair R12
   elem <- fetchReg siExpr R11
@@ -301,7 +303,7 @@ compileFunc func@SFlatFunction{..} = do
     }
 
   -- Emit the function header.
-  tell [ ARMFunc sffName ]
+  traceShow regAlloc $ tell [ ARMFunc sffName ]
 
   -- Push on the stack all modified registers.
   save <- toSave <$> get
