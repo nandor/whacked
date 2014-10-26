@@ -26,7 +26,7 @@ congruence func@SFunction{ sfBlocks }
 
     -- Unites all variables in PHI expressions.
     insert mp SPhi{..}
-      = let vars = spDest : spMerge
+      = let vars = spDest : map snd spMerge
         in foldl union mp [(x, y) | x <- vars, y <- vars, x < y]
 
     -- Disjoint set union.

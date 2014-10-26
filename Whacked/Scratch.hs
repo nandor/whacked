@@ -56,7 +56,7 @@ data SPhi
   = SPhi
     { spDest  :: SVar
     , spType  :: Type
-    , spMerge :: [SVar]
+    , spMerge :: [(Int, SVar)]
     }
   deriving ( Eq, Ord )
 
@@ -192,8 +192,11 @@ instance Show SBlock where
 instance Show SPhi where
   show SPhi{..}
     = show spDest ++ " <- phi(" ++
-      (concat . intersperse "," $ map show spMerge) ++
+      (concat . intersperse "," $ map showArg spMerge) ++
       ")"
+    where
+      showArg (from, var)
+        = show from ++ "->" ++ show var
 
 
 instance Show SInstr where

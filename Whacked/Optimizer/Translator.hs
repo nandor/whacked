@@ -495,8 +495,10 @@ genFunc func@IFunction{..}
           prev <- Set.toList <$> Map.lookup idx graph'
           return phi{ spMerge = [y | Just y <- map (lookupVar x) prev] }
 
-        lookupVar var block
-          = snd <$> (Map.lookup block phis' >>= Map.lookup var)
+        lookupVar var block = do
+          vars <- Map.lookup block phis'
+          (_, var) <- Map.lookup var vars
+          return (block, var)
 
 
 -- | Generates unoptimised Scratchy code for a program.

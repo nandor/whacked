@@ -6,12 +6,12 @@ begin
     while c < 10 do
         if a < 5 then
             a = 4;
-            b = 4;
+            b = 4
         else
             a = 3;
-            b = 3;
+            b = 3
         fi
-    done
+    done;
 
     print a;
     print b

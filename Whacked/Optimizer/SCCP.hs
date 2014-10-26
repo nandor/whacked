@@ -34,8 +34,8 @@ data Value
   | CInt Int
   | CBool Bool
   | CChar Char
-  | CArray (Maybe (SVar, Int))
-  | CPair (Maybe SVar)
+  | CArray Value Value
+  | CRef (Maybe SVar)
   deriving ( Eq, Ord, Show )
 
 
@@ -44,6 +44,12 @@ data Value
 instance Monoid Value where
   mappend Top x = x
   mappend x Top = x
+  mappend (CArray refA lenA) (CArray refB lenB)
+    | ref' == Bot && len' == Bot = Bot
+    | otherwise = CArray ref' len'
+    where
+      ref' = refA <> refB
+      len' = lenA <> lenB
   mappend x y
     | x == y = x
     | otherwise = Bot
@@ -64,10 +70,10 @@ compareValue op (CBool x) (CBool y)
   = Just $ compareOp op x y
 compareValue op (CChar x) (CChar y)
   = Just $ compareOp op x y
-compareValue op x'@(CPair _) y'@(CPair _)
-  = Just $ compareOp op x' y'
-compareValue op x'@(CArray _) y'@(CArray _)
-  = Just $ compareOp op x' y'
+compareValue op (CRef ref) (CRef ref')
+  = Just $ compareOp op ref ref'
+compareValue op (CArray ref _) (CArray ref' _)
+  = compareValue op ref ref'
 
 
 -- |Evaluates a binary operation. If the result is well defined, it returns a
@@ -98,14 +104,14 @@ evalBinOp op (CBool x) (CBool y)
 evalBinOp op (CChar x) (CChar y)
   = Just $ case op of
     Cmp cmp -> CBool $ compareOp cmp x y
-evalBinOp op x'@(CPair _) y'@(CPair _)
+evalBinOp op (CRef ref) (CRef ref')
   = Just $ case op of
-    Cmp CEQ -> CBool $ x' == y'
-    Cmp CNE -> CBool $ x' /= y'
-evalBinOp op x'@(CArray _) y'@(CArray _)
-  = Just $ case op of
-    Cmp CEQ -> CBool $ x' == y'
-    Cmp CNE -> CBool $ x' /= y'
+    Cmp CEQ -> CBool $ ref == ref'
+    Cmp CNE -> CBool $ ref /= ref'
+evalBinOp op (CArray ref _) y'@(CArray ref' _)
+  = case op of
+    Cmp CEQ -> CBool <$> compareValue CEQ ref ref'
+    Cmp CNE -> CBool <$> compareValue CNE ref ref'
 
 
 -- |Evaluates an unary operation.
@@ -127,9 +133,9 @@ evalUnOp op (CChar x)
 
 
 -- |Builds the SSA graph, linking defitions to uses.
-buildSSAGraph :: SFunction -> ([SVar], Map Int [Int])
+buildSSAGraph :: SFunction -> (Map Int [SVar], Map Int [Int])
 buildSSAGraph func@SFunction{..}
-  = (map fst . Map.toList $ defs, Map.mapWithKey (\k v -> nub v \\ [k]) ssa)
+  = (blockDefs, Map.mapWithKey (\k v -> nub v \\ [k]) ssa)
   where
     -- Find the definition point of all variables.
     defs = Map.foldlWithKey foldFunc Map.empty sfBlocks
@@ -141,11 +147,15 @@ buildSSAGraph func@SFunction{..}
       = foldl (\mp x -> Map.insert x i mp) mp (getKill instr)
 
     -- Link definitions to all uses.
-    ssa = Map.foldlWithKey linkFunc Map.empty sfBlocks
-    linkFunc mp idx SBlock{ sbInstrs, sbPhis }
-      = foldl (linkDefs idx) mp
-      . concat
-      $ (map spMerge sbPhis) ++ (map getGen sbInstrs)
+    (blockDefs, ssa)
+      = Map.foldlWithKey linkFunc (Map.empty, Map.empty) sfBlocks
+    linkFunc (mp, mp') idx SBlock{ sbInstrs, sbPhis }
+      = ( Map.insert idx allDefs mp
+        , foldl (linkDefs idx) mp' allDefs
+        )
+      where
+        allDefs
+          = concat $ (map (map snd . spMerge) sbPhis) ++ (map getGen sbInstrs)
     linkDefs i mp var
       = case Map.lookup var defs of
           Nothing -> mp
@@ -155,24 +165,118 @@ buildSSAGraph func@SFunction{..}
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = traceShow (func, ssa) $ func
+  = traceShow (func, vars') $ func
   where
     (cfg, cfg') = buildFlowGraph func
-    (vars, ssa) = buildSSAGraph func
+    (blockDefs, ssa) = buildSSAGraph func
     (start, _) = Map.findMin sfBlocks
-    {-
+    vars = concat . map snd . Map.toList $ blockDefs
 
-    (mark, vars') = traverse
-      [(start, start)]
-      []
-      Set.empty
-      (Map.fromList . zip vars . repeat $ Top)
-    mark' = Set.map snd mark
+    (executed, vars') = sccp'
+      [(start, start)]                         -- Edge entering the start node.
+      []                                       -- No SSA edges.
+      Set.empty                                -- All edges unexecuted.
+      (Map.fromList . zip vars . repeat $ Top) -- All vars set to TOP.
 
-    traverse (edge@(start, end):xs) ys mark vars
-      = case Map.lookup end code of
+
+    -- Sparse conditional propagation algorithm. Maintains two workflows:
+    -- cfg for propagating through blocks and ssa for propagating values
+    -- into new blocks.
+    sccp' (edge@(start, end):cfg) ssa executed vars
+      | Set.member edge executed
         -- If the edge was already executed, stop propagation and continue
         -- with other avilable edges.
+        = sccp' cfg ssa executed vars
+      | anyOtherExecuted executed start end
+        -- If any other edges were executed, evaluate only phi instructions.
+        = sccp' cfg (ssa0 ++ ssa) executed vars'
+      | otherwise
+        -- If no other edges were executed, evaluate everything.
+        = sccp' (cfg0 ++ cfg1 ++ cfg) (ssa0 ++ ssa1 ++ ssa) executed' vars''
+      where
+        executed' = Set.insert edge executed
+        ssa' = ssa0 ++ ssa1
+        cfg' = cfg0 ++ ssa0
+        (cfg0, ssa0, vars')
+          = evaluatePhis edge executed vars
+        (cfg1, ssa1, vars'')
+          = evaluateInstrs edge executed vars
+
+    sccp' [] (edge@(start, end):ssa) executed vars
+      | not (anyExecuted executed end)
+        -- When none of the edges entering a block were executed, stop
+        -- propagating values through the SSA graph.
+        = sccp' [] ssa executed vars
+      | otherwise
+        -- Otherwise, evaluate all instructions that take arguments from the
+        -- start block.
+        = sccp' (cfg0 ++ cfg1) (ssa0 ++ ssa1 ++ ssa) executed vars''
+      where
+        executed' = Set.insert edge executed
+        (cfg0, ssa0, vars')
+          = evaluatePhis edge executed vars
+        (cfg1, ssa1, vars'')
+          = evaluateInstrs edge executed vars
+
+    sccp' [] [] executed vars
+      = (executed, vars)
+
+
+    -- Evaluates all phi nodes from a block.
+    evaluatePhis edge@(start, end) executed vars
+      = ([], [], traceShow "PHI" $ vars)
+      where
+        Just SBlock{..} = Map.lookup end sfBlocks
+
+    -- Evaluates all instructions from a block.
+    evaluateInstrs edge@(start, end) executed vars
+      = foldl evalInstr ([], [], vars) sbInstrs
+      where
+        Just SBlock{..} = Map.lookup end sfBlocks
+
+        evalInstr (cfg, ssa, vars) SBinOp{..}
+          = traceShow "SBinOp" undefined
+        evalInstr (cfg, ssa, vars) SUnOp{..}
+          = traceShow "SUnOp" undefined
+        evalInstr (cfg, ssa, vars) SMov{..}
+          = traceShow "SMov" undefined
+        evalInstr (cfg, ssa, vars) SCall{..}
+          = traceShow "SCall" undefined
+
+        evalInstr (cfg, ssa, vars) SBool{..}
+          = (cfg, ssa, Map.insert siDest (CBool siBool) vars)
+        evalInstr (cfg, ssa, vars) SChar{..}
+          = (cfg, ssa, Map.insert siDest (CChar siChar) vars)
+        evalInstr (cfg, ssa, vars) SInt{..}
+          = (cfg, ssa, Map.insert siDest (CInt siInt) vars)
+
+        evalInstr (cfg, ssa, vars) SString{..}
+          = traceShow "SString" undefined
+        evalInstr (cfg, ssa, vars) SNewArray{..}
+          = traceShow "SNewArray" undefined
+        evalInstr (cfg, ssa, vars) SWriteArray{..}
+          = traceShow "SWriteArray" undefined
+        evalInstr (cfg, ssa, vars) SReadArray{..}
+          = traceShow "SReadArray" undefined
+        evalInstr (cfg, ssa, vars) SNewPair{..}
+          = traceShow "SNewPair" undefined
+        evalInstr (cfg, ssa, vars) SWritePair{..}
+          = traceShow "SWritePair" undefined
+        evalInstr (cfg, ssa, vars) SReadPair{..}
+          = traceShow "SReadPair" undefined
+        evalInstr (cfg, ssa, vars) SFree{..}
+          = traceShow "SFree" undefined
+        evalInstr (cfg, ssa, vars) SReturn{..}
+          = traceShow "SReturn" undefined
+        evalInstr (cfg, ssa, vars) SBinJump{..}
+          = traceShow "SBinJump" undefined
+        evalInstr (cfg, ssa, vars) SUnJump{..}
+          = traceShow "SUnJump" undefined
+        evalInstr (cfg, ssa, vars) SJump{..}
+          = traceShow "SJump" undefined
+
+    {-traverse (edge@(start, end):xs) ys mark vars
+      = case Map.lookup end code of
         _ | Set.member edge mark ->
           traverse xs ys mark' vars
 
@@ -289,13 +393,20 @@ sccp func@SFunction{..}
           = Map.lookup var vars >>= \case
             Top -> Nothing
             x -> Just x
+    -}
 
+    -- Checks if any edges going to any other than (start, end) were marked
+    -- as executed previously.
     anyOtherExecuted mark start end = fromMaybe False $ do
       nodes <- Map.lookup end cfg'
-      let marked x = x /= (start, end) && Set.member x mark
-      return $ any marked . zip nodes $ repeat end
+      return
+        . any (\x -> x /= (start, end) && Set.member x mark)
+        . zip nodes
+        $ repeat end
 
+    -- Checks if any of the edges entering the node were executed or not.
     anyExecuted mark end = fromMaybe False $ do
       nodes <- Map.lookup end cfg'
-      return $ any (\x -> Set.member (x, end) mark) nodes
-    -}
+      return
+        . any (\x -> Set.member (x, end) mark)
+        $ nodes
