@@ -23,7 +23,7 @@ import           Whacked.Backend.ARM.Allocator
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
+
 
 data Scope
   = Scope
@@ -298,10 +298,10 @@ compileInstr SReturn{..} = do
 
 
 -- |Generates code for a function.
-compileFunc :: SFlatFunction -> Compiler ()
+compileFunc :: SFunction -> Compiler ()
 compileFunc func@SFlatFunction{..} = do
   let liveOut = map (Set.toList . snd . snd) . Map.toList . liveVariables $ func
-      targets = Set.fromList $ concatMap (getTarget . snd) sffInstrs
+      targets = Set.fromList $ concatMap (getTarget . snd) sfInstrs
       regPref = getPreferredRegs liveOut func
       regAlloc = allocRegs liveOut func regPref
 
@@ -317,12 +317,12 @@ compileFunc func@SFlatFunction{..} = do
     { toSave = usedRegs
     , regs = regAlloc
     , regStack = 1 + length usedRegs
-    , argStack = max 0 (length sffArgs - 4)
+    , argStack = max 0 (length sfArgs - 4)
     , varStack = stackSpace
     }
 
   -- Emit the function header.
-  tell [ ARMFunc sffName ]
+  tell [ ARMFunc sfName ]
 
   -- Push on the stack all modified registers.
   save <- toSave <$> get
@@ -331,11 +331,11 @@ compileFunc func@SFlatFunction{..} = do
     tell [ ARMSub AAL SP SP (ARMI $ stackSpace * 4) ]
 
   -- Copy arguments to their proper location.
-  forM_ (zip (argInLocation $ length sffArgs) sffArgs) $ \(from, to) -> do
+  forM_ (zip (argInLocation $ length sfArgs) sfArgs) $ \(from, to) -> do
     moveLocToVar from to
 
   -- Emit instructions.
-  forM_ (zip liveOut sffInstrs) $ \(out, (i, instr)) -> do
+  forM_ (zip liveOut sfInstrs) $ \(out, (i, instr)) -> do
     when (i `Set.member` targets) $ do
       label <- getLabel i
       tell [ ARMLabel label ]
@@ -346,16 +346,16 @@ compileFunc func@SFlatFunction{..} = do
 
   -- Update the label counter.
   get >>= \scope@Scope{ labelBase } -> do
-    put scope{ labelBase = labelBase + length sffInstrs}
+    put scope{ labelBase = labelBase + length sfInstrs}
 
 
-compileProg :: SFlatProgram -> Compiler ()
-compileProg SFlatProgram{..} = do
-  forM_ sfpFuncs $ \func -> do
+compileProg :: SProgram -> Compiler ()
+compileProg SProgram{..} = do
+  forM_ spFuncs $ \func -> do
     compileFunc func
 
 
-compile :: SFlatProgram -> [ASM]
+compile :: SProgram -> [ASM]
 compile program
   = [ARMSection ".data"] ++
     dataSeg ++

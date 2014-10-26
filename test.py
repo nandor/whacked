@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 
 def test(root, codes, wrong, flags=None):
     flags = flags or []
@@ -11,6 +12,8 @@ def test(root, codes, wrong, flags=None):
                 continue
             file = os.path.join(root, file)
             print("\n" + file + ":\n")
+            sys.stdout.flush()
+            sys.stderr.flush()
             code = subprocess.call(
                 ["./dist/build/whacked/whacked", file] + flags)
             if code not in codes:

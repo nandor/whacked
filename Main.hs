@@ -19,7 +19,7 @@ import           Whacked.Frontend.Generator
 import           Whacked.Optimizer.Simplifier
 import           Whacked.Optimizer.RemovePHI
 import           Whacked.Optimizer.Translator
---import           Whacked.Optimizer.SCCP
+import           Whacked.Optimizer.SCCP
 import           Whacked.Backend.ARM as ARM
 
 
@@ -106,8 +106,12 @@ main
             Right itch -> do
               when optPrintIMF $ print itch
 
-              let scratch = flattenS
-                          . mapF (simplify . removePhi . moveConstants)
+              let scratch = mapF ( flatten
+                                 . simplify
+                                 . removePhi
+                                 . moveConstants
+                                 . sccp
+                                 )
                           . generateS
                           $ itch
 

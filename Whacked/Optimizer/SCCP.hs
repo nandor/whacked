@@ -47,7 +47,6 @@ instance Monoid Value where
   mappend x y
     | x == y = x
     | otherwise = Bot
-
   mempty
     = Top
 
@@ -127,28 +126,10 @@ evalUnOp op (CChar x)
     Ord -> Just $ CInt (ord x)
 
 
--- |Builds the SSA graph. In the SSA graph, edges exist between declarations
--- and uses of variables. Information about values is propagated downwards
--- in the SSA graph.
-buildSSAGraph :: [(Int, SInstr)] -> ([SVar], Map Int [Int])
-buildSSAGraph block
-  = (map fst . Map.toList $ defs, foldl linkDefs Map.empty $ block)
-  where
-    defs = foldl findDefs Map.empty block
-
-    findDefs mp (idx, instr)
-      = foldl (\mp x -> Map.insert x idx mp) mp (getKill instr)
-    linkDefs mp (idx, instr)
-      = foldl (linkTo idx) mp (getGen instr)
-
-    linkTo idx mp var = fromMaybe mp $ do
-      from <- Map.lookup var defs
-      return $ Map.insertWith (++) from [idx] mp
-
-
-optimise :: SFunction -> SFunction
-optimise func@SFunction{..}
-  = traceShow (cfg,)
+-- |Performs sparse conditional constant propagation.
+sccp :: SFunction -> SFunction
+sccp func@SFunction{..}
+  = func
   where
     (cfg, cfg') = buildFlowGraph func
     {-(vars, ssa) = buildSSAGraph sfBody
@@ -293,7 +274,3 @@ optimise func@SFunction{..}
       nodes <- Map.lookup end cfg'
       return $ any (\x -> Set.member (x, end) mark) nodes
     -}
-
-sccp :: SProgram -> SProgram
-sccp SProgram{..}
-  = SProgram $ map optimise spFuncs

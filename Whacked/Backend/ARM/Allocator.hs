@@ -17,21 +17,21 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.Backend.ARM.ASM
 
-import Debug.Trace
 
-liveVariables :: SFlatFunction -> Map Int (Set SVar, Set SVar)
+
+liveVariables :: SFunction -> Map Int (Set SVar, Set SVar)
 liveVariables func@SFlatFunction{..}
   = fst . last . takeWhile snd . iterate updateAll $ (initial, True)
   where
     -- Build up the control flow graph.
-    cfg = foldl addLink next sffInstrs
+    cfg = foldl addLink next sfInstrs
     addLink mp (i, x) = Map.insertWith (++) i (getTarget x) mp
     next = Map.fromList (zip labels . map (:[]) $ tail labels)
 
     -- Some helper maps for easy lookup.
-    labels = map fst sffInstrs
+    labels = map fst sfInstrs
     initial = foldr (\x -> Map.insert x (Set.empty, Set.empty)) Map.empty labels
-    instrs = Map.fromList sffInstrs
+    instrs = Map.fromList sfInstrs
 
     updateAll (mp, _)
       = foldl update (mp, False) labels
@@ -52,7 +52,7 @@ liveVariables func@SFlatFunction{..}
 
 -- |For each live variable in the program, computes a list of registers where
 -- the variable can be placed. The registers are ordered by preference.
-getPreferredRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMLoc]
+getPreferredRegs :: [[SVar]] -> SFunction -> Map SVar [ARMLoc]
 getPreferredRegs live func@SFlatFunction{..}
   = Map.filterWithKey (\x _ -> x `Set.member` liveSet)
   . Map.map nub
@@ -60,18 +60,18 @@ getPreferredRegs live func@SFlatFunction{..}
   $ instrs
   where
     -- Pairs of live variables & instructions.
-    instrs = zip live . map snd $ sffInstrs
+    instrs = zip live . map snd $ sfInstrs
 
     -- Set of live variables.
     liveSet
       = (Set.fromList . concat $ live)
         `Set.union`
-        Set.fromList sffArgs
+        Set.fromList sfArgs
 
     -- Mapping of arguments.
     args
       = foldr (\(x, y) -> Map.insert x (y : argRegs ++ allRegs)) Map.empty
-      $ zip sffArgs (argInLocation $ length sffArgs)
+      $ zip sfArgs (argInLocation $ length sfArgs)
 
     -- For each live variable, associates the list of all registers as
     -- available.
@@ -117,7 +117,7 @@ getPreferredRegs live func@SFlatFunction{..}
 
 
 -- |Tries to allocate hardware registers for all variables in the program.
-allocRegs :: [[SVar]] -> SFlatFunction -> Map SVar [ARMLoc] -> Map SVar ARMLoc
+allocRegs :: [[SVar]] -> SFunction -> Map SVar [ARMLoc] -> Map SVar ARMLoc
 allocRegs live func@SFlatFunction{..} pref
   = Map.union lowAlloc alloc
   where
@@ -125,10 +125,10 @@ allocRegs live func@SFlatFunction{..} pref
     useCount
       = foldl (\mp x -> Map.insertWith (+) x 1 mp) Map.empty
       . concatMap (getGen . snd)
-      $ sffInstrs
+      $ sfInstrs
 
     -- List of all live variables.
-    liveVars = Set.toList . Set.fromList $ (sffArgs ++ (concat live))
+    liveVars = Set.toList . Set.fromList $ (sfArgs ++ (concat live))
 
     -- For each variable, generates a list of vars which conflict with it.
     conflict
