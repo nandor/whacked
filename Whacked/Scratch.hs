@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 module Whacked.Scratch where
 
 -- |The last intermediary form. Optimizations such as inlining, constant
@@ -184,7 +184,9 @@ instance Show SFunction where
 
 instance Show SBlock where
   show SBlock{..}
-    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
+    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbPhis) ++
+      "\n" ++
+      (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
 
 
 instance Show SPhi where

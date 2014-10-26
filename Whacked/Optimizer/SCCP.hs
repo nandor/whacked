@@ -6,7 +6,7 @@ import           Control.Monad
 import           Data.Char
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.List (nub)
+import           Data.List (nub, (\\))
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Set (Set)
@@ -126,17 +126,42 @@ evalUnOp op (CChar x)
     Ord -> Just $ CInt (ord x)
 
 
+-- |Builds the SSA graph, linking defitions to uses.
+buildSSAGraph :: SFunction -> ([SVar], Map Int [Int])
+buildSSAGraph func@SFunction{..}
+  = (map fst . Map.toList $ defs, Map.mapWithKey (\k v -> nub v \\ [k]) ssa)
+  where
+    -- Find the definition point of all variables.
+    defs = Map.foldlWithKey foldFunc Map.empty sfBlocks
+    foldFunc mp idx SBlock{ sbInstrs, sbPhis }
+      = foldl (getDefs idx)
+        (foldl (\mp x -> Map.insert (spDest x) idx mp) mp sbPhis)
+      $ sbInstrs
+    getDefs i mp instr
+      = foldl (\mp x -> Map.insert x i mp) mp (getKill instr)
+
+    -- Link definitions to all uses.
+    ssa = Map.foldlWithKey linkFunc Map.empty sfBlocks
+    linkFunc mp idx SBlock{ sbInstrs, sbPhis }
+      = foldl (linkDefs idx) mp
+      . concat
+      $ (map spMerge sbPhis) ++ (map getGen sbInstrs)
+    linkDefs i mp var
+      = case Map.lookup var defs of
+          Nothing -> mp
+          Just def -> Map.insertWith (++) def [i] mp
+
+
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = func
+  = traceShow (func, ssa) $ func
   where
     (cfg, cfg') = buildFlowGraph func
-    {-(vars, ssa) = buildSSAGraph sfBody
-    code = Map.fromList sfBody
-    next = Map.fromList $ zip (map fst sfBody) (tail . map fst $ sfBody)
+    (vars, ssa) = buildSSAGraph func
+    (start, _) = Map.findMin sfBlocks
+    {-
 
-    (start, _) = Map.findMin cfg
     (mark, vars') = traverse
       [(start, start)]
       []

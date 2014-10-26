@@ -1,0 +1,18 @@
+begin
+    int a = 0;
+    int b = 0;
+    int c = 0;
+
+    while c < 10 do
+        if a < 5 then
+            a = 4;
+            b = 4;
+        else
+            a = 3;
+            b = 3;
+        fi
+    done
+
+    print a;
+    print b
+end
