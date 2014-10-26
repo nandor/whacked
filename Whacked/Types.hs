@@ -49,21 +49,21 @@ instance Show UnaryOp where
 -- |Comparision operators.
 data CondOp
   = CLT
-  | CLTE
+  | CLE
   | CGT
-  | CGTE
+  | CGE
   | CEQ
   | CNE
   deriving ( Eq, Ord )
 
 
 instance Show CondOp where
-  show CLT  = "<"
-  show CLTE = "<="
-  show CGT  = ">"
-  show CGTE = ">="
-  show CEQ  = "=="
-  show CNE  = "/="
+  show CLT = "<"
+  show CLE = "<="
+  show CGT = ">"
+  show CGE = ">="
+  show CEQ = "=="
+  show CNE = "/="
 
 
 -- |All types present in the WACC language.
@@ -109,12 +109,12 @@ sizeof (Void    ) = 0
 
 -- Negates the comparison operator.
 invertCond :: CondOp -> CondOp
-invertCond CLT  = CGTE
-invertCond CLTE = CGT
-invertCond CGT  = CLTE
-invertCond CGTE = CLT
-invertCond CEQ  = CNE
-invertCond CNE  = CEQ
+invertCond CLT = CGE
+invertCond CLE = CGT
+invertCond CGT = CLE
+invertCond CGE = CLT
+invertCond CEQ = CNE
+invertCond CNE = CEQ
 
 
 -- |Returns the type of the result of a binary operation or Nothing.
@@ -127,14 +127,14 @@ binOpType Mod Int  Int  = Just Int
 binOpType And Bool Bool = Just Bool
 binOpType Or  Bool Bool = Just Bool
 
-binOpType (Cmp CLT ) Int  Int  = Just Bool
-binOpType (Cmp CLT ) Char Char = Just Bool
-binOpType (Cmp CLTE) Int  Int  = Just Bool
-binOpType (Cmp CLTE) Char Char = Just Bool
-binOpType (Cmp CGT ) Int  Int  = Just Bool
-binOpType (Cmp CGT ) Char Char = Just Bool
-binOpType (Cmp CGTE) Int  Int  = Just Bool
-binOpType (Cmp CGTE) Char Char = Just Bool
+binOpType (Cmp CLT) Int  Int  = Just Bool
+binOpType (Cmp CLT) Char Char = Just Bool
+binOpType (Cmp CLE) Int  Int  = Just Bool
+binOpType (Cmp CLE) Char Char = Just Bool
+binOpType (Cmp CGT) Int  Int  = Just Bool
+binOpType (Cmp CGT) Char Char = Just Bool
+binOpType (Cmp CGE) Int  Int  = Just Bool
+binOpType (Cmp CGE) Char Char = Just Bool
 
 binOpType (Cmp CEQ) Int  Int  = Just Bool
 binOpType (Cmp CEQ) Char Char = Just Bool
@@ -172,12 +172,12 @@ unOpType _ _           = Nothing
 compareOp :: (Ord a, Eq a) => CondOp -> a -> a -> Bool
 compareOp op x y
   = (x `compare` y) `elem` case op of
-    CLT  -> [LT]
-    CLTE -> [LT, EQ]
-    CGT  -> [GT]
-    CGTE -> [GT, EQ]
-    CEQ  -> [EQ]
-    CNE  -> [LT, GT]
+    CLT -> [LT]
+    CLE -> [LT, EQ]
+    CGT -> [GT]
+    CGE -> [GT, EQ]
+    CEQ -> [EQ]
+    CNE -> [LT, GT]
 
 
 -- |Checks if two types match.

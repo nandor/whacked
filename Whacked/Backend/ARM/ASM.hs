@@ -72,8 +72,8 @@ instance Show ARMImm where
 data ARMCond
   = ALT
   | AGT
-  | ALTE
-  | AGTE
+  | ALE
+  | AGE
   | AEQ
   | ANE
   | AAL
@@ -81,20 +81,20 @@ data ARMCond
 
 
 toARMCond :: CondOp -> ARMCond
-toARMCond CLT  = ALT
-toARMCond CLTE = ALTE
-toARMCond CGT  = AGT
-toARMCond CGTE = AGTE
-toARMCond CEQ  = AEQ
-toARMCond CNE  = ANE
+toARMCond CLT = ALT
+toARMCond CLE = ALE
+toARMCond CGT = AGT
+toARMCond CGE = AGE
+toARMCond CEQ = AEQ
+toARMCond CNE = ANE
 
 
 instance Show ARMCond where
   show AAL  = ""
   show AGT  = "GT"
   show ALT  = "LT"
-  show AGTE = "GTE"
-  show ALTE = "LTE"
+  show AGE  = "GE"
+  show ALE  = "LE"
   show AEQ  = "EQ"
   show ANE  = "NE"
 
@@ -144,7 +144,7 @@ instance Show ASM where
   show (ARMStr d base off)
     = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMAdr d label)
-    = "\tADR " ++ show d ++ ", " ++ label
+    = "\tLDR " ++ show d ++ ", =" ++ label
 
 
   show (ARMAdd cond d n m)
