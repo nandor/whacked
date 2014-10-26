@@ -1,23 +1,44 @@
 begin
-    int f(int a) is
-        return a + 4
+    string returnString() is
+        return "Hello, world!"
     end
 
-    int c = 0;
-    int q = 0;
-    int a = 1;
-    int b = 2;
-    int d = 3;
+    char[] returnCharArray() is
+        char[] x = ['a', 'b', 'c'];
+        return x
+    end
 
-    while d < 10 do
-        int t = b;
-        b = a;
-        a = t;
+    int[] returnIntArray() is
+        int[] x = [1, 2, 3];
+        return x
+    end
 
-        int q = call f(1);
-        d = d + q
-    done;
+    string stringA = call returnString();
+    string stringB = call returnString();
+    println stringA;
+    println stringB;
 
-    print b;
-    print a
+    if stringB == stringB then
+        println "houston, we have a problem"
+    else
+        println "makes sense"
+    fi;
+
+    char[] cArrA = call returnCharArray();
+    char[] cArrB = call returnCharArray();
+
+    if cArrA == cArrB then
+        println "houston, we really have a problem"
+    else
+        println "cool"
+    fi;
+
+    int[] iArrA = call returnIntArray();
+    int[] iArrB = call returnIntArray();
+
+    if iArrA == iArrB then
+        println "houstong, what the heck?"
+    else
+        println "nice"
+    fi
 end

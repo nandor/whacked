@@ -84,11 +84,7 @@ removePhi func@SFunction{..}
       = op{ siDest = replace siDest }
     replaceInstr op@SInt{..}
       = op{ siDest = replace siDest }
-    replaceInstr op@SBoolArray{..}
-      = op{ siDest = replace siDest }
-    replaceInstr op@SCharArray{..}
-      = op{ siDest = replace siDest }
-    replaceInstr op@SIntArray{..}
+    replaceInstr op@SString{..}
       = op{ siDest = replace siDest }
     replaceInstr op@SNewArray{..}
       = op{ siDest = replace siDest }

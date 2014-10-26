@@ -58,6 +58,9 @@ data IExpr
   | IChar
     { ieChar :: Char
     }
+  | IString
+    { ieString :: String
+    }
   | IArray
     { ieType :: Type
     , ieElems :: [IExpr]
@@ -170,6 +173,8 @@ instance Show IExpr where
     = show ieInt
   show IChar{..}
     = show ieChar
+  show IString{..}
+    = show ieString
   show IArray{..}
     = "[" ++ concat (intersperse "," $ map show ieElems) ++ "]"
   show IPair{..}

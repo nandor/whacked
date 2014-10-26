@@ -138,7 +138,7 @@ genExpr ABinOp{..} = do
   (rt, re) <- genExpr aeRight
   case binOpType aeBinOp lt rt of
     Nothing ->
-      genError aeTag "type error(ABinOp): mismatched types"
+      genError aeTag $ "type error(ABinOp): mismatched types"
     Just t ->
       return (t, IBinOp t aeBinOp le re)
 genExpr AVar{..} = findVar aeName >>= \case
@@ -153,7 +153,7 @@ genExpr ABool{..} =
 genExpr AChar{..} =
   return (Char, IChar aeChar)
 genExpr AString{..} =
-  return (Array Char, IArray (Array Char) (map IChar aeString))
+  return (String, IString aeString)
 genExpr AIndex{..} = do
   (at, aexpr) <- genExpr aeArray
   (it, iexpr) <- genExpr aeIndex
@@ -162,6 +162,8 @@ genExpr AIndex{..} = do
   case at of
     Array at' ->
       return (at', IIndex at' aexpr iexpr)
+    String ->
+      return (Char, IIndex Char aexpr iexpr)
     _ ->
       genError aeTag $ "type error: array expected"
 genExpr ANull{..} =
@@ -294,6 +296,10 @@ genStmt AAssign{..} = do
       case at of
         Array t -> do
           unless (t `match` et) $
+            genError alTag "type error(ALArray): mismatched types"
+          tell [ IAssArray aexpr iexpr eexpr]
+        String -> do
+          unless (Char `match` et) $
             genError alTag "type error(ALArray): mismatched types"
           tell [ IAssArray aexpr iexpr eexpr]
         _ -> do

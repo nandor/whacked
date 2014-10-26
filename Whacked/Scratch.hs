@@ -106,17 +106,9 @@ data SInstr
     { siDest :: SVar
     , siInt  :: Int
     }
-  | SBoolArray
-    { siDest  :: SVar
-    , siBools :: [Bool]
-    }
-  | SCharArray
-    { siDest  :: SVar
-    , siChars :: [Char]
-    }
-  | SIntArray
-    { siDest :: SVar
-    , siInts :: [Int]
+  | SString
+    { siDest   :: SVar
+    , siString :: String
     }
   | SNewArray
     { siDest :: SVar
@@ -126,7 +118,7 @@ data SInstr
     { siArray :: SVar
     , siIndex :: SVar
     , siExpr  :: SVar
-    , siByte  :: Bool
+    , siType  :: Type
     }
   | SReadArray
     { siDest  :: SVar
@@ -237,12 +229,8 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siChar
   show SInt{..}
     = show siDest ++ " <- " ++ show siInt
-  show SBoolArray{..}
-    = show siDest ++ " <- " ++ show siBools
-  show SCharArray{..}
-    = show siDest ++ " <- " ++ show siChars
-  show SIntArray{..}
-    = show siDest ++ " <- " ++ show siInts
+  show SString{..}
+    = show siDest ++ " <- " ++ show siString
   show SNewArray{..}
     = show siDest ++ " <- new[" ++ show siLength ++ "]"
   show SWriteArray{..}
@@ -291,9 +279,7 @@ isAssignment SCall{..}       = True
 isAssignment SBool{..}       = True
 isAssignment SChar{..}       = True
 isAssignment SInt{..}        = True
-isAssignment SBoolArray{..}  = True
-isAssignment SCharArray{..}  = True
-isAssignment SIntArray{..}   = True
+isAssignment SString{..}     = True
 isAssignment SNewArray{..}   = True
 isAssignment SWriteArray{..} = False
 isAssignment SReadArray{..}  = True
@@ -338,9 +324,7 @@ getKill x
     SBool{..}       -> [siDest]
     SChar{..}       -> [siDest]
     SInt{..}        -> [siDest]
-    SBoolArray{..}  -> [siDest]
-    SCharArray{..}  -> [siDest]
-    SIntArray{..}   -> [siDest]
+    SString{..}     -> [siDest]
     SNewArray{..}   -> [siDest]
     SWriteArray{..} -> []
     SReadArray{..}  -> [siDest]
@@ -365,9 +349,7 @@ getGen x
     SBool{..}       -> []
     SChar{..}       -> []
     SInt{..}        -> []
-    SBoolArray{..}  -> []
-    SCharArray{..}  -> []
-    SIntArray{..}   -> []
+    SString{..}     -> []
     SNewArray{..}   -> []
     SWriteArray{..} -> [siArray, siIndex, siExpr]
     SReadArray{..}  -> [siArray, siIndex]

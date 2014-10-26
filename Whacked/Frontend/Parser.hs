@@ -112,7 +112,7 @@ aType
     baseType = asum . map try $
       [ reserved "int"    *> return Int
       , reserved "bool"   *> return Bool
-      , reserved "string" *> return (Array Char)
+      , reserved "string" *> return String
       , reserved "char"   *> return Char
       ]
 

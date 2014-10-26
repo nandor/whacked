@@ -29,7 +29,7 @@ data Scope
   = Scope
     { regs      :: Map SVar ARMLoc
     , toSave    :: [ARMReg]
-    , strings   :: [String]
+    , strings   :: Map String String
     , labelBase :: Int
     , regStack  :: Int
     , argStack  :: Int
@@ -170,12 +170,13 @@ compileInstr SChar{..} = do
   dest <- findReg siDest R12
   tell [ ARMMov AAL dest (ARMI $ ord siChar) ]
   storeReg siDest dest
-compileInstr SCharArray{..} = do
-  traceShow () $ return ()
-compileInstr SBoolArray{..} = do
-  traceShow () $ return ()
-compileInstr SIntArray{..} = do
-  traceShow () $ return ()
+compileInstr SString{..} = do
+  scope@Scope{..} <- get
+  let label = "msg_" ++ show (Map.size strings)
+  put scope{ strings = Map.insert  label siString strings }
+  dest <- findReg siDest R12
+  tell [ ARMAdr dest label]
+  storeReg siDest dest
 compileInstr SBinOp{..} = do
   dest <- findReg siDest R12
   left <- fetchReg siLeft R11
@@ -274,8 +275,6 @@ compileInstr SReturn{..} = do
     tell [ ARMAdd AAL SP SP (ARMI $ varStack * 4) ]
   move R0 arg
   tell [ ARMPOP (Set.toList . Set.fromList $ PC : toSave) ]
-compileInstr x = do
-  traceShow x undefined
 
 
 -- |Generates code for a function.
@@ -303,7 +302,7 @@ compileFunc func@SFlatFunction{..} = do
     }
 
   -- Emit the function header.
-  traceShow regAlloc $ tell [ ARMFunc sffName ]
+  tell [ ARMFunc sffName ]
 
   -- Push on the stack all modified registers.
   save <- toSave <$> get
@@ -338,15 +337,27 @@ compileProg SFlatProgram{..} = do
 
 compile :: SFlatProgram -> [ASM]
 compile program
-  = execWriter . evalStateT (run $ compileProg program) $ scope
+  = [ARMSection ".data"] ++
+    dataSeg ++
+    [ARMSection ".text"] ++
+    codeSeg
   where
+    ((_, Scope{..}), codeSeg)
+      = runWriter . runStateT (run $ compileProg program) $ scope
+
+    dataSeg
+      = map snd
+      . Map.toList
+      . Map.mapWithKey (\x y -> ARMString x y)
+      $ strings
+
     scope
       = Scope
         { regs      = Map.empty
         , toSave    = []
-        , strings   = []
         , labelBase = 0
         , regStack  = 0
         , argStack  = 0
         , varStack  = 0
+        , strings   = Map.empty
         }

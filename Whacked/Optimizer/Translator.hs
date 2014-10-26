@@ -321,30 +321,22 @@ genExpr IChar{..} dest = do
 genExpr IInt{..} dest = do
   emit $ SInt dest ieInt
   return (Int, dest)
+genExpr IString{..} dest = do
+  emit $ SString dest ieString
+  return (String, dest)
+genExpr IArray{ ieElems = [], ..} dest = do
+  emit $ SNewArray dest 0
+  return (Empty, dest)
 genExpr IArray{..} dest = do
-  case ieElems of
-    [] -> do
-      emit $ SNewArray dest 0
-      return (Empty, dest)
-    xs | all (isConst Char) xs -> do
-      emit $ SCharArray dest . map (\(IChar x) -> x) $ xs
-      return (Array Char, dest)
-    xs | all (isConst Int) xs -> do
-      emit $ SIntArray dest . map (\(IInt x) -> x) $ xs
-      return (Array Int, dest)
-    xs | all (isConst Bool) xs -> do
-      emit $ SBoolArray dest . map (\(IBool x) -> x) $ xs
-      return (Array Int, dest)
-    _ -> do
-      emit $ SNewArray dest (length ieElems * (sizeof ieType))
-      elems <- forM ieElems $ \elem -> do
-        expr <- genTemp
-        genExpr elem expr
-      forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
-        idx <- genTemp
-        emit $ SInt idx i
-        emit $ SWriteArray dest idx expr (t `elem` [Char, Bool])
-      return (Array ieType, dest)
+  emit $ SNewArray dest (length ieElems * (sizeof ieType))
+  elems <- forM ieElems $ \elem -> do
+    expr <- genTemp
+    genExpr elem expr
+  forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
+    idx <- genTemp
+    emit $ SInt idx i
+    emit $ SWriteArray dest idx expr t
+  return (Array ieType, dest)
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
   (_, idx) <- genTemp >>= genExpr ieIndex
@@ -366,11 +358,7 @@ genExpr IElem{..} dest = do
     Pair lt rt | ieElem == Snd -> do
       emit $ SReadPair Snd dest pexpr
       return (rt, dest)
-    Null -> do
-      emit $ SCharArray dest "dereferencing null pointer"
-      emit $ SCall [] "__throw" [dest]
-      return (ieType, dest)
-    Poly -> do
+    _ -> do
       emit $ SReadPair ieElem dest pexpr
       return (ieType, dest)
 genExpr ICall{..} dest = do
@@ -441,7 +429,7 @@ genInstr IAssArray{..} = do
   (_, array) <- genTemp >>= genExpr iiArray
   (_, idx)   <- genTemp >>= genExpr iiIndex
   (t, expr)  <- genTemp >>= genExpr iiExpr
-  emit $ SWriteArray array idx expr (t `elem` [Char, Bool])
+  emit $ SWriteArray array idx expr t
 genInstr IAssPair{..} = do
   (_, pexpr) <- genTemp >>= genExpr iiPair
   (t, expr)  <- genTemp >>= genExpr iiExpr

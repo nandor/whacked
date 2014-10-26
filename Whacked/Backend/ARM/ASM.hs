@@ -103,33 +103,25 @@ data ASM
   = ARMLabel Int
   | ARMFunc String
   | ARMSection String
-  | ARMWord Int
-  | ARMAscii String
-
-
+  | ARMString String String
   | ARMLoadConst ARMReg Int
   | ARMLdr   ARMReg ARMReg ARMImm
-  | ARMStr  ARMReg ARMReg ARMImm
-
-  | ARMAdd ARMCond ARMReg ARMReg ARMImm
-  | ARMSub ARMCond ARMReg ARMReg ARMImm
-  | ARMOrr ARMCond ARMReg ARMReg ARMImm
-  | ARMAnd ARMCond ARMReg ARMReg ARMImm
-  | ARMCmp ARMCond ARMReg ARMImm
-  | ARMTst ARMCond ARMReg ARMImm
-  | ARMMov ARMCond ARMReg ARMImm
-  | ARMMvn ARMCond ARMReg ARMImm
-  | ARMNeg ARMCond ARMReg ARMImm
-
+  | ARMStr   ARMReg ARMReg ARMImm
+  | ARMAdr   ARMReg String
+  | ARMAdd   ARMCond ARMReg ARMReg ARMImm
+  | ARMSub   ARMCond ARMReg ARMReg ARMImm
+  | ARMOrr   ARMCond ARMReg ARMReg ARMImm
+  | ARMAnd   ARMCond ARMReg ARMReg ARMImm
+  | ARMCmp   ARMCond ARMReg ARMImm
+  | ARMTst   ARMCond ARMReg ARMImm
+  | ARMMov   ARMCond ARMReg ARMImm
+  | ARMMvn   ARMCond ARMReg ARMImm
+  | ARMNeg   ARMCond ARMReg ARMImm
   | ARMSmull ARMCond ARMReg ARMReg ARMReg ARMReg
-
-  | ARMADR ARMReg String
+  | ARMB     ARMCond Int
   | ARMPUSH [ARMReg]
   | ARMPOP  [ARMReg]
-
-  | ARMSTR ARMReg ARMReg ARMReg
   | ARMBL String
-  | ARMB ARMCond Int
   deriving (Eq, Ord)
 
 
@@ -140,10 +132,10 @@ instance Show ASM where
     = "L" ++ show label ++ ":"
   show (ARMFunc label)
     = ".global " ++ label ++ "\n" ++ label ++ ":"
-  show (ARMWord x)
-    = "\t.word " ++ show x
-  show (ARMAscii x)
-    = "\t.ascii " ++ show x
+  show (ARMString label string)
+    = ".long " ++ show (length string) ++ "\n" ++
+      label ++ ":\n" ++
+      ".ascii " ++ show string
 
   show (ARMLoadConst d const)
     = "\tLDR " ++ show d ++ ", =" ++ show const
@@ -151,6 +143,8 @@ instance Show ASM where
     = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMStr d base off)
     = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+  show (ARMAdr d label)
+    = "\tADR " ++ show d ++ ", " ++ label
 
 
   show (ARMAdd cond d n m)
@@ -182,8 +176,6 @@ instance Show ASM where
     = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMPOP rs)
     = "\tPOP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
-  show (ARMSTR d n m)
-    = "\tST " ++ show d ++ ", " ++ show n ++ ", " ++ show m
   show (ARMB cond xs)
     = "\tB" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)

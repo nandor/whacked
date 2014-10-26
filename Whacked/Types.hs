@@ -71,6 +71,7 @@ data Type
   = Int
   | Bool
   | Char
+  | String
   | Array Type
   | Pair Type Type
   | Poly
@@ -102,6 +103,7 @@ sizeof (Pair _ _) = 8
 sizeof (Poly    ) = 8
 sizeof (Empty   ) = 4
 sizeof (Null    ) = 4
+sizeof (String  ) = 4
 sizeof (Void    ) = 0
 
 
@@ -145,10 +147,12 @@ binOpType (Cmp CEQ) (Array _ ) (Array _ ) = Just Bool
 binOpType (Cmp CEQ) (Pair _ _) (Pair _ _) = Just Bool
 binOpType (Cmp CEQ) (Pair _ _) (Null    ) = Just Bool
 binOpType (Cmp CEQ) (Null    ) (Pair _ _) = Just Bool
+binOpType (Cmp CEQ) (String  ) (String  ) = Just Bool
 binOpType (Cmp CNE) (Array _ ) (Array _ ) = Just Bool
 binOpType (Cmp CNE) (Pair _ _) (Pair _ _) = Just Bool
 binOpType (Cmp CNE) (Pair _ _) (Null    ) = Just Bool
 binOpType (Cmp CNE) (Null    ) (Pair _ _) = Just Bool
+binOpType (Cmp CNE) (String  ) (String  ) = Just Bool
 
 binOpType _ _ _
   = Nothing
@@ -178,19 +182,21 @@ compareOp op x y
 
 -- |Checks if two types match.
 match :: Type -> Type -> Bool
-match (Null    ) (Poly    ) = True
-match (Poly    ) (Null    ) = True
-match (Null    ) (Pair _ _) = True
-match (Pair _ _) (Null    ) = True
-match (Null    ) (Array _ ) = True
-match (Array _ ) (Null    ) = True
-match (Poly    ) (Pair _ _) = True
-match (Pair _ _) (Poly    ) = True
-match (Empty   ) (Array _ ) = True
-match (Array _ ) (Empty   ) = True
-match (Array x ) (Array y ) = match x y
-match (Pair x y) (Pair z v) = match x z && match y v
-match (x       ) (y       ) = x == y
+match (Null      ) (Poly      ) = True
+match (Poly      ) (Null      ) = True
+match (Null      ) (Pair _ _  ) = True
+match (Pair _ _  ) (Null      ) = True
+match (Null      ) (Array _   ) = True
+match (Array _   ) (Null      ) = True
+match (Poly      ) (Pair _ _  ) = True
+match (Pair _ _  ) (Poly      ) = True
+match (Empty     ) (Array _   ) = True
+match (Array _   ) (Empty     ) = True
+match (Array x   ) (Array y   ) = match x y
+match (Pair x y  ) (Pair z v  ) = match x z && match y v
+match (Array Char) (String    ) = True
+match (String    ) (Array Char) = True
+match (x         ) (y         ) = x == y
 
 
 -- |Checks if a RValue can be read.
@@ -199,7 +205,6 @@ isReadable Int          = True
 isReadable Char         = True
 isReadable (Array Char) = True
 isReadable _            = False
-
 
 
 -- |Checks if the variable can be encoded in an ARM instruction.

@@ -5,6 +5,7 @@ module Main where
 
 import           Control.Applicative
 import           Control.Monad
+import           Data.List
 import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
@@ -115,5 +116,7 @@ main
               let asm = ARM.compile scratch
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm
+
+              writeFile optOutput (concat . intersperse "\n" . map show $ asm)
 
     (_, _, errs) -> usage
