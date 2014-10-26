@@ -22,7 +22,7 @@ import           Whacked.Backend.ARM.ASM
 import           Whacked.Backend.ARM.Allocator
 import           Whacked.Scratch
 import           Whacked.Types
-
+import Debug.Trace
 
 
 data Scope
@@ -77,6 +77,11 @@ moveLocToVar (ARMLocArgIn stk) var
 -- |Copies a variable to into one of the registers that is going to be passed
 -- as an argument to another function.
 moveVarToLoc :: SVar -> ARMLoc -> Compiler ()
+moveVarToLoc (SImm x) (ARMLocReg reg) = do
+  tell [ ARMMov AAL reg (ARMI x) ]
+moveVarToLoc (SImm x) (ARMLocArgOut stk) = do
+  tell [ ARMMov AAL R12 (ARMI x) ]
+  tell [ ARMStr R12 SP $ ARMI ((stk + 1) * 4) ]
 moveVarToLoc var (ARMLocReg reg)
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->

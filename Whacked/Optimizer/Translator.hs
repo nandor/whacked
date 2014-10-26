@@ -328,10 +328,8 @@ genExpr IArray{ ieElems = [], ..} dest = do
   return (Empty, dest)
 genExpr IArray{..} dest = do
   emit $ SNewArray dest (length ieElems * (sizeof ieType))
-  elems <- forM ieElems $ \elem -> do
-    expr <- genTemp
-    genExpr elem expr
-  forM_ (zip [0..] elems) $ \(i, (t, expr)) -> do
+  forM_ (zip [0..] ieElems) $ \(i, elem) -> do
+    (t, expr) <- genTemp >>= genExpr elem
     idx <- genTemp
     emit $ SInt idx i
     emit $ SWriteArray dest idx expr t
@@ -415,6 +413,7 @@ genInstr IPrint{..} = do
     Int        -> SCall [] "__print_int"    [expr]
     Char       -> SCall [] "__print_char"   [expr]
     Bool       -> SCall [] "__print_bool"   [expr]
+    String     -> SCall [] "__print_string" [expr]
     Array Char -> SCall [] "__print_string" [expr]
     _          -> SCall [] "__print_ref"    [expr]
 genInstr IPrintln{..} = do
