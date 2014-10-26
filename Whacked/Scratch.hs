@@ -124,6 +124,7 @@ data SInstr
     { siDest  :: SVar
     , siArray :: SVar
     , siIndex :: SVar
+    , siType  :: Type
     }
   | SNewPair
     { siDest :: SVar

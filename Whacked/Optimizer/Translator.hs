@@ -340,7 +340,7 @@ genExpr IArray{..} dest = do
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
   (_, idx) <- genTemp >>= genExpr ieIndex
-  emit $ SReadArray dest arr idx
+  emit $ SReadArray dest arr idx t
   return (t, dest)
 genExpr IPair{..} dest = do
   (lt, lexpr) <- genTemp >>= genExpr ieFst

@@ -237,14 +237,34 @@ compileInstr SMov{ siArg = x@(SVar _), ..} = do
 compileInstr SReadArray{..} = do
   dest <- findReg siDest R12
   array <- fetchReg siArray R12
-  index <- fetchImm siIndex R11
-  tell [ ARMLdr dest array index ]
+  case siType of
+    Char -> do
+      index <- fetchImm siIndex R11
+      tell [ ARMLdrb dest array index ]
+    Bool -> do
+      index <- fetchImm siIndex R11
+      tell [ ARMLdrb dest array index ]
+    _ -> fetchImm siIndex R11 >>= \case
+      ARMI idx ->
+        tell [ ARMLdr dest array (ARMI (idx * 4)) ]
+      ARMR reg -> do
+        tell [ ARMLdrLsl dest array reg 2 ]
   storeReg siDest dest
 compileInstr SWriteArray{..} = do
   array <- fetchReg siArray R12
   expr <- fetchReg siExpr R11
-  index <- fetchImm siIndex R11
-  tell [ ARMStr expr array index ]
+  case siType of
+    Char -> do
+      index <- fetchImm siIndex R11
+      tell [ ARMStrb expr array index]
+    Bool -> do
+      index <- fetchImm siIndex R11
+      tell [ ARMStrb expr array index]
+    _ -> fetchImm siIndex R11 >>= \case
+      ARMI idx ->
+        tell [ ARMStr expr array (ARMI (idx * 4)) ]
+      ARMR reg ->
+        tell [ ARMStrLsl expr array reg 2 ]
 compileInstr SWritePair{..} = do
   pair <- fetchReg siPair R12
   elem <- fetchReg siExpr R11

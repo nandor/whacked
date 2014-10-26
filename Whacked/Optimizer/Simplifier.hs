@@ -68,7 +68,7 @@ simplify func@SFunction{..}
           x -> op
     replace op@SUnOp{..}
       = case siUnOp of
-          Len -> SReadArray siDest siArg (SImm (-1))
+          Len -> SReadArray siDest siArg (SImm (-1)) Int
           x -> op
     replace SNewArray{..}
       = SCall [siDest] "__alloc" [SImm siLength]

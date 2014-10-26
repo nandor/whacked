@@ -105,20 +105,24 @@ data ASM
   | ARMSection String
   | ARMString String String
   | ARMLoadConst ARMReg Int
-  | ARMLdr   ARMReg ARMReg ARMImm
-  | ARMStr   ARMReg ARMReg ARMImm
-  | ARMAdr   ARMReg String
-  | ARMAdd   ARMCond ARMReg ARMReg ARMImm
-  | ARMSub   ARMCond ARMReg ARMReg ARMImm
-  | ARMOrr   ARMCond ARMReg ARMReg ARMImm
-  | ARMAnd   ARMCond ARMReg ARMReg ARMImm
-  | ARMCmp   ARMCond ARMReg ARMImm
-  | ARMTst   ARMCond ARMReg ARMImm
-  | ARMMov   ARMCond ARMReg ARMImm
-  | ARMMvn   ARMCond ARMReg ARMImm
-  | ARMNeg   ARMCond ARMReg ARMImm
-  | ARMSmull ARMCond ARMReg ARMReg ARMReg ARMReg
-  | ARMB     ARMCond Int
+  | ARMLdr    ARMReg ARMReg ARMImm
+  | ARMStr    ARMReg ARMReg ARMImm
+  | ARMLdrb   ARMReg ARMReg ARMImm
+  | ARMStrb   ARMReg ARMReg ARMImm
+  | ARMLdrLsl ARMReg ARMReg ARMReg Int
+  | ARMStrLsl ARMReg ARMReg ARMReg Int
+  | ARMAdr    ARMReg String
+  | ARMAdd    ARMCond ARMReg ARMReg ARMImm
+  | ARMSub    ARMCond ARMReg ARMReg ARMImm
+  | ARMOrr    ARMCond ARMReg ARMReg ARMImm
+  | ARMAnd    ARMCond ARMReg ARMReg ARMImm
+  | ARMCmp    ARMCond ARMReg ARMImm
+  | ARMTst    ARMCond ARMReg ARMImm
+  | ARMMov    ARMCond ARMReg ARMImm
+  | ARMMvn    ARMCond ARMReg ARMImm
+  | ARMNeg    ARMCond ARMReg ARMImm
+  | ARMSmull  ARMCond ARMReg ARMReg ARMReg ARMReg
+  | ARMB      ARMCond Int
   | ARMPUSH [ARMReg]
   | ARMPOP  [ARMReg]
   | ARMBL String
@@ -143,8 +147,18 @@ instance Show ASM where
     = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMStr d base off)
     = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+  show (ARMLdrb d base off)
+    = "\tLDRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+  show (ARMStrb d base off)
+    = "\tSTRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMAdr d label)
     = "\tLDR " ++ show d ++ ", =" ++ label
+  show (ARMLdrLsl d base reg lsl)
+    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++
+      show reg ++ ", lsl #" ++ show lsl ++ "]"
+  show (ARMStrLsl d base reg lsl)
+    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++
+      show reg ++ ", lsl #" ++ show lsl ++ "]"
 
 
   show (ARMAdd cond d n m)
