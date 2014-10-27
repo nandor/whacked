@@ -1,13 +1,9 @@
 name:                whacked
 version:             0.0.0.1
 synopsis:            Whacked Compiler
-license:             BSD3
-license-file:        LICENSE
-author:              Whacked Team
-copyright:           (C) 2014 The Whacked Team. All rights reserved.
+author:              Nandor Licker
 category:            Language
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 executable whacked
@@ -22,4 +18,3 @@ executable whacked
                        mtl >= 2.2,
                        filepath >= 1.3
   default-language:    Haskell2010
-  ghc-options: -auto-all -caf-all
