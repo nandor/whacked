@@ -64,25 +64,27 @@ moveConstants func@SFunction{..}
 -- wrapper functions.
 simplify :: SFunction -> SFunction
 simplify func@SFunction{..}
-  = mapI replace func
+  = concatMapI replace func
   where
     replace op@SBinOp{..}
       = case siBinOp of
-          Div -> SCall [siDest] "__aeabi_idiv" [siLeft, siRight]
-          Mod -> SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]
-          x -> op
+          Div -> [SCall [siDest] "__aeabi_idiv" [siLeft, siRight]]
+          Mod -> [SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]]
+          x -> [op]
     replace op@SUnOp{..}
       = case siUnOp of
-          Len -> SReadArray siDest siArg (SImm (-1)) Int
-          x -> op
+          Len -> [SReadArray siDest siArg (SImm (-1)) Int]
+          x -> [op]
     replace SNewArray{..}
-      = SCall [siDest] "__alloc" [SImm (siLength * sizeof siType)]
+      = [ SCall [siDest] "__alloc" [SImm (siLength * sizeof siType)]
+        , SWriteArray siDest (SImm (-1)) (SImm siLength) Int
+        ]
     replace SNewPair{..}
-      = SCall [siDest] "__alloc" [SImm 8]
+      = [SCall [siDest] "__alloc" [SImm 8]]
     replace SFree{..}
-      = SCall [] "__delete" [siDest]
+      = [SCall [] "__delete" [siDest]]
     replace x
-      = x
+      = [x]
 
 
 -- | Flattens the program, removing blocks.

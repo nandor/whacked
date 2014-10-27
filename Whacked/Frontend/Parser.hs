@@ -201,9 +201,9 @@ aExpr
           , Infix (tagBin "-" Sub) AssocLeft
           ]
         , [ Infix (tagBin ">"  $ Cmp CGT ) AssocNone
-          , Infix (tagBin ">=" $ Cmp CGT) AssocNone
+          , Infix (tagBin ">=" $ Cmp CGE) AssocNone
           , Infix (tagBin "<"  $ Cmp CLT ) AssocNone
-          , Infix (tagBin "<=" $ Cmp CLT) AssocNone
+          , Infix (tagBin "<=" $ Cmp CLE) AssocNone
           ]
         , [ Infix (tagBin "==" $ Cmp CEQ) AssocNone
           , Infix (tagBin "!=" $ Cmp CNE) AssocNone

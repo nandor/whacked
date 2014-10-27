@@ -291,11 +291,11 @@ mapF f prog@SProgram{..}
 
 
 -- |Maps a function over all instructions.
-mapI :: (SInstr -> SInstr) -> SFunction -> SFunction
-mapI f func@SFunction{..}
+concatMapI :: (SInstr -> [SInstr]) -> SFunction -> SFunction
+concatMapI f func@SFunction{..}
   = func
     { sfBlocks
-        = Map.map (\b@SBlock{..} -> b{ sbInstrs = map f sbInstrs }) sfBlocks
+        = Map.map (\b -> b{ sbInstrs = concatMap f (sbInstrs b)}) sfBlocks
     }
 
 
