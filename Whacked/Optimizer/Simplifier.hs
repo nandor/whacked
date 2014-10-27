@@ -112,8 +112,47 @@ flatten func@SFunction{..}
 -- |Removes unreachable instructions.
 pruneFlowGraph :: SFunction -> SFunction
 pruneFlowGraph func@SFlatFunction{..}
-  = func
+  = func{ sfInstrs = prune sfInstrs }
+  where
+    nextNode = Map.fromList . zip (map fst sfInstrs) . tail . map fst $ sfInstrs
+    next i = fromMaybe [] $ (:[]) <$> Map.lookup i nextNode
 
+    cfg = foldr (\(i, x) -> Map.insert i (getNext i x)) Map.empty sfInstrs
+    getNext i SUnJump{..}
+      = siWhere : next i
+    getNext i SBinJump{..}
+      = siWhere : next i
+    getNext i SJump{..}
+      = [siWhere]
+    getNext i SReturn{..}
+      = []
+    getNext i SCall{ siFunc = "exit" }
+      = []
+    getNext i _
+      = next i
+
+    cfg' = Map.foldlWithKey (\mp x next -> reverse x next mp) Map.empty cfg
+    reverse node next mp
+      = foldr (\x -> Map.insertWith (++) x [node]) mp next
+
+    fromStart = dfs cfg [0] Set.empty
+    fromEnd = dfs cfg' [i | (i, x) <- sfInstrs, isTerminal x] Set.empty
+    reachable = Set.union fromStart fromEnd
+
+    prune ((i, x):xs)
+      | not (i `Set.member` reachable) = prune xs
+      | otherwise = case prune xs of
+          [] -> (i, x):[]
+          xs'@((i', _):_) -> case x of
+            SJump{..}    | targetValid i' siWhere -> (i, x) : xs'
+            SBinJump{..} | targetValid i' siWhere -> (i, x) : xs'
+            SUnJump{..}  | targetValid i' siWhere -> (i, x) : xs'
+            _ -> (i, x) : xs'
+      where
+        targetValid i' siWhere
+          = i < siWhere && i' < siWhere
+    prune []
+      = []
 
 -- |Removes functions that are not called.
 pruneCallGraph :: SProgram -> SProgram
@@ -128,11 +167,18 @@ pruneCallGraph prog@SProgram{..}
     calls _
       = []
 
-    called = dfs ["main"] Set.empty
-    dfs (x:xs) set
+    called = dfs graph ["main"] Set.empty
+
+
+-- |Depth first traversal over a graph.
+dfs :: (Ord a, Eq a) => Map a [a] -> [a] -> Set a -> Set a
+dfs graph xs set
+  = dfs' xs set
+  where
+    dfs' (x:xs) set
       | x `Set.member` set
-        = dfs xs set
+        = dfs' xs set
       | otherwise
-        = dfs ((fromMaybe [] $ Map.lookup x graph) ++ xs) (Set.insert x set)
-    dfs [] set
+        = dfs' ((fromMaybe [] $ Map.lookup x graph) ++ xs) (Set.insert x set)
+    dfs' [] set
       = set

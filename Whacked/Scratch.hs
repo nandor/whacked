@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns, LambdaCase #-}
 module Whacked.Scratch where
 
 -- |The last intermediary form. Optimizations such as inlining, constant
@@ -34,7 +34,7 @@ coreFunctions
     , SCoreFunction [] "__print_char"   SPrintChar
     , SCoreFunction [] "__print_bool"   SPrintBool
     , SCoreFunction [] "__print_string" SPrintString
-    , SCoreFunction [] "__print_string" SPrintRef
+    , SCoreFunction [] "__print_ref"    SPrintRef
     , SCoreFunction [] "__alloc"        SAlloc
     , SCoreFunction [] "__delete"       SDelete
     ]
@@ -301,25 +301,33 @@ mapI f func@SFunction{..}
 
 -- |Returns true if the instruction makes an assignment to a variable.
 isAssignment :: SInstr -> Bool
-isAssignment SBinOp{..}      = True
-isAssignment SUnOp{..}       = True
-isAssignment SCall{..}       = True
-isAssignment SBool{..}       = True
-isAssignment SChar{..}       = True
-isAssignment SInt{..}        = True
-isAssignment SString{..}     = True
-isAssignment SNewArray{..}   = True
-isAssignment SWriteArray{..} = False
-isAssignment SReadArray{..}  = True
-isAssignment SNewPair{..}    = True
-isAssignment SWritePair{..}  = False
-isAssignment SReadPair{..}   = True
-isAssignment SFree{..}       = False
-isAssignment SReturn{..}     = False
-isAssignment SBinJump{..}    = False
-isAssignment SUnJump{..}     = False
-isAssignment SJump{..}       = False
+isAssignment = \case
+  SBinOp{..}      -> True
+  SUnOp{..}       -> True
+  SCall{..}       -> True
+  SBool{..}       -> True
+  SChar{..}       -> True
+  SInt{..}        -> True
+  SString{..}     -> True
+  SNewArray{..}   -> True
+  SWriteArray{..} -> False
+  SReadArray{..}  -> True
+  SNewPair{..}    -> True
+  SWritePair{..}  -> False
+  SReadPair{..}   -> True
+  SFree{..}       -> False
+  SReturn{..}     -> False
+  SBinJump{..}    -> False
+  SUnJump{..}     -> False
+  SJump{..}       -> False
 
+
+-- |Returns true if an expression is a terminal in the call graph.
+isTerminal :: SInstr -> Bool
+isTerminal = \case
+  SCall{..}       -> True
+  SReturn{..}     -> True
+  _               -> False
 
 -- |Returns true if a SVar is not an immediate.
 isVar :: SVar -> Bool
