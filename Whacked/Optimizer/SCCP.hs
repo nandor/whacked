@@ -164,12 +164,58 @@ buildSSAGraph func@SFunction{..}
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = traceShow (func, vars', executed) $ func
+  = func{ sfBlocks = Map.fromList . prune . Map.toList $ sfBlocks }
   where
     (cfgGraph, cfgGraph') = buildFlowGraph func
     (blockDefs, ssaGraph) = buildSSAGraph func
     (start, _) = Map.findMin sfBlocks
+    varsInitial = Map.fromList $
+      (zip (vars \\ sfArgs) . repeat $ Top) ++
+      (zip sfArgs . repeat $ Bot)
     vars = concat . map snd . Map.toList $ blockDefs
+
+    -- Removes unrechable blocks & replaces constants.
+    prune []
+      = []
+    prune ((idx, block@SBlock{..}):xs)
+      | not $ idx `Set.member` marked = prune xs
+      | otherwise =
+          ( idx
+          , block{ sbInstrs = [x | Just x <- map simplifyInstr sbInstrs] }
+          ) : xs'
+      where
+        xs' = prune xs
+
+        toNext
+          = case xs' of
+          []              -> Nothing
+          ((idx', _) : _) -> Just $ SJump idx'
+
+        simplifyInstr op@SBinJump{..} = do
+          left <- lookupValue vars' siLeft
+          right <- lookupValue vars' siRight
+          case compareValue siCond left right of
+            Just True  -> Just $ SJump siWhere
+            Just False -> toNext
+            Nothing    -> Just op
+        simplifyInstr op@SUnJump{..} = do
+          arg <- lookupValue vars' siArg
+          case arg of
+            CBool x | x == siWhen -> Just $ SJump siWhere
+            CBool x | x /= siWhen -> toNext
+            _                     -> Just op
+        simplifyInstr op@SBinOp{..} = do
+          left <- lookupValue vars' siLeft
+          right <- lookupValue vars' siRight
+          case evalBinOp siBinOp left right of
+            CInt x  -> Just $ SInt siDest x
+            CBool x -> Just $ SBool siDest x
+            CChar x -> Just $ SChar siDest x
+            _       -> Just op
+        simplifyInstr x
+          = Just x
+
+
 
     nextBlocks
       = let indices = map fst . Map.toList $ blockDefs
@@ -181,11 +227,8 @@ sccp func@SFunction{..}
     ssaNext end
       = fromMaybe [] $ map (end,) <$> Map.lookup end ssaGraph
 
-    (executed, vars') = sccp'
-      [(start, start)]                         -- Edge entering the start node.
-      []                                       -- No SSA edges.
-      Set.empty                                -- All edges unexecuted.
-      (Map.fromList . zip vars . repeat $ Top) -- All vars set to TOP.
+    (executed, vars') = sccp' [(start, start)] [] Set.empty varsInitial
+    marked = Set.fromList . map snd . Set.toList $ executed
 
 
     -- Sparse conditional propagation algorithm. Maintains two workflows:
