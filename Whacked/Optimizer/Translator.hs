@@ -308,7 +308,7 @@ genExpr IBinOp{..} dest = do
 genExpr IUnOp{..} dest = do
   (t, expr) <- genTemp >>= genExpr ieArg
   emit $ SUnOp t dest ieUnOp expr
-  return (t, dest)
+  return (fromJust $ unOpType ieUnOp t, dest)
 genExpr IVar{..} dest = do
   Scope{ vars } <- get
   return . fromJust $ Map.lookup (ieName, ieScope) vars
