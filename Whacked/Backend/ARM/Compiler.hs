@@ -348,6 +348,8 @@ compileFunc func@SFlatFunction{..} = do
       [x] | not (isCall instr) && not (x `elem` out) -> return ()
       _ -> compileInstr instr
 
+  tell [ ARMLtorg ]
+
   -- Update the label counter.
   get >>= \scope@Scope{ labelBase } -> do
     put scope{ labelBase = labelBase + length sfInstrs}
@@ -358,6 +360,7 @@ compileProg SProgram{..} = do
   forM_ spFuncs $ \case
     func@SFlatFunction{..} -> compileFunc func
     core@SCoreFunction{..} -> tell [ARMCore sfCore]
+
 
 compile :: SProgram -> [ASM]
 compile program

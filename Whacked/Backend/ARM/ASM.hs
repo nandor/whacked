@@ -106,6 +106,7 @@ data ASM
   = ARMLabel Int
   | ARMFunc String
   | ARMCore SCore
+  | ARMLtorg
   | ARMSection String
   | ARMString String String
   | ARMLoadConst ARMReg Int
@@ -145,6 +146,8 @@ instance Show ASM where
       label ++ ":\n" ++
       ".ascii " ++ show string ++ "\n" ++
       ".byte 0"
+  show ARMLtorg
+    = ".ltorg"
 
   show (ARMLoadConst d const)
     = "    LDR " ++ show d ++ ", =" ++ show const
