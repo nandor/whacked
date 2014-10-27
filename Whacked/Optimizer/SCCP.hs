@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 import           Data.List (nub, (\\))
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Word
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Whacked.Scratch
@@ -16,7 +17,19 @@ import           Whacked.Types
 import           Whacked.FlowGraph
 
 
-import Debug.Trace
+-- |Min bound for the integer type.
+minInt :: Int
+minInt = fromIntegral (minBound :: Word32)
+
+-- |Max bound for the integer type.
+maxInt :: Int
+maxInt = fromIntegral (maxBound :: Word32)
+
+
+-- |Checks if a number fits in range.
+overflow :: Int -> Bool
+overflow x
+  = x < minInt || maxInt < x
 
 
 -- |Values used in the lattice for sparse conditional constant propagation.
@@ -90,14 +103,17 @@ evalBinOp _ y Top
   = y
 evalBinOp op (CInt x) (CInt y)
   = case op of
-    Add          -> CInt (x + y)
-    Sub          -> CInt (x - y)
-    Mul          -> CInt (x * y)
-    Div | y /= 0 -> CInt (x `div` y)
-    Div          -> Bot
-    Mod | y /= 0 -> CInt (x `mod` y)
-    Mod          -> Bot
-    Cmp cmp      -> CBool $ compareOp cmp x y
+    Add | not (overflow (x + y)) -> CInt (x + y)
+    Add                          -> Bot
+    Sub | not (overflow (x - y)) -> CInt (x - y)
+    Sub                          -> Bot
+    Mul | not (overflow (x * y)) -> CInt (x * y)
+    Mul                          -> Bot
+    Div | y /= 0                 -> CInt (x `div` y)
+    Div                          -> Bot
+    Mod | y /= 0                 -> CInt (x `mod` y)
+    Mod                          -> Bot
+    Cmp cmp                      -> CBool $ compareOp cmp x y
 evalBinOp op (CBool x) (CBool y)
   = case op of
     Or      -> CBool (x || y)
@@ -214,8 +230,6 @@ sccp func@SFunction{..}
             _       -> Just op
         simplifyInstr x
           = Just x
-
-
 
     nextBlocks
       = let indices = map fst . Map.toList $ blockDefs
