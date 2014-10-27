@@ -16,5 +16,6 @@ executable whacked
                        directory >= 1.2,
                        transformers >= 0.3,
                        mtl >= 2.2,
-                       filepath >= 1.3
+                       filepath >= 1.3,
+                       heredoc >= 0.2
   default-language:    Haskell2010

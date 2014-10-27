@@ -65,7 +65,7 @@ simplify func@SFunction{..}
     replace op@SBinOp{..}
       = case siBinOp of
           Div -> SCall [siDest] "__aeabi_idiv" [siLeft, siRight]
-          Mod -> SCall [SVar (-1), siDest] "__aeabi_idivmode" [siLeft, siRight]
+          Mod -> SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]
           x -> op
     replace op@SUnOp{..}
       = case siUnOp of
@@ -76,7 +76,7 @@ simplify func@SFunction{..}
     replace SNewPair{..}
       = SCall [siDest] "__alloc" [SImm 8]
     replace SFree{..}
-      = SCall [] "__free" [siDest]
+      = SCall [] "__delete" [siDest]
     replace x
       = x
 

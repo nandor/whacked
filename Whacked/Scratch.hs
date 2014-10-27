@@ -15,12 +15,28 @@ import           Whacked.Types
 -- |List of builtin functions.
 data SCore
   = SReadInt
+  | SReadChar
+  | SPrintInt
+  | SPrintChar
+  | SPrintBool
+  | SPrintString
+  | SPrintRef
+  | SAlloc
+  | SDelete
   deriving ( Eq, Ord, Show )
 
 
 coreFunctions :: [SFunction]
 coreFunctions
-  = [ SCoreFunction [] "__print_int" SReadInt
+  = [ SCoreFunction [] "__read_int"     SReadInt
+    , SCoreFunction [] "__read_char"    SReadChar
+    , SCoreFunction [] "__print_int"    SPrintInt
+    , SCoreFunction [] "__print_char"   SPrintChar
+    , SCoreFunction [] "__print_bool"   SPrintBool
+    , SCoreFunction [] "__print_string" SPrintString
+    , SCoreFunction [] "__print_string" SPrintRef
+    , SCoreFunction [] "__alloc"        SAlloc
+    , SCoreFunction [] "__delete"       SDelete
     ]
 
 

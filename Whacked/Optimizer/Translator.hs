@@ -410,15 +410,13 @@ genInstr IAssVar{..} = do
   put scope{ vars = Map.insert (iiVar, iiScope) (t, dest) vars }
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  fmt <- genTemp
   case t of
-    Int        -> emit $ SString fmt "%d"
-    Char       -> emit $ SString fmt "%c"
-    Bool       -> emit $ SString fmt "%d"
-    String     -> emit $ SString fmt "%s"
-    Array Char -> emit $ SString fmt "%s"
-    _          -> emit $ SString fmt "%p"
-  emit $ SCall [] "printf" [fmt, expr]
+    Int        -> emit $ SCall [] "__print_int" [expr]
+    Char       -> emit $ SCall [] "__print_char" [expr]
+    Bool       -> emit $ SCall [] "__print_bool" [expr]
+    String     -> emit $ SCall [] "__print_string" [expr]
+    Array Char -> emit $ SCall [] "__print_string" [expr]
+    _          -> emit $ SCall [] "__print_ref" [expr]
 genInstr IPrintln{..} = do
   genInstr (IPrint iiExpr)
   temp <- genTemp

@@ -163,9 +163,7 @@ move reg imm = do
 compileInstr :: SInstr -> Compiler ()
 compileInstr SInt{..} = do
   dest <- findReg siDest R12
-  if fitsInImm siInt
-    then tell [ ARMMov AAL dest (ARMI siInt) ]
-    else tell [ ARMLoadConst dest siInt ]
+  tell [ ARMLoadConst dest siInt ]
   storeReg siDest dest
 compileInstr SBool{..} = do
   dest <- findReg siDest R12
@@ -200,7 +198,8 @@ compileInstr SBinOp{..} = do
       tell [ ARMAnd AAL dest left imm ]
     Mul -> do
       arg <- fetchReg siRight R12
-      tell [ ARMSmull AAL dest R12 left arg ]
+      tell [ ARMSmull AAL R11 R12 left arg ]
+      tell [ ARMMov AAL dest (ARMR R11) ]
     Cmp op -> do
       imm <- fetchImm siRight R12
       tell [ ARMCmp AAL left imm ]

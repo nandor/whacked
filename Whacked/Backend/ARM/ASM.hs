@@ -1,9 +1,11 @@
+{-# LANGUAGE QuasiQuotes #-}
 module Whacked.Backend.ARM.ASM where
 
 
 import Data.List
 import Whacked.Scratch
 import Whacked.Types
+import Text.Heredoc
 
 
 
@@ -145,67 +147,144 @@ instance Show ASM where
       ".byte 0"
 
   show (ARMLoadConst d const)
-    = "\tLDR " ++ show d ++ ", =" ++ show const
+    = "    LDR " ++ show d ++ ", =" ++ show const
   show (ARMLdr d base off)
-    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+    = "    LDR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMStr d base off)
-    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+    = "    STR " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMLdrb d base off)
-    = "\tLDRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+    = "    LDRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMStrb d base off)
-    = "\tSTRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
+    = "    STRB " ++ show d ++ ", [" ++ show base ++ ", " ++ show off ++ "]"
   show (ARMAdr d label)
-    = "\tLDR " ++ show d ++ ", =" ++ label
+    = "    LDR " ++ show d ++ ", =" ++ label
   show (ARMLdrLsl d base reg lsl)
-    = "\tLDR " ++ show d ++ ", [" ++ show base ++ ", " ++
+    = "    LDR " ++ show d ++ ", [" ++ show base ++ ", " ++
       show reg ++ ", lsl #" ++ show lsl ++ "]"
   show (ARMStrLsl d base reg lsl)
-    = "\tSTR " ++ show d ++ ", [" ++ show base ++ ", " ++
+    = "    STR " ++ show d ++ ", [" ++ show base ++ ", " ++
       show reg ++ ", lsl #" ++ show lsl ++ "]"
 
 
   show (ARMAdd cond d n m)
-    = "\tADD" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+    = "    ADD" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+      ", " ++ show m
   show (ARMSub cond d n m)
-    = "\tSUB" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+    = "    SUB" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+      ", " ++ show m
   show (ARMOrr cond d n m)
-    = "\tORR" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+    = "    ORR" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+      ", " ++ show m
   show (ARMAnd cond d n m)
-    = "\tAND" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++ ", " ++ show m
+    = "    AND" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+      ", " ++ show m
   show (ARMCmp cond d m)
-    = "\tCMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+    = "    CMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMTst cond d m)
-    = "\tTST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+    = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMMov cond d n)
-    = "\tMOV" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+    = "    MOV" ++ show cond ++ " " ++ show d ++ ", " ++ show n
   show (ARMMvn cond d n)
-    = "\tMVN" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+    = "    MVN" ++ show cond ++ " " ++ show d ++ ", " ++ show n
   show (ARMNeg cond d n)
-    = "\tNEG" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+    = "    NEG" ++ show cond ++ " " ++ show d ++ ", " ++ show n
 
 
   show (ARMSmull cond lo hi m s)
-    = "\tSMULL" ++ show cond ++ " " ++
+    = "    SMULL" ++ show cond ++ " " ++
       show lo ++ ", " ++ show hi ++ ", " ++
       show m ++ ", " ++ show s
 
   show (ARMPUSH rs)
-    = "\tPUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
+    = "    PUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMPOP rs)
-    = "\tPOP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
+    = "    POP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
   show (ARMB cond xs)
-    = "\tB" ++ show cond ++ " L" ++ show xs
+    = "    B" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)
-    = "\tBL " ++ xs
+    = "    BL " ++ xs
 
   show (ARMCore SReadInt)
-    = "__read_int:          \n" ++
-      "PUSH {LR}            \n" ++
-      "LDR R0, =1f          \n" ++
-      "SUB R1, SP, #4       \n" ++
-      "BL scanf             \n" ++
-      "LDR r0, [SP,#-4]     \n" ++
-      "POP {PC}             \n" ++
-      "1:                   \n" ++
-      ".asciz \"%d\"        \n" ++
-      ".align 4             \n"
+    = [str|__read_int:
+          |    PUSH {LR}
+          |    LDR R0, =1f
+          |    SUB R1, SP, #4
+          |    BL scanf
+          |    LDR r0, [SP,#-4]
+          |    POP {PC}
+          |  1:
+          |    .asciz "%d"
+          |    .align 4
+          |]
+
+  show (ARMCore SReadChar)
+    = [str|__read_char:
+          |    B getchar
+          |]
+
+  show (ARMCore SPrintInt)
+    = [str|__print_int:
+          |    MOV R1, R0
+          |    LDR R0, =1f
+          |    B printf
+          |  1:
+          |    .asciz "%d"
+          |    .align 4
+          |]
+
+  show (ARMCore SPrintChar)
+    = [str|__print_char:
+          |    MOV R1, R0
+          |    LDR R0, =1f
+          |    B printf
+          |  1:
+          |    .asciz "%c"
+          |    .align 4
+          |]
+
+  show (ARMCore SPrintBool)
+    = [str|__print_bool:
+          |    TST R0, R0
+          |    LDREQ R0, =1f
+          |    LDRNE R0, =2f
+          |    B printf
+          |  1:
+          |    .asciz "true"
+          |  2:
+          |    .asciz "false"
+          |    .align 4
+          |]
+
+
+  show (ARMCore SPrintString)
+    = [str|__print_string:
+          |   B puts
+          |]
+
+  show (ARMCore SPrintRef)
+    = [str|__print_ref:
+          |    MOV R1, R0
+          |    LDR R0, =1f
+          |    B printf
+          |  1:
+          |    .asciz "%p"
+          |    .align 4
+          |]
+
+  show (ARMCore SAlloc)
+    = [str|__alloc:
+          |   PUSH {LR}
+          |   ADD R0, R0, #4
+          |   BL malloc
+          |   ADD R0, R0, #4
+          |   POP {PC}
+          |]
+
+  show (ARMCore SDelete)
+    = [str|__delete:
+          |   PUSH {LR}
+          |   SUB R0, R0, #4
+          |   BL free
+          |   MOV R0, #0
+          |   POP {PC}
+          |]
