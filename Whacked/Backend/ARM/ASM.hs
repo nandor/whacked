@@ -261,7 +261,7 @@ instance Show ASM where
 
   show (ARMCore SPrintString)
     = [str|__print_string:
-          |   B puts
+          |   B printf
           |]
 
   show (ARMCore SPrintRef)
