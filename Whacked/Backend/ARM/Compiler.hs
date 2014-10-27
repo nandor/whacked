@@ -204,6 +204,7 @@ compileInstr SBinOp{..} = do
       imm <- fetchImm siRight R12
       tell [ ARMCmp AAL left imm ]
       tell [ ARMMov (toARMCond op) dest (ARMI 1) ]
+      tell [ ARMMov (toARMCond $ invertCond op) dest (ARMI 0) ]
   storeReg siDest dest
 compileInstr SUnOp{..} = do
   dest <- findReg siDest R12
