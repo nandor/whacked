@@ -101,7 +101,8 @@ data SInstr
     , siString :: String
     }
   | SNewArray
-    { siDest :: SVar
+    { siType   :: Type
+    , siDest   :: SVar
     , siLength :: Int
     }
   | SWriteArray
@@ -130,7 +131,7 @@ data SInstr
     , siPair :: SVar
     }
   | SFree
-    { siRef :: SVar
+    { siDest :: SVar
     }
   | SReturn
     { siArg  :: SVar
@@ -231,7 +232,7 @@ instance Show SInstr where
   show SReadPair{..}
     = show siDest ++ " <- " ++ show siPair ++ "." ++ show siElem
   show SFree{..}
-    = "free " ++ show siRef
+    = "free " ++ show siDest
   show SReturn{..}
     = "ret " ++ show siArg
   show SBinJump{..}
@@ -318,7 +319,7 @@ getKill x
     SNewPair{..}    -> [siDest]
     SWritePair{..}  -> []
     SReadPair{..}   -> [siDest]
-    SFree{..}       -> [siRef]
+    SFree{..}       -> [siDest]
     SReturn{..}     -> []
     SBinJump{..}    -> []
     SUnJump{..}     -> []
@@ -343,7 +344,7 @@ getGen x
     SNewPair{..}    -> []
     SWritePair{..}  -> [siPair, siExpr]
     SReadPair{..}   -> [siPair]
-    SFree{..}       -> [siRef]
+    SFree{..}       -> [siDest]
     SReturn{..}     -> [siArg]
     SBinJump{..}    -> [siLeft, siRight]
     SUnJump{..}     -> [siArg]

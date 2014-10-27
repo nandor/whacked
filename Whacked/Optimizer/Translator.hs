@@ -324,10 +324,10 @@ genExpr IString{..} dest = do
   emit $ SString dest ieString
   return (String, dest)
 genExpr IArray{ ieElems = [], ..} dest = do
-  emit $ SNewArray dest 0
+  emit $ SNewArray Empty dest 0
   return (Empty, dest)
 genExpr IArray{..} dest = do
-  emit $ SNewArray dest (length ieElems * (sizeof ieType))
+  emit $ SNewArray ieType dest (length ieElems)
   forM_ (zip [0..] ieElems) $ \(i, elem) -> do
     (t, expr) <- genTemp >>= genExpr elem
     idx <- genTemp

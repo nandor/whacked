@@ -105,7 +105,7 @@ removePhi func@SFunction{..}
     replaceInstr op@SReadPair{..}
       = op{ siDest = replace siDest, siPair = replace siPair }
     replaceInstr op@SFree{..}
-      = op{ siRef = replace siRef }
+      = op{ siDest = replace siDest }
     replaceInstr op@SReturn{..}
       = op{ siArg = replace siArg }
     replaceInstr op@SBinJump{..}

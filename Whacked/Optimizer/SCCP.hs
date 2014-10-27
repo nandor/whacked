@@ -79,63 +79,62 @@ compareValue op (CArray ref _) (CArray ref' _)
 -- |Evaluates a binary operation. If the result is well defined, it returns a
 -- value describing it. If one of the operands was Top or the values are not
 -- consistent, Nothing is returned.
-evalBinOp :: BinaryOp -> Value -> Value -> Maybe Value
+evalBinOp :: BinaryOp -> Value -> Value -> Value
 evalBinOp _ Bot _
-  = Nothing
+  = Bot
 evalBinOp _ _ Bot
-  = Nothing
+  = Bot
 evalBinOp _ Top y
-  = Just y
+  = y
 evalBinOp _ y Top
-  = Just y
+  = y
 evalBinOp op (CInt x) (CInt y)
-  = Just $ case op of
-    Add     -> CInt (x + y)
-    Sub     -> CInt (x - y)
-    Mul     -> CInt (x * y)
-    Div     -> CInt (x `div` y)
-    Mod     -> CInt (x `mod` y)
-    Cmp cmp -> CBool $ compareOp cmp x y
+  = case op of
+    Add          -> CInt (x + y)
+    Sub          -> CInt (x - y)
+    Mul          -> CInt (x * y)
+    Div | y /= 0 -> CInt (x `div` y)
+    Div          -> Bot
+    Mod | y /= 0 -> CInt (x `mod` y)
+    Mod          -> Bot
+    Cmp cmp      -> CBool $ compareOp cmp x y
 evalBinOp op (CBool x) (CBool y)
-  = Just $ case op of
+  = case op of
     Or      -> CBool (x || y)
     And     -> CBool (x && y)
     Cmp cmp -> CBool $ compareOp cmp x y
 evalBinOp op (CChar x) (CChar y)
-  = Just $ case op of
+  = case op of
     Cmp cmp -> CBool $ compareOp cmp x y
 evalBinOp op (CRef ref) (CRef ref')
-  = Just $ case op of
+  = case op of
     Cmp CEQ -> CBool $ ref == ref'
     Cmp CNE -> CBool $ ref /= ref'
 evalBinOp op (CArray ref _) y'@(CArray ref' _)
   = case op of
-    Cmp CEQ -> CBool <$> compareValue CEQ ref ref'
-    Cmp CNE -> CBool <$> compareValue CNE ref ref'
+    Cmp CEQ -> fromMaybe Top $ CBool <$> compareValue CEQ ref ref'
+    Cmp CNE -> fromMaybe Top $ CBool <$> compareValue CNE ref ref'
 
 
 -- |Evaluates an unary operation.
-evalUnOp :: UnaryOp -> Value -> Maybe Value
+evalUnOp :: UnaryOp -> Value -> Value
 evalUnOp _ Bot
-  = Nothing
+  = Bot
 evalUnOp _ Top
-  = Just Top
-evalUnOp op (CInt x)
-  = case op of
-    Neg -> Just $ CInt (-x)
-    Chr -> Just $ CChar (chr x)
-evalUnOp op (CBool x)
-  = case op of
-    Not -> Just $ CBool (not x)
-evalUnOp op (CChar x)
-  = case op of
-    Ord -> Just $ CInt (ord x)
+  = Top
+evalUnOp Neg (CInt x)            = CInt (-x)
+evalUnOp Not (CBool x)           = CBool (not x)
+evalUnOp Chr (CInt x)            = CChar (chr x)
+evalUnOp Ord (CChar x)           = CInt (ord x)
+evalUnOp Len (CArray _ (CInt x)) = CInt x
+evalUnOp Len _                   = Bot
+evalUnOp _ _                     = Bot
 
 
 -- |Builds the SSA graph, linking defitions to uses.
 buildSSAGraph :: SFunction -> (Map Int [SVar], Map Int [Int])
 buildSSAGraph func@SFunction{..}
-  = (blockDefs, Map.mapWithKey (\k v -> nub v \\ [k]) ssa)
+  = (blockDefs, Map.mapWithKey (\k v -> nub v) ssa)
   where
     -- Find the definition point of all variables.
     defs = Map.foldlWithKey foldFunc Map.empty sfBlocks
@@ -242,7 +241,7 @@ sccp func@SFunction{..}
           where
             merge
               = mconcat
-              . map (fromMaybe Top . (`lookupValue` vars) . snd)
+              . map (fromMaybe Top . (lookupValue vars) . snd)
               . filter (\(x, _) -> (x, end) `Set.member` executed)
               $ spMerge
 
@@ -263,188 +262,89 @@ sccp func@SFunction{..}
         Just SBlock{..} = Map.lookup end sfBlocks
 
         evalInstr arg@(cfg, ssa, vars) SBinOp{..} = fromMaybe arg $ do
-          left <- lookupValue siLeft vars
-          right <- lookupValue siRight vars
-          return $ case evalBinOp siBinOp left right of
-            Nothing ->
-              (cfg, ssa ++ ssaNext end, Map.insert siDest Bot vars)
-            Just x  -> case lookupValue siDest vars of
-              Just y | y == x || y == Bot ->
-                (cfg, ssa, vars)
-              _ ->
-                (cfg, ssa ++ ssaNext end, Map.insert siDest x vars)
+          left <- lookupValue vars siLeft
+          right <- lookupValue vars siRight
+          let result = evalBinOp siBinOp left right
+          return $ case lookupValue vars siDest of
+            Just x | x == result || x == Bot ->
+              (cfg, ssa, vars)
+            _ ->
+              (cfg, ssa ++ ssaNext end, Map.insert siDest result vars)
 
-        evalInstr (cfg, ssa, vars) SUnOp{..}
-          = traceShow "SUnOp" undefined
+        evalInstr arg@(cfg, ssa, vars) SUnOp{..} = fromMaybe arg $ do
+          arg <- lookupValue vars siArg
+          let result = evalUnOp siUnOp arg
+          return $ case lookupValue vars siDest of
+            Just x | x == result || x == Bot ->
+              (cfg, ssa, vars)
+            _ ->
+              (cfg, ssa ++ ssaNext end, Map.insert siDest result vars)
+
         evalInstr (cfg, ssa, vars) SMov{..}
-          = traceShow "SMov" undefined
+          | lookupValue vars siDest == other = (cfg, ssa, vars)
+          | otherwise
+            = ( cfg
+              , ssa ++ ssaNext end
+              , Map.insert siDest (fromMaybe Top other) vars
+              )
+          where
+            other = lookupValue vars siArg
+
         evalInstr (cfg, ssa, vars) SCall{..}
-          = ( cfg
+          | all (Just Bot ==) $ map (lookupValue vars) siRet = (cfg, ssa, vars)
+          | otherwise =
+            ( cfg
             , ssa ++ ssaNext end
             , foldl (\mp x -> Map.insert x Bot mp) vars siRet
             )
 
-        evalInstr (cfg, ssa, vars) SBool{..}
-          = (cfg, ssa, Map.insert siDest (CBool siBool) vars)
-        evalInstr (cfg, ssa, vars) SChar{..}
-          = (cfg, ssa, Map.insert siDest (CChar siChar) vars)
-        evalInstr (cfg, ssa, vars) SInt{..}
-          = (cfg, ssa, Map.insert siDest (CInt siInt) vars)
-
-        evalInstr (cfg, ssa, vars) SString{..}
-          = traceShow "SString" undefined
-        evalInstr (cfg, ssa, vars) SNewArray{..}
-          = traceShow "SNewArray" undefined
-        evalInstr (cfg, ssa, vars) SWriteArray{..}
-          = traceShow "SWriteArray" undefined
-        evalInstr (cfg, ssa, vars) SReadArray{..}
-          = traceShow "SReadArray" undefined
-        evalInstr (cfg, ssa, vars) SNewPair{..}
-          = traceShow "SNewPair" undefined
-        evalInstr (cfg, ssa, vars) SWritePair{..}
-          = traceShow "SWritePair" undefined
-        evalInstr (cfg, ssa, vars) SReadPair{..}
-          = traceShow "SReadPair" undefined
-        evalInstr (cfg, ssa, vars) SFree{..}
-          = traceShow "SFree" undefined
-        evalInstr (cfg, ssa, vars) SReturn{..}
-          = (cfg, ssa, vars)
-
         evalInstr arg@(cfg, ssa, vars) op@SBinJump{..} = fromMaybe arg $ do
-          left <- lookupValue siLeft vars
-          right <- lookupValue siRight vars
-          case compareValue siCond left right of
-            Just True  -> Just ((end, siWhere) : cfg, [], vars)
-            Just False -> Just (next end ++ cfg, [], vars)
-            Nothing    -> Just ((end, siWhere) : next end ++ cfg, [], vars)
+          left <- lookupValue vars siLeft
+          right <- lookupValue vars siRight
+          return $ case compareValue siCond left right of
+            Just True  -> ((end, siWhere) : cfg, [], vars)
+            Just False -> (next end ++ cfg, [], vars)
+            Nothing    -> ((end, siWhere) : next end ++ cfg, [], vars)
 
-        evalInstr (cfg, ssa, vars) SUnJump{..}
-          = traceShow "SUnJump" undefined
+        evalInstr arg@(cfg, ssa, vars) SUnJump{..}
+          = case lookupValue vars siArg of
+            Just (CBool x) | x == siWhen ->
+              ((end, siWhere) : cfg, [], vars)
+            Just (CBool x) ->
+              (next end ++ cfg, [], vars)
+            _ ->
+              ((end, siWhere) : next end ++ cfg, [], vars)
+
         evalInstr (cfg, ssa, vars) SJump{..}
           = ((end, siWhere) : cfg, [], vars)
 
-    {-traverse (edge@(start, end):xs) ys mark vars
-      = case Map.lookup end code of
-        _ | Set.member edge mark ->
-          traverse xs ys mark' vars
+        evalInstr (cfg, ssa, vars) SReturn{..}
+          = (cfg, ssa, vars)
+        evalInstr (cfg, ssa, vars) SWriteArray{..}
+          = (cfg, ssa, vars)
+        evalInstr (cfg, ssa, vars) SWritePair{..}
+          = (cfg, ssa, vars)
 
-        -- Evaluate phi nodes & propagate to the next node.
-        Just node@SPhi{..} ->
-          let (xs', ys', var') = traverse' node next edge mark vars
-          in traverse (xs' ++ xs) (ys' ++ ys) (Set.insert edge mark) var'
-
-        -- If any other edges were executed and the node is not a phi node,
-        -- skip this node and continue on with others.
-        _ | anyOtherExecuted mark start end ->
-          traverse xs ys mark' vars
-
-        -- Otherwise, evaluate the new node and continue.
-        Just node ->
-          let (xs', ys', var') = traverse' node next edge mark vars
-          in traverse (xs' ++ xs) (ys' ++ ys) (Set.insert edge mark) var'
-      where
-        mark' = Set.insert edge mark
-        next = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
-
-    traverse [] (edge@(start, end):ys) mark vars
-      = case Map.lookup end code of
-          -- If none of the incoming edges were executed, postpone evaluation.
-          _ | not $ anyExecuted mark end ->
-            traverse [] ys mark vars
-          Just node ->
-            let (xs', ys', vars') = traverse' node [] edge mark vars
-            in traverse xs' (ys' ++ ys) mark vars'
-
-    traverse [] [] mark vars
-      = (mark, vars)
-
-    traverse' node xs (start, end) mark vars = case node of
-      -- Evaluate a phi node. When evaluating a phi node, we take into
-      -- consideration the edges that come into the node and are marked
-      -- executable. The meet function is then applied over those values.
-      node@SPhi{..} ->
-        let new = mconcat [fromMaybe Top (Map.lookup x vars) | x <- siMerge]
-        in if new == (fromJust $ Map.lookup siDest vars)
-            then
-              ( xs, [], vars )
-            else
-              ( xs
-              , ssaNext
-              , Map.insert siDest new vars
-              )
-
-      -- Evaluate a binary operation.
-      node@SBinOp{..} -> fromMaybe (xs, [], vars) $ do
-        left <- getValue siLeft
-        right <- getValue siRight
-        return $ case evalBinOp siBinOp left right of
-          Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
-          Just x -> (xs, ssaNext, Map.insert siDest x vars)
-
-      -- Evaluate an unary operation.
-      node@SUnOp{..} -> fromMaybe (xs, [], vars) $ do
-        arg <- getValue siArg
-        return $ case evalUnOp siUnOp arg of
-          Nothing -> (xs, ssaNext, Map.insert siDest Bot vars)
-          Just x -> (xs, ssaNext, Map.insert siDest x vars)
-
-      -- Results of function calls are always variable.
-      node@SCall{..} ->
-        ( xs
-        , []
-        , foldl (\mp x -> Map.insert x Bot mp) vars siRet
-        )
-
-      -- Returns do nothing.
-      node@SReturn{..} ->
-        ( xs, [], vars )
-
-      -- Constants are marked and propagated.
-      node@SInt{..} ->
-        (xs, ssaNext, Map.insert siDest (CInt siInt) vars)
-      node@SBool{..} ->
-        (xs, ssaNext, Map.insert siDest (CBool siBool) vars)
-      node@SChar{..} ->
-        (xs, ssaNext, Map.insert siDest (CChar siChar) vars)
-      node@SCharArray{..} ->
-        (xs, ssaNext, Map.insert siDest (CArray (Just (siDest, length siChars))) vars)
-
-
-      -- | Evaluate conditionals.
-      node@SBinJump{..} -> fromMaybe (cfgNext, [], vars) $ do
-        left <- getValue siLeft
-        right <- getValue siRight
-        expr <- compareValue siCond left right
-        if expr
-          then do
-            return ([(end, siWhere)], [], vars)
-          else do
-            return ([(end, fromJust $ Map.lookup end next)], [], vars)
-      node@SUnJump{..} -> fromMaybe (cfgNext, [], vars) $ do
-        expr <- getValue siArg
-        case expr of
-          CBool x | x == siWhen ->
-            return ([(end, siWhere)], [], vars)
-          CBool x | x /= siWhen ->
-            return ([(end, fromJust $ Map.lookup end next)], [], vars)
-          _ ->
-            Nothing
-
-      -- Add the unique branch target to the cfg worklist.
-      node@SJump{..} -> ( xs, [], vars )
-      where
-        ssaNext = zip (repeat end) $ fromMaybe [] (Map.lookup end ssa)
-        cfgNext = zip (repeat end) $ fromMaybe [] (Map.lookup end cfg)
-
-        -- Looks up a value in the variable mapping.
-        getValue var
-          = Map.lookup var vars >>= \case
-            Top -> Nothing
-            x -> Just x
-    -}
+        evalInstr (cfg, ssa, vars) const
+          = case lookupValue vars $ siDest const of
+            Just x ->
+              (cfg, ssa, vars)
+            Nothing ->
+              (cfg, ssa ++ ssaNext end, Map.insert (siDest const) const' vars)
+          where
+            const' = case const of
+              SBool{..}       -> CBool siBool
+              SChar{..}       -> CChar siChar
+              SInt{..}        -> CInt siInt
+              SString{..}     -> CRef $ Just siDest
+              SNewArray{..}   -> CArray (CRef $ Just siDest) (CInt $ siLength)
+              SNewPair{..}    -> CRef $ Just siDest
+              SFree{..}       -> CRef Nothing
+              SReadArray{..}  -> Bot
+              SReadPair{..}   -> Bot
 
     -- Finds a value in the var pool. Only returns it if is well defined.
-    lookupValue var vars
+    lookupValue vars var
       = Map.lookup var vars >>= \case
           Top -> Nothing
           x -> Just x

@@ -72,11 +72,11 @@ simplify func@SFunction{..}
           Len -> SReadArray siDest siArg (SImm (-1)) Int
           x -> op
     replace SNewArray{..}
-      = SCall [siDest] "__alloc" [SImm siLength]
+      = SCall [siDest] "__alloc" [SImm (siLength * sizeof siType)]
     replace SNewPair{..}
       = SCall [siDest] "__alloc" [SImm 8]
     replace SFree{..}
-      = SCall [] "__free" [siRef]
+      = SCall [] "__free" [siDest]
     replace x
       = x
 
