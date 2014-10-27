@@ -6,10 +6,12 @@ module Main where
 import           Control.Applicative
 import           Control.Monad
 import           Data.List
+import           Data.Maybe
 import           System.Console.GetOpt
 import           System.Directory
 import           System.Environment
 import           System.Exit
+import           System.FilePath.Posix
 import           Whacked.Tree
 import           Whacked.Itch
 import           Whacked.Scratch
@@ -29,7 +31,7 @@ data Options
     , optPrintIMF :: Bool
     , optPrintHelp :: Bool
     , optPrintASM :: Bool
-    , optOutput :: String
+    , optOutput :: Maybe String
     }
   deriving (Eq, Ord, Show)
 
@@ -49,11 +51,7 @@ options
         (NoArg $ \opt -> opt{ optPrintHelp = True })
         "Print the help message"
     , Option "o" ["output"]
-        (OptArg
-          (\val opt -> case val of
-            Nothing -> opt
-            Just val' -> opt{ optOutput = val' })
-          (optOutput defaultOptions))
+        (ReqArg (\val opt -> opt{ optOutput = Just val }) "FILE")
         "Choose the output file"
     ]
 
@@ -65,7 +63,7 @@ defaultOptions
     , optPrintIMF = False
     , optPrintHelp = False
     , optPrintASM = False
-    , optOutput = "wacc.s"
+    , optOutput = Nothing
     }
 
 
@@ -121,6 +119,8 @@ main
               when optPrintASM $ do
                   mapM_ (putStrLn . show) asm
 
-              writeFile optOutput (concat . intersperse "\n" . map show $ asm)
+              let (file, _) = splitExtension sourceName
+                  out = fromMaybe (file ++ ".s") optOutput
+              writeFile out (concatMap (\x -> show x ++ "\n") $ asm)
 
     (_, _, errs) -> usage

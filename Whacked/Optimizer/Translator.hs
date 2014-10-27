@@ -11,6 +11,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.ST
+import           Data.Char
 import           Data.List ((\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
@@ -387,7 +388,7 @@ genInstr IReturn{..} = do
   emit $ SReturn expr
 genInstr IExit{..} = do
   (_, expr) <- genTemp >>= genExpr iiExpr
-  emit $ SCall [] "__exit" [expr]
+  emit $ SCall [] "exit" [expr]
 genInstr IBinJump{..} = do
   (lt, le) <- genTemp >>= genExpr iiLeft
   (rt, re) <- genTemp >>= genExpr iiRight
@@ -409,16 +410,20 @@ genInstr IAssVar{..} = do
   put scope{ vars = Map.insert (iiVar, iiScope) (t, dest) vars }
 genInstr IPrint{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
-  emit $ case t of
-    Int        -> SCall [] "__print_int"    [expr]
-    Char       -> SCall [] "__print_char"   [expr]
-    Bool       -> SCall [] "__print_bool"   [expr]
-    String     -> SCall [] "__print_string" [expr]
-    Array Char -> SCall [] "__print_string" [expr]
-    _          -> SCall [] "__print_ref"    [expr]
+  fmt <- genTemp
+  case t of
+    Int        -> emit $ SString fmt "%d"
+    Char       -> emit $ SString fmt "%c"
+    Bool       -> emit $ SString fmt "%d"
+    String     -> emit $ SString fmt "%s"
+    Array Char -> emit $ SString fmt "%s"
+    _          -> emit $ SString fmt "%p"
+  emit $ SCall [] "printf" [fmt, expr]
 genInstr IPrintln{..} = do
   genInstr (IPrint iiExpr)
-  emit $ SCall [] "__println" []
+  temp <- genTemp
+  emit $ SChar temp '\n'
+  emit $ SCall [] "putchar" [temp]
 genInstr IEnd{} = do
   expr <- genTemp
   emit $ SInt expr 0
@@ -504,4 +509,4 @@ genFunc func@IFunction{..}
 -- | Generates unoptimised Scratchy code for a program.
 generateS :: IProgram -> SProgram
 generateS IProgram{..}
-  = SProgram (map genFunc ipFuncs)
+  = SProgram (map genFunc ipFuncs ++ coreFunctions)

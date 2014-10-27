@@ -112,7 +112,7 @@ getPreferredRegs live func@SFlatFunction{..}
     -- so local variables will be placed in higher registers first. Function
     -- arguments & return values will have R0-R3 first, so the allocator will
     -- know that those are their preferred registers.
-    allRegs = [ ARMLocReg x | x <- reverse $ enumFromTo R0 R9 ]
+    allRegs = [ ARMLocReg x | x <- reverse $ enumFromTo R4 R9 ]
     argRegs = [ ARMLocReg x | x <- enumFromTo R0 R3 ]
 
 

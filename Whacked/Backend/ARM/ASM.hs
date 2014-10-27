@@ -2,6 +2,7 @@ module Whacked.Backend.ARM.ASM where
 
 
 import Data.List
+import Whacked.Scratch
 import Whacked.Types
 
 
@@ -102,6 +103,7 @@ instance Show ARMCond where
 data ASM
   = ARMLabel Int
   | ARMFunc String
+  | ARMCore SCore
   | ARMSection String
   | ARMString String String
   | ARMLoadConst ARMReg Int
@@ -139,7 +141,8 @@ instance Show ASM where
   show (ARMString label string)
     = ".long " ++ show (length string) ++ "\n" ++
       label ++ ":\n" ++
-      ".ascii " ++ show string
+      ".ascii " ++ show string ++ "\n" ++
+      ".byte 0"
 
   show (ARMLoadConst d const)
     = "\tLDR " ++ show d ++ ", =" ++ show const
@@ -194,3 +197,16 @@ instance Show ASM where
     = "\tB" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)
     = "\tBL " ++ xs
+
+  show (ARMCore SReadInt)
+    = "__read_int:          \n" ++
+      "PUSH {LR}            \n" ++
+      "LDR R0, =1f          \n" ++
+      "SUB R1, SP, #4       \n" ++
+      "BL scanf             \n" ++
+      "LDR r0, [SP,#-4]     \n" ++
+      "POP {PC}             \n" ++
+      "1:                   \n" ++
+      ".asciz \"%d\"        \n" ++
+      ".align 4             \n" ++
+

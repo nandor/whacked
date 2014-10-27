@@ -356,9 +356,9 @@ compileFunc func@SFlatFunction{..} = do
 
 compileProg :: SProgram -> Compiler ()
 compileProg SProgram{..} = do
-  forM_ spFuncs $ \func -> do
-    compileFunc func
-
+  forM_ spFuncs $ \case
+    func@SFlatFunction{..} -> compileFunc func
+    core@SCoreFunction{..} -> tell [ARMCore sfCore]
 
 compile :: SProgram -> [ASM]
 compile program

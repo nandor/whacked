@@ -12,6 +12,17 @@ import           Text.Printf(printf)
 import           Whacked.Types
 
 
+-- |List of builtin functions.
+data SCore
+  = SReadInt
+  deriving ( Eq, Ord, Show )
+
+
+coreFunctions :: [SFunction]
+coreFunctions
+  = [ SCoreFunction [] "__print_int" SReadInt
+    ]
+
 
 -- |Variables get unique indices inside their respective blocks. The combination
 -- of a unique block index and a unique index in a block can distinguish all
@@ -40,8 +51,12 @@ data SFunction
     , sfArgs   :: [SVar]
     , sfName   :: String
     }
+  | SCoreFunction
+    { sfArgs :: [SVar]
+    , sfName :: String
+    , sfCore :: SCore
+    }
   deriving ( Eq, Ord )
-
 
 
 data SBlock
@@ -181,6 +196,8 @@ instance Show SFunction where
     where
       showInstr (i, x)
         = printf "%4d:   %s" i (show x)
+  show SCoreFunction{..}
+    = sfName ++ "(..) CORE \n"
 
 
 instance Show SBlock where
@@ -247,7 +264,14 @@ instance Show SInstr where
 -- |Applies a function to all functions.
 mapF :: (SFunction -> SFunction) -> SProgram -> SProgram
 mapF f prog@SProgram{..}
-  = prog{ spFuncs = map f spFuncs }
+  = prog{ spFuncs = map transform spFuncs }
+  where
+    transform func@SFunction{}
+      = f func
+    transform func@SFlatFunction{}
+      = f func
+    transform x
+      = x
 
 
 -- |Maps a function over all instructions.
