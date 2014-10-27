@@ -248,8 +248,8 @@ instance Show ASM where
   show (ARMCore SPrintBool)
     = [str|__print_bool:
           |    TST R0, R0
-          |    LDREQ R0, =1f
-          |    LDRNE R0, =2f
+          |    LDRNE R0, =1f
+          |    LDREQ R0, =2f
           |    B printf
           |  1:
           |    .asciz "true"
