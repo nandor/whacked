@@ -208,5 +208,4 @@ instance Show ASM where
       "POP {PC}             \n" ++
       "1:                   \n" ++
       ".asciz \"%d\"        \n" ++
-      ".align 4             \n" ++
-
+      ".align 4             \n"

@@ -1,5 +1,4 @@
-#!/usr/bin/python2
+#!/bin/sh
 
+./dist/build/whacked/whacked $1
 
-if __name__ == "__main__":
-  pass
