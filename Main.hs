@@ -104,7 +104,9 @@ main
             Right itch -> do
               when optPrintIMF $ print itch
 
-              let scratch = mapF ( flatten
+              let scratch = pruneCallGraph
+                          . mapF ( pruneFlowGraph
+                                 . flatten
                                  . simplify
                                  . removePhi
                                  . moveConstants

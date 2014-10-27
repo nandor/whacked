@@ -3,6 +3,8 @@ module Whacked.Optimizer.Simplifier
   ( moveConstants
   , simplify
   , flatten
+  , pruneFlowGraph
+  , pruneCallGraph
   ) where
 
 import           Control.Applicative
@@ -14,6 +16,8 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
+
+import Debug.Trace
 
 
 
@@ -103,3 +107,32 @@ flatten func@SFunction{..}
       = (i, op{ siWhere = fromJust $ Map.lookup siWhere mp })
     relabel (i, x)
       = (i, x)
+
+
+-- |Removes unreachable instructions.
+pruneFlowGraph :: SFunction -> SFunction
+pruneFlowGraph func@SFlatFunction{..}
+  = func
+
+
+-- |Removes functions that are not called.
+pruneCallGraph :: SProgram -> SProgram
+pruneCallGraph prog@SProgram{..}
+  = prog{ spFuncs = [ x | x <- spFuncs, sfName x `Set.member` called] }
+  where
+    graph
+      = foldr (\f -> Map.insertWith (++) (sfName f) (calls f)) Map.empty spFuncs
+
+    calls SFlatFunction{..}
+      = [ siFunc | (_, SCall{ siFunc }) <- sfInstrs ]
+    calls _
+      = []
+
+    called = dfs ["main"] Set.empty
+    dfs (x:xs) set
+      | x `Set.member` set
+        = dfs xs set
+      | otherwise
+        = dfs ((fromMaybe [] $ Map.lookup x graph) ++ xs) (Set.insert x set)
+    dfs [] set
+      = set

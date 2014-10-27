@@ -421,7 +421,7 @@ genInstr IPrintln{..} = do
   genInstr (IPrint iiExpr)
   temp <- genTemp
   emit $ SChar temp '\n'
-  emit $ SCall [] "putchar" [temp]
+  emit $ SCall [] "__print_char" [temp]
 genInstr IEnd{} = do
   expr <- genTemp
   emit $ SInt expr 0
