@@ -111,7 +111,7 @@ evalBinOp op (CInt x) (CInt y)
     Mul                          -> Bot
     Div | y /= 0                 -> CInt (x `div` y)
     Div                          -> Bot
-    Mod | y /= 0                 -> CInt (x `mod` y)
+    Mod | y /= 0                 -> CInt (x `rem` y)
     Mod                          -> Bot
     Cmp cmp                      -> CBool $ compareOp cmp x y
 evalBinOp op (CBool x) (CBool y)
