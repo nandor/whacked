@@ -224,11 +224,15 @@ instance Show IInstr where
 -- |Approximates the number of temporaries used by an expression.
 height :: IExpr -> Int
 height IBinOp{..}
-  = 1 + max (height ieLeft) (height ieRight)
+  = min
+      (max (height ieLeft + 1) (height ieRight))
+      (max (height ieLeft) (height ieRight + 1))
 height IIndex{..}
-  = 1 + max (height ieArray) (height ieIndex)
+  = min
+      (max (height ieArray + 1) (height ieIndex))
+      (max (height ieArray) (height ieIndex + 1))
 height ICall{..}
-  = 1 + maximum (map height ieArgs)
+  = maximum (map height ieArgs)
 height IUnOp{..}
   = 0
 height _
