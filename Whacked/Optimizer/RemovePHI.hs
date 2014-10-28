@@ -55,7 +55,10 @@ congruence func@SFunction{ sfBlocks }
 -- |Removes all phi nodes.
 removePhi :: SFunction -> SFunction
 removePhi func@SFunction{..}
-  = func{ sfBlocks = Map.map removeBlock sfBlocks }
+  = func
+    { sfBlocks = Map.map removeBlock sfBlocks
+    , sfArgs = map replace sfArgs
+    }
   where
     -- |Merge everything from the same congruence class.
     cong = congruence func

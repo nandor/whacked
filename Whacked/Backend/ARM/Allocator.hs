@@ -76,9 +76,7 @@ getPreferredRegs live func@SFlatFunction{..}
     -- For each live variable, associates the list of all registers as
     -- available.
     allowRegs mp (live, op@SCall{..})
-      = foldr (\(x, y) -> Map.insertWith (++) x [y])
-        (putRegs live (getKill op ++ getGen op) allRegs mp)
-      $ zip siArgs argRegs
+      = putRegs live (getKill op ++ getGen op) allRegs mp
     allowRegs mp (live, op@SReturn{..})
       = putRegs live (getGen op) (ARMLocReg R0:allRegs) mp
     allowRegs mp (live, op)
@@ -90,9 +88,7 @@ getPreferredRegs live func@SFlatFunction{..}
     -- For function calls, bans all live variables from being placed in R0-R3,
     -- but allows return values to be placed there.
     banRegs mp (live, SCall{..})
-      = foldr (\(x, y) -> Map.insertWith (++) x [y])
-        (foldl clearArgs mp live)
-      $ zip siRet argRegs
+      = foldl clearArgs mp live
     banRegs mp (live, x)
       = mp
 

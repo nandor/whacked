@@ -145,7 +145,8 @@ instance Show ASM where
     = ".long " ++ show (length string) ++ "\n" ++
       label ++ ":\n" ++
       ".ascii " ++ show string ++ "\n" ++
-      ".byte 0"
+      ".byte 0\n" ++
+      ".align 4"
   show ARMLtorg
     = ".ltorg"
 
@@ -209,12 +210,12 @@ instance Show ASM where
 
   show (ARMCore SReadInt)
     = [str|__read_int:
-          |    PUSH {LR}
+          |    PUSH {R4-R12,LR}
           |    LDR R0, =1f
           |    SUB R1, SP, #4
           |    BL scanf
           |    LDR r0, [SP,#-4]
-          |    POP {PC}
+          |    POP {R4-R12,PC}
           |  1:
           |    .asciz "%d"
           |    .align 4
@@ -222,14 +223,18 @@ instance Show ASM where
 
   show (ARMCore SReadChar)
     = [str|__read_char:
-          |    B getchar
+          |    PUSH {R4-R12,LR}
+          |    BL getchar
+          |    POP {R4-R12,PC}
           |]
 
   show (ARMCore SPrintInt)
     = [str|__print_int:
+          |    PUSH {R4-R12,LR}
           |    MOV R1, R0
           |    LDR R0, =1f
-          |    B printf
+          |    BL printf
+          |    POP {R4-R12,PC}
           |  1:
           |    .asciz "%d"
           |    .align 4
@@ -237,9 +242,11 @@ instance Show ASM where
 
   show (ARMCore SPrintChar)
     = [str|__print_char:
+          |    PUSH {R4-R12,LR}
           |    MOV R1, R0
           |    LDR R0, =1f
-          |    B printf
+          |    BL printf
+          |    POP {R4-R12,PC}
           |  1:
           |    .asciz "%c"
           |    .align 4
@@ -247,10 +254,12 @@ instance Show ASM where
 
   show (ARMCore SPrintBool)
     = [str|__print_bool:
+          |    PUSH {R4-R12,LR}
           |    TST R0, #1
           |    LDRNE R0, =1f
           |    LDREQ R0, =2f
-          |    B printf
+          |    BL printf
+          |    POP {R4-R12,PC}
           |  1:
           |    .asciz "true"
           |  2:
@@ -261,14 +270,18 @@ instance Show ASM where
 
   show (ARMCore SPrintString)
     = [str|__print_string:
-          |   B printf
+          |    PUSH {R4-R12,LR}
+          |    BL printf
+          |    POP {R4-R12,PC}
           |]
 
   show (ARMCore SPrintRef)
     = [str|__print_ref:
+          |    PUSH {R4-R12,LR}
           |    MOV R1, R0
           |    LDR R0, =1f
-          |    B printf
+          |    BL printf
+          |    POP {R4-R12,PC}
           |  1:
           |    .asciz "%p"
           |    .align 4
@@ -276,18 +289,18 @@ instance Show ASM where
 
   show (ARMCore SAlloc)
     = [str|__alloc:
-          |   PUSH {LR}
-          |   ADD R0, R0, #4
-          |   BL malloc
-          |   ADD R0, R0, #4
-          |   POP {PC}
+          |    PUSH {R4-R12,LR}
+          |    ADD R0, R0, #4
+          |    BL malloc
+          |    ADD R0, R0, #4
+          |    POP {R4-R12,PC}
           |]
 
   show (ARMCore SDelete)
     = [str|__delete:
-          |   PUSH {LR}
-          |   SUB R0, R0, #4
-          |   BL free
-          |   MOV R0, #0
-          |   POP {PC}
+          |    PUSH {R4-R12,LR}
+          |    SUB R0, R0, #4
+          |    BL free
+          |    MOV R0, #0
+          |    POP {R4-R12,PC}
           |]

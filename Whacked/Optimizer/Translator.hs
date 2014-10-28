@@ -26,6 +26,7 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
+import Debug.Trace
 
 -- | Control flow graph structure.
 type FlowGraph
@@ -235,6 +236,7 @@ data Scope
     , block    :: Int
     , vars     :: Map (String, Int) (Type, SVar)
     , vars'    :: Map SVar (String, Int)
+    , blockVar :: Map Int (Map (String, Int) (Type, SVar))
     , blocks   :: Map Int SBlock
     , labels   :: Map Int Int
     }
@@ -259,6 +261,7 @@ runGenerator labels gen
           , vars = Map.empty
           , vars' = Map.empty
           , blocks = Map.empty
+          , blockVar = Map.empty
           , labels = labels
           }
     in (a, scope)
@@ -451,21 +454,32 @@ genFunc func@IFunction{..}
     frontier = getFrontier graph graph' dominators
     phi = getPhiNodes ifVars blocks frontier
 
-    ((args, phis), scope@Scope{ blocks = blocks' }) = runGenerator labels $ do
+    (args, scope@Scope{ blocks = blocks', blockVar }) = runGenerator labels $ do
       args <- forM ifArgs $ \(t, name) -> do
         expr <- genTemp
-        scope@Scope{ vars } <- get
-        put scope{ vars = Map.insert (name, 0) (t, expr) vars }
+        scope@Scope{ vars, vars' } <- get
+        put scope{ vars = Map.insert (name, 0) (t, expr) vars
+                 , vars' = Map.insert expr (name, 0) vars'
+                 }
         return expr
 
-      phis <- forM (Map.toList blocks) $ \(idx, instrs) -> do
+      forM_ (Map.toList blocks) $ \(idx, instrs) -> do
         -- Place empty phi nodes for all affected variables.
         case Map.lookup idx phi of
           Nothing -> do
-            get >>= \scope@Scope{ blocks } -> put scope
+            scope@Scope{ blocks, blockVar } <- get
+            put scope
               { block = idx
               , blocks = Map.insert idx (SBlock [] []) blocks
               }
+            case Set.toList <$> Map.lookup idx graph' of
+              Nothing -> return ()
+              Just xs -> do
+                get >>= \scope@Scope{vars} -> put scope
+                  { vars = Map.unions
+                      [x | Just x <- map (`Map.lookup` blockVar) xs ]
+                  }
+
             mapM_ genInstr instrs
           Just phi' -> do
             phis <- forM phi' $ \(var, idx, t) -> do
@@ -485,11 +499,11 @@ genFunc func@IFunction{..}
             mapM_ genInstr instrs
 
         -- Returns a snapshot of variable versions.
-        (idx, ) . vars <$> get
+        scope@Scope{ vars, blockVar } <- get
+        put scope{ blockVar = Map.insert idx vars blockVar }
 
-      return (args, phis)
+      return args
 
-    phis' = Map.fromList phis
     computePhi idx block@SBlock{..}
       = block{ sbPhis = map computePhi' sbPhis }
       where
@@ -499,7 +513,7 @@ genFunc func@IFunction{..}
           return phi{ spMerge = [y | Just y <- map (lookupVar x) prev] }
 
         lookupVar var block = do
-          vars <- Map.lookup block phis'
+          vars <- Map.lookup block blockVar
           (_, var) <- Map.lookup var vars
           return (block, var)
 
