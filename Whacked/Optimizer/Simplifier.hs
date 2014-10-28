@@ -143,13 +143,7 @@ pruneFlowGraph func@SFlatFunction{..}
 
     prune ((i, x):xs)
       | not (i `Set.member` reachable) = prune xs
-      | otherwise = case prune xs of
-          [] -> (i, x):[]
-          xs'@((i', _):_) -> case x of
-            --SJump{..}    | canRemove i' siWhere -> xs'
-            --SBinJump{..} | canRemove i' siWhere -> xs'
-            --SUnJump{..}  | canRemove i' siWhere -> xs'
-            _ -> (i, x) : xs'
+      | otherwise = (i, x) : prune xs
       where
         canRemove i' siWhere
           = i < siWhere && i' >= siWhere

@@ -182,7 +182,7 @@ buildSSAGraph func@SFunction{..}
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = traceShow vars' func{ sfBlocks = Map.fromList . prune . Map.toList $ sfBlocks }
+  = func{ sfBlocks = Map.fromList . prune . Map.toList $ sfBlocks }
   where
     (cfgGraph, cfgGraph') = buildFlowGraph func
     (blockDefs, ssaGraph) = buildSSAGraph func

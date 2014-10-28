@@ -109,8 +109,8 @@ main
                                  . flatten
                                  . simplify
                                  . removePhi
-                               --  . moveConstants
-                               --  . sccp
+                                 . moveConstants
+                                 . sccp
                                  )
                           . generateS
                           $ itch
