@@ -278,6 +278,7 @@ compileInstr SReadPair{..} = do
   dest <- findReg siDest R12
   pair <- fetchReg siPair R12
   tell [ ARMLdr dest pair (ARMI $ if siElem == Fst then 0 else 4) ]
+  storeReg siDest dest
 compileInstr SCall{..} = do
   -- Copy arguments to registers & stack.
   forM_ (zip siArgs (argOutLocation $ length siArgs)) $ \(from, to) -> do
@@ -305,10 +306,12 @@ compileInstr SReturn{..} = do
 -- |Generates code for a function.
 compileFunc :: SFunction -> Compiler ()
 compileFunc func@SFlatFunction{..} = do
-  let liveOut = map (Set.toList . snd . snd) . Map.toList . liveVariables $ func
-      targets = Set.fromList $ concatMap (getTarget . snd) sfInstrs
-      regPref = getPreferredRegs liveOut func
-      regAlloc = allocRegs liveOut func regPref
+  let live = map (\(_, (x, y)) -> (Set.toList x, Set.toList y))
+           . Map.toList
+           $ liveVariables func
+      targets  = Set.fromList $ concatMap (getTarget . snd) sfInstrs
+      regPref  = getPreferredRegs live func
+      regAlloc = allocRegs live func regPref
 
       usedRegs
         = [ x
@@ -340,7 +343,7 @@ compileFunc func@SFlatFunction{..} = do
     moveLocToVar from to
 
   -- Emit instructions.
-  forM_ (zip liveOut sfInstrs) $ \(out, (i, instr)) -> do
+  forM_ (zip live sfInstrs) $ \((_, out), (i, instr)) -> do
     when (i `Set.member` targets) $ do
       label <- getLabel i
       tell [ ARMLabel label ]
