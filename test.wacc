@@ -1,26 +1,24 @@
 begin
-    int a = 0;
-    int b = 0;
-    int c = 0;
-    int d = 5;
+    int longCall(int a, int b, int c, int d, int e, int f, int g, int h) is
+        println a;
+        println b;
+        println c;
+        println d;
+        println e;
+        println f;
+        println g;
+        println h;
+        return a + b + c + d + e + f + g + h
+    end
 
-    while c < 10 do
-        if a < 5 then
-            a = 4;
-            b = 4
-        else
-            a = 3;
-            b = 3
-        fi;
-        c = c + 1
-    done;
-
-    if d == 5 then
-        println "okay"
-    else
-        println "wrong"
-    fi;
-
-    print a;
-    print b
+    int a = 1;
+    int b = 2;
+    int c = 3;
+    int d = 4;
+    int e = 5;
+    int f = 6;
+    int g = 7;
+    int h = 8;
+    int j = call longCall(a, b, c, d, e, f, g, h);
+    println j
 end

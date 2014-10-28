@@ -63,16 +63,16 @@ moveLocToVar (ARMLocReg reg) var
         when (reg' /= reg) $
           tell [ ARMMov AAL reg' (ARMR reg) ]
       Just (ARMLocStk stk) -> do
-        tell [ ARMStr reg SP $ ARMI (-stk * 4) ]
+        tell [ ARMStr reg SP $ ARMI (stk * 4) ]
 moveLocToVar (ARMLocArgIn stk) var
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
         return ()
       Just (ARMLocReg reg') -> do
-        tell [ ARMLdr reg' SP $ ARMI (-(regStack + varStack + stk) * 4) ]
+        tell [ ARMLdr reg' SP $ ARMI ((regStack + varStack + stk) * 4) ]
       Just (ARMLocStk stk') -> do
-        tell [ ARMLdr R12 SP $ ARMI (-(regStack + varStack + stk) * 4) ]
-        tell [ ARMStr R12 SP $ ARMI (-stk' * 4) ]
+        tell [ ARMLdr R12 SP $ ARMI ((regStack + varStack + stk') * 4) ]
+        tell [ ARMStr R12 SP $ ARMI (stk' * 4) ]
 
 -- |Copies a variable to into one of the registers that is going to be passed
 -- as an argument to another function.
@@ -81,7 +81,7 @@ moveVarToLoc (SImm x) (ARMLocReg reg) = do
   tell [ ARMMov AAL reg (ARMI x) ]
 moveVarToLoc (SImm x) (ARMLocArgOut stk) = do
   tell [ ARMMov AAL R12 (ARMI x) ]
-  tell [ ARMStr R12 SP $ ARMI ((stk + 1) * 4) ]
+  tell [ ARMStr R12 SP $ ARMI (-(stk + 1) * 4) ]
 moveVarToLoc var (ARMLocReg reg)
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
@@ -90,16 +90,16 @@ moveVarToLoc var (ARMLocReg reg)
         when (reg' /= reg) $
           tell [ ARMMov AAL reg (ARMR reg') ]
       Just (ARMLocStk stk) -> do
-          tell [ ARMLdr reg SP $ ARMI (-stk * 4) ]
+          tell [ ARMLdr reg SP $ ARMI (stk * 4) ]
 moveVarToLoc var (ARMLocArgOut stk)
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
         return ()
       Just (ARMLocReg reg') -> do
-        tell [ ARMStr reg' SP $ ARMI ((stk + 1) * 4) ]
+        tell [ ARMStr reg' SP $ ARMI (-(stk + 1) * 4) ]
       Just (ARMLocStk stk') -> do
-        tell [ ARMLdr R12 SP $ ARMI (-stk' * 4) ]
-        tell [ ARMStr R12 SP $ ARMI ((stk + 1) * 4) ]
+        tell [ ARMLdr R12 SP $ ARMI (stk' * 4) ]
+        tell [ ARMStr R12 SP $ ARMI (-(stk + 1) * 4) ]
 
 
 -- |Returns the register mapped to a value or a default temprary register.
@@ -115,7 +115,7 @@ storeReg :: SVar -> ARMReg -> Compiler ()
 storeReg var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
     ARMLocReg reg' -> move reg' (ARMR reg)
-    ARMLocStk idx -> tell [ ARMStr reg SP $ ARMI (-idx * 4) ]
+    ARMLocStk idx -> tell [ ARMStr reg SP $ ARMI (idx * 4) ]
 
 
 -- |Copies an immediate value to a memory location.
@@ -125,7 +125,7 @@ storeImm var imm tmp
     ARMLocReg reg' -> move reg' imm
     ARMLocStk idx -> do
       move tmp imm
-      tell [ ARMStr tmp SP $ ARMI (-idx * 4) ]
+      tell [ ARMStr tmp SP $ ARMI (idx * 4) ]
 
 
 -- |Returns a register to use as an input operand for an instruction.
@@ -137,7 +137,7 @@ fetchReg var reg
   = get >>= \Scope{ regs } -> case fromJust $ Map.lookup var regs of
     ARMLocReg reg  -> return reg
     ARMLocStk idx -> do
-      tell [ ARMLdr reg SP $ ARMI (-idx * 4) ]
+      tell [ ARMLdr reg SP $ ARMI (idx * 4) ]
       return reg
 
 
@@ -312,7 +312,7 @@ compileFunc func@SFlatFunction{..} = do
 
       usedRegs
         = [ x
-          | ARMLocReg x <- map snd (Map.toList regAlloc)
+          | ARMLocReg x <- nub $ map snd (Map.toList regAlloc)
           , not (x `elem` (enumFromTo R0 R3))
           ]
       stackSpace
