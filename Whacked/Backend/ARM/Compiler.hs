@@ -223,8 +223,8 @@ compileInstr SBinJump{..} = do
 compileInstr SUnJump{..} = do
   arg <- fetchReg siArg R12
   label <- getLabel siWhere
-  tell [ ARMTst AAL arg (ARMR arg) ]
-  tell [ ARMB ANE label ]
+  tell [ ARMTst AAL arg (ARMI 1) ]
+  tell [ ARMB (if siWhen then ANE else AEQ) label ]
 compileInstr SJump{..} = do
   label <- getLabel siWhere
   tell [ ARMB AAL label ]

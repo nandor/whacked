@@ -224,8 +224,14 @@ instance Show ASM where
   show (ARMCore SReadChar)
     = [str|__read_char:
           |    PUSH {R4-R12,LR}
-          |    BL getchar
+          |    LDR R0, =1f
+          |    SUB R1, SP, #4
+          |    BL scanf
+          |    LDR r0, [SP,#-4]
           |    POP {R4-R12,PC}
+          |  1:
+          |    .asciz " %c"
+          |    .align 4
           |]
 
   show (ARMCore SPrintInt)

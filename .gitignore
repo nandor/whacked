@@ -2,3 +2,4 @@ dist/*
 *sublime*
 wacc.s
 binary*
+.gdbinit

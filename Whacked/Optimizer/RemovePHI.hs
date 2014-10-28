@@ -19,8 +19,11 @@ import           Whacked.Scratch
 -- folding on the SSA graph.
 congruence :: SFunction -> Map SVar SVar
 congruence func@SFunction{ sfBlocks }
-  = Map.map fst trees
+  = Map.fromList . map (\x -> (x, fst $ find trees x)) $ vars
   where
+    -- All variables.
+    vars = map fst . Map.toList $ trees
+
     -- All concruence classes
     trees = Map.foldl (\mp b -> foldl insert mp $ sbPhis b) Map.empty sfBlocks
 

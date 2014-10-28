@@ -182,7 +182,7 @@ buildSSAGraph func@SFunction{..}
 -- |Performs sparse conditional constant propagation.
 sccp :: SFunction -> SFunction
 sccp func@SFunction{..}
-  = func{ sfBlocks = Map.fromList . prune . Map.toList $ sfBlocks }
+  = traceShow vars' func{ sfBlocks = Map.fromList . prune . Map.toList $ sfBlocks }
   where
     (cfgGraph, cfgGraph') = buildFlowGraph func
     (blockDefs, ssaGraph) = buildSSAGraph func
@@ -204,32 +204,27 @@ sccp func@SFunction{..}
       where
         xs' = prune xs
 
-        toNext
-          = case xs' of
-          []              -> Nothing
-          ((idx', _) : _) -> Just $ SJump idx'
-
-        simplifyInstr op@SBinJump{..} = do
+        {-simplifyInstr op@SBinJump{..} = do
           left <- lookupValue vars' siLeft
           right <- lookupValue vars' siRight
           case compareValue siCond left right of
             Just True  -> Just $ SJump siWhere
             Just False -> toNext
-            Nothing    -> Just op
+            Nothing    -> Just op-}
         simplifyInstr op@SUnJump{..} = do
           arg <- lookupValue vars' siArg
           case arg of
             CBool x | x == siWhen -> Just $ SJump siWhere
-            CBool x | x /= siWhen -> toNext
+            CBool x | x /= siWhen -> Nothing
             _                     -> Just op
-        simplifyInstr op@SBinOp{..} = do
+        {-simplifyInstr op@SBinOp{..} = do
           left <- lookupValue vars' siLeft
           right <- lookupValue vars' siRight
           case evalBinOp siBinOp left right of
             CInt x  -> Just $ SInt siDest x
             CBool x -> Just $ SBool siDest x
             CChar x -> Just $ SChar siDest x
-            _       -> Just op
+            _       -> Just op-}
         simplifyInstr x
           = Just x
 

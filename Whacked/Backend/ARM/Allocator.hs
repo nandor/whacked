@@ -128,7 +128,7 @@ allocRegs live func@SFlatFunction{..} pref
 
     -- For each variable, generates a list of vars which conflict with it.
     conflict
-      = foldl addConflicts Map.empty live
+      = foldl addConflicts Map.empty (live ++ [sfArgs])
       where
         addConflicts mp xs
           = foldl addLink mp [(x, y) | x <- xs, y <- xs, x /= y]

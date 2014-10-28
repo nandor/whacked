@@ -139,20 +139,20 @@ pruneFlowGraph func@SFlatFunction{..}
 
     fromStart = dfs cfg [0] Set.empty
     fromEnd = dfs cfg' [i | (i, x) <- sfInstrs, isTerminal x] Set.empty
-    reachable = Set.union fromStart fromEnd
+    reachable = Set.intersection fromStart fromEnd
 
     prune ((i, x):xs)
       | not (i `Set.member` reachable) = prune xs
       | otherwise = case prune xs of
           [] -> (i, x):[]
           xs'@((i', _):_) -> case x of
-            SJump{..}    | targetValid i' siWhere -> (i, x) : xs'
-            SBinJump{..} | targetValid i' siWhere -> (i, x) : xs'
-            SUnJump{..}  | targetValid i' siWhere -> (i, x) : xs'
+            --SJump{..}    | canRemove i' siWhere -> xs'
+            --SBinJump{..} | canRemove i' siWhere -> xs'
+            --SUnJump{..}  | canRemove i' siWhere -> xs'
             _ -> (i, x) : xs'
       where
-        targetValid i' siWhere
-          = i < siWhere && i' < siWhere
+        canRemove i' siWhere
+          = i < siWhere && i' >= siWhere
     prune []
       = []
 
