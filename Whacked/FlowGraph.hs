@@ -65,7 +65,7 @@ buildFlowGraph func@SFunction{..}
         Just _            -> (idx, [idx']) : tail
       where
         tail = build $ (idx', y) : bs
-    build ((idx, SBlock{..}):[])
+    build [(idx, SBlock{..})]
       = case lastMay sbInstrs of
         Nothing           -> []
         Just SBinJump{..} -> [(idx, [siWhere])]
@@ -74,5 +74,5 @@ buildFlowGraph func@SFunction{..}
         Just SReturn{..}  -> []
         Just _            -> []
 
-    rev cfg' node out
-      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg' out
+    rev cfg' node
+      = foldl (\cfg' x -> Map.insertWith (++) x [node] cfg') cfg'

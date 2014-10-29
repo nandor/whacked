@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 module Whacked.Backend.ARM.Allocator
   ( liveVariables
   , getPreferredRegs
@@ -43,7 +43,7 @@ liveVariables func@SFlatFunction{..}
       let newOut  = Set.unions [x | Just (x, _) <- map (`Map.lookup` mp) succ]
           kill    = Set.fromList (getKill instr)
           gen     = Set.fromList (getGen instr)
-          newIn = (Set.difference oldOut kill) `Set.union` gen
+          newIn = Set.difference oldOut kill `Set.union` gen
       return
         ( Map.insert x (newIn, newOut) mp
         , modified || newIn /= oldIn || newOut /= oldOut
@@ -66,7 +66,7 @@ getPreferredRegs live func@SFlatFunction{..}
 
     -- Set of live variables.
     liveSet
-      = (Set.fromList . concat . map snd $ live)
+      = (Set.fromList . concatMap snd $ live)
         `Set.union`
         Set.fromList sfArgs
 
@@ -129,7 +129,7 @@ allocRegs live func@SFlatFunction{..} pref
     live' = map snd live
 
     -- List of all live variables.
-    liveVars = Set.toList . Set.fromList $ (sfArgs ++ (concat live'))
+    liveVars = Set.toList . Set.fromList $ sfArgs ++ concat live'
 
     -- For each variable, generates a list of vars which conflict with it.
     conflict
@@ -151,7 +151,7 @@ allocRegs live func@SFlatFunction{..} pref
       = Just (minimum xs)
 
     -- Sorts the registers by number of uses.
-    sortr = sortBy (flip (compare `on` (`Map.lookup` useCount)))
+    sortr = sortBy (flip compare `on` (`Map.lookup` useCount))
 
     -- First assign low vars to low regs.
     (lowAlloc, lowLeft, lowRegs)

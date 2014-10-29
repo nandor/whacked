@@ -159,7 +159,7 @@ buildSSAGraph func@SFunction{..}
     foldFunc mp idx SBlock{ sbInstrs, sbPhis }
       = foldl (getDefs idx)
         (foldl (\mp x -> Map.insert (spDest x) idx mp) mp sbPhis)
-      $ sbInstrs
+        sbInstrs
     getDefs i mp instr
       = foldl (\mp x -> Map.insert x i mp) mp (getKill instr)
 
@@ -172,7 +172,7 @@ buildSSAGraph func@SFunction{..}
         )
       where
         allDefs
-          = concat $ (map (map snd . spMerge) sbPhis) ++ (map getGen sbInstrs)
+          = concat $ map (map snd . spMerge) sbPhis ++ map getGen sbInstrs
     linkDefs i mp var
       = case Map.lookup var defs of
           Nothing -> mp
@@ -190,7 +190,7 @@ sccp func@SFunction{..}
     varsInitial = Map.fromList $
       (zip (vars \\ sfArgs) . repeat $ Top) ++
       (zip sfArgs . repeat $ Bot)
-    vars = concat . map snd . Map.toList $ blockDefs
+    vars = concatMap snd . Map.toList $ blockDefs
 
     -- Removes unrechable blocks & replaces constants.
     prune []
@@ -199,7 +199,7 @@ sccp func@SFunction{..}
       | not $ idx `Set.member` marked = prune xs
       | otherwise =
           ( idx
-          , block{ sbInstrs = [x | Just x <- map simplifyInstr sbInstrs] }
+          , block{ sbInstrs = mapMaybe simplifyInstr sbInstrs }
           ) : xs'
       where
         xs' = prune xs
@@ -258,7 +258,7 @@ sccp func@SFunction{..}
         = sccp' (cfg' ++ cfg) (ssa0 ++ ssa1 ++ ssa) executed' vars''
       where
         executed' = Set.insert edge executed
-        cfg' = if cfg0 ++ cfg1 == [] then next end else cfg0 ++ cfg1
+        cfg' = if null $ cfg0 ++ cfg1 then next end else cfg0 ++ cfg1
         (cfg0, ssa0, vars')
           = evaluatePhis edge executed' vars
         (cfg1, ssa1, vars'')
@@ -295,7 +295,7 @@ sccp func@SFunction{..}
           where
             merge
               = mconcat
-              . map (fromMaybe Top . (lookupValue vars) . snd)
+              . map (fromMaybe Top . lookupValue vars . snd)
               . filter (\(x, _) -> (x, end) `Set.member` executed)
               $ spMerge
 
@@ -391,7 +391,7 @@ sccp func@SFunction{..}
               SChar{..}       -> CChar siChar
               SInt{..}        -> CInt siInt
               SString{..}     -> CRef $ Just siDest
-              SNewArray{..}   -> CArray (CRef $ Just siDest) (CInt $ siLength)
+              SNewArray{..}   -> CArray (CRef $ Just siDest) (CInt siLength)
               SNewPair{..}    -> CRef $ Just siDest
               SFree{..}       -> CRef Nothing
               SReadArray{..}  -> Bot

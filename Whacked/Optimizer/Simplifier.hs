@@ -17,8 +17,6 @@ import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
-
 
 
 -- |Pushes immediate constants into instructions. Due to the fact that ARM
@@ -45,7 +43,7 @@ moveConstants func@SFunction{..}
         op@SBool{..} ->
           (Map.insert siDest (SImm $ fromEnum siBool) vars, op:instrs)
         op@SInt{..} | fitsInImm siInt ->
-          (Map.insert siDest (SImm $ siInt) vars, op:instrs)
+          (Map.insert siDest (SImm siInt) vars, op:instrs)
         op@SWriteArray{..} ->
           (vars, op{ siIndex = replaceVar siIndex }:instrs)
         op@SReadArray{..} ->
@@ -93,12 +91,12 @@ flatten func@SFunction{..}
   = SFlatFunction (map relabel instrs') sfArgs sfName
   where
     (mp, _, instrs')
-      = Map.foldlWithKey transform (Map.empty, 0, []) $ sfBlocks
+      = Map.foldlWithKey transform (Map.empty, 0, []) sfBlocks
 
     transform (mp, next, acc) idx SBlock{..}
       = ( Map.insert idx next mp
         , next + length sbInstrs
-        , acc ++ (zip [next..] sbInstrs)
+        , acc ++ zip [next..] sbInstrs
         )
 
     relabel (i, op@SJump{..})
@@ -168,13 +166,13 @@ pruneCallGraph prog@SProgram{..}
 
 -- |Depth first traversal over a graph.
 dfs :: (Ord a, Eq a) => Map a [a] -> [a] -> Set a -> Set a
-dfs graph xs set
-  = dfs' xs set
+dfs graph
+  = dfs'
   where
     dfs' (x:xs) set
       | x `Set.member` set
         = dfs' xs set
       | otherwise
-        = dfs' ((fromMaybe [] $ Map.lookup x graph) ++ xs) (Set.insert x set)
+        = dfs' (fromMaybe [] (Map.lookup x graph) ++ xs) (Set.insert x set)
     dfs' [] set
       = set

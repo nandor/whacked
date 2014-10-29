@@ -2,7 +2,6 @@
 {-# LANGUAGE LambdaCase, RecordWildCards, NamedFieldPuns #-}
 module Main where
 
-
 import           Control.Applicative
 import           Control.Monad
 import           Data.List
@@ -25,6 +24,8 @@ import           Whacked.Optimizer.SCCP
 import           Whacked.Backend.ARM as ARM
 
 
+
+-- |Structure to hold command line options.
 data Options
   = Options
     { optPrintAST :: Bool
@@ -36,6 +37,7 @@ data Options
   deriving (Eq, Ord, Show)
 
 
+-- |List of command line options parsed by getopt.
 options :: [ OptDescr (Options -> Options) ]
 options
   = [ Option "A" ["print-ast"]
@@ -56,6 +58,7 @@ options
     ]
 
 
+-- |Default options.
 defaultOptions :: Options
 defaultOptions
   = Options
@@ -67,6 +70,7 @@ defaultOptions
     }
 
 
+-- |Prints help.
 usage :: IO ()
 usage = do
   prog <- getProgName
@@ -76,9 +80,11 @@ usage = do
   putStrLn $ usageInfo header options
 
 
+-- |Entry point of the compiler. Parses arguments & starts the pipeline.
 main :: IO ()
 main
   = getOpt Permute options <$> getArgs >>= \case
+    -- Compile stuff if argument parsing succeeds.
     (opts, [sourceName], []) -> do
       let Options{..} = foldl (flip ($)) defaultOptions opts
 
@@ -90,39 +96,40 @@ main
         putStrLn $ "[" ++ sourceName ++ "]: File does not exist."
         exitFailure
 
-      -- |Get the AST.
+      -- |Parse, optimize and compile stuff.
       readFile sourceName >>= \source -> case parse sourceName source of
         Left err -> do
-          putStrLn (show err)
+          print err
           exitWith $ ExitFailure 100
-        Right ast -> do
-          when optPrintAST $ print ast
-          case generateI ast of
-            Left err -> do
-              putStrLn err
-              exitWith $ ExitFailure 200
-            Right itch -> do
-              when optPrintIMF $ print itch
+        Right ast -> case generateI ast of
+          Left err -> do
+            putStrLn err
+            exitWith $ ExitFailure 200
+          Right itch -> do
+            let -- Optimized intermediate form.
+                scratch = pruneCallGraph        -- Removes unused functions.
+                        . mapF ( pruneFlowGraph -- Removes unreachable code.
+                               . flatten        -- Replaces basic blocks.
+                               . simplify       -- Replaces IMF with core calls.
+                               . removePhi      -- Removes PHI nodes.
+                               . moveConstants  -- Computes constants.
+                               . sccp           -- Propagates constants.
+                               )
+                        . generateS             -- Generate Scratchy code.
+                        $ itch
 
-              let scratch = pruneCallGraph
-                          . mapF ( pruneFlowGraph
-                                 . flatten
-                                 . simplify
-                                 . removePhi
-                                 . moveConstants
-                                 . sccp
-                                 )
-                          . generateS
-                          $ itch
+                -- Assembly code.
+                asm = ARM.compile scratch
 
-              when optPrintIMF $ print scratch
+                -- Output file name.
+                (file, _) = splitExtension sourceName
+                out = fromMaybe (file ++ ".s") optOutput
 
-              let asm = ARM.compile scratch
-              when optPrintASM $ do
-                  mapM_ (putStrLn . show) asm
+            when optPrintAST $ print ast
+            when optPrintIMF $ print itch
+            when optPrintIMF $ print scratch
+            when optPrintASM $ mapM_ print asm
+            writeFile out $ concatMap (\x -> show x ++ "\n") asm
 
-              let (file, _) = splitExtension sourceName
-                  out = fromMaybe (file ++ ".s") optOutput
-              writeFile out (concatMap (\x -> show x ++ "\n") $ asm)
-
+    -- Display an error message if argument parsing fails.
     (_, _, errs) -> usage

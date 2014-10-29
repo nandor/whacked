@@ -43,7 +43,7 @@ getBlocks body
   where
     (blocks, target, _, _) = group Map.empty Map.empty [] 0 body
     group blocks target block next (instr:instrs) = case instr of
-      ILabel{..} | block == [] ->
+      ILabel{..} | null block ->
         group
           blocks
           (Map.insert iiLabel next target)
@@ -71,7 +71,7 @@ getBlocks body
             (next + 1)
             instrs
     group blocks target block next []
-      | block == [] =
+      | null block =
         ( blocks
         , target
         , block
@@ -109,8 +109,8 @@ getGraph blocks target
         _ -> Set.singleton (index + 1)
 
     graph' = Map.foldlWithKey backLink Map.empty graph
-    backLink graph index out
-      = Set.foldl backLink' graph out
+    backLink graph index
+      = Set.foldl backLink' graph
       where
         backLink' graph out'
           = case Map.lookup out' graph of
@@ -129,8 +129,7 @@ getDominators graph graph' = runST $ do
   dom <- MVector.new (count + 1)
 
   MVector.write dom 0 (Just 0)
-  forM_ [1..count] $ \i -> do
-    MVector.write dom i Nothing
+  forM_ [1..count] $ \i -> MVector.write dom i Nothing
 
   let findDominators = do
         changed <- forM [0..count] $ \i -> case Map.lookup i graph' of
@@ -159,14 +158,13 @@ getDominators graph graph' = runST $ do
         | x == y = return x
         | x > y = do
           x' <- fromJust <$> MVector.read dom x
-          intersect x' y
+          x' `intersect` y
         | x < y = do
           y' <- fromJust <$> MVector.read dom y
-          intersect x y'
+          x `intersect` y'
 
   findDominators
-  dom <- forM [0..count] $ (MVector.read dom)
-  return $ Vector.fromList dom
+  Vector.fromList <$> forM [0..count] (MVector.read dom)
 
 
 -- | Computes the dominance frontier. The dominance frontier of a node is
@@ -255,7 +253,7 @@ newtype Generator a
 -- | Runs the generator monad.
 runGenerator :: Map Int Int -> Generator a -> (a, Scope)
 runGenerator labels gen
-  = let (a, scope) = runState (run gen) $ Scope
+  = let (a, scope) = runState (run gen) Scope
           { nextTemp = 0
           , block = 0
           , vars = Map.empty
@@ -384,8 +382,8 @@ genExpr INull{} dest = do
 
 -- | Generates Scratchy intermediate code out of Itchy expressions.
 genInstr :: IInstr -> Generator ()
-genInstr ILabel{..} = do
-  return ()
+genInstr ILabel{..}
+  = return ()
 genInstr IReturn{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SReturn expr
@@ -474,10 +472,8 @@ genFunc func@IFunction{..}
               }
             case Set.toList <$> Map.lookup idx graph' of
               Nothing -> return ()
-              Just xs -> do
-                get >>= \scope@Scope{vars} -> put scope
-                  { vars = Map.unions
-                      [x | Just x <- map (`Map.lookup` blockVar) xs ]
+              Just xs -> get >>= \scope@Scope{vars} -> put scope
+                  { vars = Map.unions . mapMaybe (`Map.lookup` blockVar) $ xs
                   }
 
             mapM_ genInstr instrs
@@ -510,7 +506,7 @@ genFunc func@IFunction{..}
         computePhi' phi@SPhi{..} = fromJust $ do
           x <- Map.lookup spDest (vars' scope)
           prev <- Set.toList <$> Map.lookup idx graph'
-          return phi{ spMerge = [y | Just y <- map (lookupVar x) prev] }
+          return phi{ spMerge = mapMaybe (lookupVar x) prev }
 
         lookupVar var block = do
           vars <- Map.lookup block blockVar

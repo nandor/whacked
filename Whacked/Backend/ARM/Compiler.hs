@@ -57,45 +57,44 @@ getLabel i = do
 moveLocToVar :: ARMLoc -> SVar -> Compiler ()
 moveLocToVar (ARMLocReg reg) var
   = get >>= \Scope{..} -> case Map.lookup var regs of
-      Nothing ->
-        return ()
-      Just (ARMLocReg reg') -> do
-        when (reg' /= reg) $
-          tell [ ARMMov AAL reg' (ARMR reg) ]
-      Just (ARMLocStk stk) -> do
+      Just (ARMLocReg reg') | reg == reg' ->
+        tell [ ARMMov AAL reg' (ARMR reg) ]
+      Just (ARMLocStk stk) ->
         tell [ ARMStr reg SP $ ARMI (stk * 4) ]
+      _ ->
+        return ()
 moveLocToVar (ARMLocArgIn stk) var
   = get >>= \Scope{..} -> case Map.lookup var regs of
-      Nothing ->
-        return ()
-      Just (ARMLocReg reg') -> do
+      Just (ARMLocReg reg') ->
         tell [ ARMLdr reg' SP $ ARMI ((regStack + varStack + stk) * 4) ]
       Just (ARMLocStk stk') -> do
         tell [ ARMLdr R12 SP $ ARMI ((regStack + varStack + stk') * 4) ]
         tell [ ARMStr R12 SP $ ARMI (stk' * 4) ]
+      Nothing ->
+        return ()
+
 
 -- |Copies a variable to into one of the registers that is going to be passed
 -- as an argument to another function.
 moveVarToLoc :: SVar -> ARMLoc -> Compiler ()
-moveVarToLoc (SImm x) (ARMLocReg reg) = do
+moveVarToLoc (SImm x) (ARMLocReg reg) =
   tell [ ARMMov AAL reg (ARMI x) ]
 moveVarToLoc (SImm x) (ARMLocArgOut stk) = do
   tell [ ARMMov AAL R12 (ARMI x) ]
   tell [ ARMStr R12 SP $ ARMI (-(stk + 1) * 4) ]
 moveVarToLoc var (ARMLocReg reg)
   = get >>= \Scope{..} -> case Map.lookup var regs of
-      Nothing ->
+      Just (ARMLocReg reg') | reg' /= reg ->
+        tell [ ARMMov AAL reg (ARMR reg') ]
+      Just (ARMLocStk stk) ->
+        tell [ ARMLdr reg SP $ ARMI (stk * 4) ]
+      _ ->
         return ()
-      Just (ARMLocReg reg') -> do
-        when (reg' /= reg) $
-          tell [ ARMMov AAL reg (ARMR reg') ]
-      Just (ARMLocStk stk) -> do
-          tell [ ARMLdr reg SP $ ARMI (stk * 4) ]
 moveVarToLoc var (ARMLocArgOut stk)
   = get >>= \Scope{..} -> case Map.lookup var regs of
       Nothing ->
         return ()
-      Just (ARMLocReg reg') -> do
+      Just (ARMLocReg reg') ->
         tell [ ARMStr reg' SP $ ARMI (-(stk + 1) * 4) ]
       Just (ARMLocStk stk') -> do
         tell [ ARMLdr R12 SP $ ARMI (stk' * 4) ]
@@ -152,11 +151,13 @@ fetchImm var reg
 
 -- |Moves an immediate into a register.
 move :: ARMReg -> ARMImm -> Compiler ()
-move reg (ARMR reg') = do
-  when (reg' /= reg) $
+move reg = \case
+  ARMR reg' | reg == reg' ->
     tell [ ARMMov AAL reg (ARMR reg') ]
-move reg imm = do
-  tell [ ARMMov AAL reg imm ]
+  ARMI imm ->
+    tell [ ARMMov AAL reg (ARMI imm) ]
+  _ ->
+    return ()
 
 
 -- |Generates ARM assembly for an instruction.
@@ -228,11 +229,10 @@ compileInstr SUnJump{..} = do
 compileInstr SJump{..} = do
   label <- getLabel siWhere
   tell [ ARMB AAL label ]
-compileInstr SMov{ siArg = (SImm x), ..} = do
+compileInstr SMov{ siArg = (SImm x), ..} =
   storeImm siDest (ARMI x) R12
-compileInstr SMov{ siArg = x@(SVar _), ..} = do
-  Scope{..} <- get
-  case fromJust $ Map.lookup siDest regs of
+compileInstr SMov{ siArg = x@(SVar _), ..}
+  = get >>= \Scope{..} -> case fromJust $ Map.lookup siDest regs of
     ARMLocReg reg -> do
       var <- fetchReg x reg
       storeReg siDest var
@@ -250,10 +250,8 @@ compileInstr SReadArray{..} = do
       index <- fetchImm siIndex R11
       tell [ ARMLdrb dest array index ]
     _ -> fetchImm siIndex R11 >>= \case
-      ARMI idx ->
-        tell [ ARMLdr dest array (ARMI (idx * 4)) ]
-      ARMR reg -> do
-        tell [ ARMLdrLsl dest array reg 2 ]
+      ARMI idx -> tell [ ARMLdr dest array (ARMI (idx * 4)) ]
+      ARMR reg -> tell [ ARMLdrLsl dest array reg 2 ]
   storeReg siDest dest
 compileInstr SWriteArray{..} = do
   array <- fetchReg siArray R12
@@ -281,19 +279,20 @@ compileInstr SReadPair{..} = do
   storeReg siDest dest
 compileInstr SCall{..} = do
   -- Copy arguments to registers & stack.
-  forM_ (zip siArgs (argOutLocation $ length siArgs)) $ \(from, to) -> do
-    moveVarToLoc from to
+  forM_ (zip siArgs (argOutLocation $ length siArgs)) $
+    uncurry moveVarToLoc
 
   -- Call the function.
-  when (length siArgs > 4) $ do
+  when (length siArgs > 4) $
     tell [ARMSub AAL SP SP (ARMI $ (length siArgs - 4) * 4)]
   tell [ ARMBL siFunc]
-  when (length siArgs > 4) $ do
+  when (length siArgs > 4) $
     tell [ARMAdd AAL SP SP (ARMI $ (length siArgs - 4) * 4)]
 
   -- Move returns values to registers / stack.
-  forM_ (zip siRet [ARMLocReg x | x <- enumFromTo R0 R3]) $ \(to, from) -> do
-    moveLocToVar from to
+  forM_ (zip siRet [ARMLocReg x | x <- enumFromTo R0 R3]) $
+    uncurry (flip moveLocToVar)
+
 compileInstr SReturn{..} = do
   arg <- fetchImm siArg R0
   Scope{ toSave, varStack } <- get
@@ -316,7 +315,7 @@ compileFunc func@SFlatFunction{..} = do
       usedRegs
         = [ x
           | ARMLocReg x <- nub $ map snd (Map.toList regAlloc)
-          , not (x `elem` (enumFromTo R0 R3))
+          , x `notElem` enumFromTo R0 R3
           ]
       stackSpace
         = length . nub $ [ x | (reg,  ARMLocStk x) <- Map.toList regAlloc ]
@@ -339,8 +338,8 @@ compileFunc func@SFlatFunction{..} = do
     tell [ ARMSub AAL SP SP (ARMI $ stackSpace * 4) ]
 
   -- Copy arguments to their proper location.
-  forM_ (zip (argInLocation $ length sfArgs) sfArgs) $ \(from, to) -> do
-    moveLocToVar from to
+  forM_ (zip (argInLocation $ length sfArgs) sfArgs) $
+    uncurry moveLocToVar
 
   -- Emit instructions.
   forM_ (zip live sfInstrs) $ \((_, out), (i, instr)) -> do
@@ -349,19 +348,19 @@ compileFunc func@SFlatFunction{..} = do
       tell [ ARMLabel label ]
 
     case getKill instr of
-      [x] | not (isCall instr) && not (x `elem` out) -> return ()
+      [x] | not (isCall instr) && x `notElem` out -> return ()
       _ -> compileInstr instr
 
   tell [ ARMLtorg ]
 
   -- Update the label counter.
-  get >>= \scope@Scope{ labelBase } -> do
+  get >>= \scope@Scope{ labelBase } ->
     put scope{ labelBase = labelBase + length sfInstrs}
 
 
 compileProg :: SProgram -> Compiler ()
-compileProg SProgram{..} = do
-  forM_ spFuncs $ \case
+compileProg SProgram{..}
+  = forM_ spFuncs $ \case
     func@SFlatFunction{..} -> compileFunc func
     core@SCoreFunction{..} -> tell [ARMCore sfCore]
 
@@ -379,7 +378,7 @@ compile program
     dataSeg
       = map snd
       . Map.toList
-      . Map.mapWithKey (\x y -> ARMString x y)
+      . Map.mapWithKey ARMString
       $ strings
 
     scope

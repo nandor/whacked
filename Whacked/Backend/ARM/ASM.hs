@@ -200,9 +200,9 @@ instance Show ASM where
       show m ++ ", " ++ show s
 
   show (ARMPUSH rs)
-    = "    PUSH {" ++ concat (intersperse ", " (map show rs)) ++ "}"
+    = "    PUSH {" ++ intercalate ", " (map show rs) ++ "}"
   show (ARMPOP rs)
-    = "    POP {" ++ concat (intersperse ", " (map show rs)) ++ "}"
+    = "    POP {" ++ intercalate ", " (map show rs) ++ "}"
   show (ARMB cond xs)
     = "    B" ++ show cond ++ " L" ++ show xs
   show (ARMBL xs)

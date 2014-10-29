@@ -148,13 +148,13 @@ data IInstr
 
 instance Show IProgram where
   show IProgram{..}
-    = concat . intersperse "\n\n" . map show $ ipFuncs
+    = intercalate "\n\n" . map show $ ipFuncs
 
 
 instance Show IFunction where
   show IFunction{..}
-    = ifName ++ "(" ++ concat (intersperse "," $ map showArg ifArgs) ++ ")\n"
-      ++ concat (intersperse "\n" $ map show ifBody)
+    = ifName ++ "(" ++ intercalate"," (map showArg ifArgs) ++ ")\n"
+      ++ intercalate "\n" (map show ifBody)
     where
       showArg (t, name)
         = "<" ++ name ++ ":0>"
@@ -176,7 +176,7 @@ instance Show IExpr where
   show IString{..}
     = show ieString
   show IArray{..}
-    = "[" ++ concat (intersperse "," $ map show ieElems) ++ "]"
+    = "[" ++ intercalate "," (map show ieElems) ++ "]"
   show IPair{..}
     = "{" ++ show ieFst ++ "," ++ show ieSnd ++ "}"
   show IIndex{..}
@@ -184,7 +184,7 @@ instance Show IExpr where
   show IElem{..}
     = show iePair ++ "." ++ show ieElem
   show ICall{..}
-    = ieName ++ "(" ++ concat (intersperse "," $ map show ieArgs) ++ ")"
+    = ieName ++ "(" ++ intercalate "," (map show ieArgs) ++ ")"
   show IRead{..}
     = "read"
   show INull{..}

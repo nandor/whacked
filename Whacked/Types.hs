@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Whacked.Types where
 
 import           Data.Bits
@@ -199,12 +200,12 @@ match (String    ) (Array Char) = True
 match (x         ) (y         ) = x == y
 
 
--- |Checks if a RValue can be read.
+-- |Checks if a RValue can be read. Only ints and chars can be read.
 isReadable :: Type -> Bool
-isReadable Int          = True
-isReadable Char         = True
-isReadable (Array Char) = True
-isReadable _            = False
+isReadable = \case
+  Int   -> True
+  Char  -> True
+  _     -> False
 
 
 -- |Checks if the variable can be encoded in an ARM instruction.

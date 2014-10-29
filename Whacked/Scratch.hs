@@ -26,17 +26,19 @@ data SCore
   deriving ( Eq, Ord, Show )
 
 
+-- |List of core functions for which the backend must provide an implementation
+-- in assembly language.
 coreFunctions :: [SFunction]
 coreFunctions
-  = [ SCoreFunction [] "__read_int"     SReadInt
-    , SCoreFunction [] "__read_char"    SReadChar
-    , SCoreFunction [] "__print_int"    SPrintInt
-    , SCoreFunction [] "__print_char"   SPrintChar
-    , SCoreFunction [] "__print_bool"   SPrintBool
-    , SCoreFunction [] "__print_string" SPrintString
-    , SCoreFunction [] "__print_ref"    SPrintRef
-    , SCoreFunction [] "__alloc"        SAlloc
-    , SCoreFunction [] "__delete"       SDelete
+  = [ SCoreFunction "__read_int"     SReadInt
+    , SCoreFunction "__read_char"    SReadChar
+    , SCoreFunction "__print_int"    SPrintInt
+    , SCoreFunction "__print_char"   SPrintChar
+    , SCoreFunction "__print_bool"   SPrintBool
+    , SCoreFunction "__print_string" SPrintString
+    , SCoreFunction "__print_ref"    SPrintRef
+    , SCoreFunction "__alloc"        SAlloc
+    , SCoreFunction "__delete"       SDelete
     ]
 
 
@@ -68,8 +70,7 @@ data SFunction
     , sfName   :: String
     }
   | SCoreFunction
-    { sfArgs :: [SVar]
-    , sfName :: String
+    { sfName :: String
     , sfCore :: SCore
     }
   deriving ( Eq, Ord )
@@ -196,19 +197,19 @@ instance Show SVar where
 
 instance Show SProgram where
   show SProgram{..}
-    = concat . intersperse "\n\n" . map show $ spFuncs
+    = intercalate "\n\n" . map show $ spFuncs
 
 
 instance Show SFunction where
   show SFunction{..}
-    = sfName ++ "(" ++ concat (intersperse "," $ map show sfArgs) ++ ")\n"
-      ++ concat (intersperse "\n" $ map showBlock . Map.toList $ sfBlocks)
+    = sfName ++ "(" ++ intercalate "," (map show sfArgs) ++ ")\n"
+      ++ intercalate "\n" (map showBlock . Map.toList $ sfBlocks)
     where
       showBlock (i, x)
         = printf "%4d:\n%s" i (show x)
   show SFlatFunction{..}
-    = sfName ++ "(" ++ concat (intersperse "," $ map show sfArgs) ++ ")\n"
-      ++ concat (intersperse "\n" $ map showInstr $ sfInstrs)
+    = sfName ++ "(" ++ intercalate "," (map show sfArgs) ++ ")\n"
+      ++ intercalate "\n" (map showInstr sfInstrs)
     where
       showInstr (i, x)
         = printf "%4d:   %s" i (show x)
@@ -218,15 +219,15 @@ instance Show SFunction where
 
 instance Show SBlock where
   show SBlock{..}
-    = (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbPhis) ++
+    = intercalate "\n" (map (\x -> "      " ++ show x) sbPhis) ++
       "\n" ++
-      (concat . intersperse "\n" . map (\x -> "      " ++ show x) $ sbInstrs)
+      intercalate "\n" (map (\x -> "      " ++ show x) sbInstrs)
 
 
 instance Show SPhi where
   show SPhi{..}
     = show spDest ++ " <- phi(" ++
-      (concat . intersperse "," $ map showArg spMerge) ++
+      intercalate "," (map showArg spMerge) ++
       ")"
     where
       showArg (from, var)
@@ -241,9 +242,9 @@ instance Show SInstr where
   show SMov{..}
     = show siDest ++ " <- " ++ show siArg
   show SCall{..}
-    = (concat . intersperse "," $ map show siRet) ++
+    = intercalate "," (map show siRet) ++
       " <- call " ++ siFunc ++
-      "(" ++ (concat . intersperse "," $ map show siArgs) ++ ")"
+      "(" ++ intercalate "," (map show siArgs) ++ ")"
   show SBool{..}
     = show siDest ++ " <- " ++ show siBool
   show SChar{..}

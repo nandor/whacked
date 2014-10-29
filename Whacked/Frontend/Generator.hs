@@ -139,7 +139,7 @@ genExpr ABinOp{..} = do
   (rt, re) <- genExpr aeRight
   case binOpType aeBinOp lt rt of
     Nothing ->
-      genError aeTag $ "type error(ABinOp): mismatched types"
+      genError aeTag "type error(ABinOp): mismatched types"
     Just t ->
       return (t, IBinOp t aeBinOp le re)
 genExpr AVar{..} = findVar aeName >>= \case
@@ -159,14 +159,14 @@ genExpr AIndex{..} = do
   (at, aexpr) <- genExpr aeArray
   (it, iexpr) <- genExpr aeIndex
   unless (it `match` Int) $
-    genError aeTag $ "type error: integer expected"
+    genError aeTag "type error: integer expected"
   case at of
     Array at' ->
       return (at', IIndex at' aexpr iexpr)
     String ->
       return (Char, IIndex Char aexpr iexpr)
     _ ->
-      genError aeTag $ "type error: array expected"
+      genError aeTag "type error: array expected"
 genExpr ANull{..} =
   return (Null, INull)
 
@@ -180,9 +180,9 @@ genRValue ARArray{..} =
     [] ->
       return (Empty, IArray Empty [])
     ((t, x):xs) | all (\(y, _) -> y == t) xs ->
-      return (Array t, IArray t $ x:(map snd xs))
+      return (Array t, IArray t $ x : map snd xs)
     _ ->
-      genError arTag $ "type error: invalid element"
+      genError arTag "type error: invalid element"
 genRValue ARPair{..} = do
   (le, lexpr) <- genExpr arFst
   (re, rexpr) <- genExpr arSnd
@@ -193,7 +193,7 @@ genRValue ARElem{..} = do
     Pair lp rp | arElem == Fst ->
       return (lp, IElem lp pexpr Fst)
     Pair lp rp | arElem == Snd ->
-      return $ (rp, IElem rp pexpr Snd)
+      return (rp, IElem rp pexpr Snd)
     _ ->
       genError arTag "type error: pair expected"
 genRValue ARCall{..} = do
@@ -203,11 +203,11 @@ genRValue ARCall{..} = do
       genError arTag $ "undefined function '" ++ arName ++ "'"
     Just AFunction{ afType, afArgs } -> do
       when (length afArgs /= length arArgs) $
-        genError arTag $ "invalid number of arguments"
+        genError arTag "invalid number of arguments"
       args <- forM (zip afArgs arArgs) $ \(AArg{ aaType }, arg) -> do
         (t, expr) <- genExpr arg
         unless (t `match` aaType) $
-          genError arTag $ "type error: invalid argument"
+          genError arTag "type error: invalid argument"
         return expr
       return (afType, ICall afType arName args)
 
@@ -232,12 +232,9 @@ genJump target branch expr@IBinOp{..}
         genJump end True ieLeft
         genJump target False ieRight
         tell [ ILabel end ]
-      Cmp op | branch -> do
-        tell [ IBinJump target op ieLeft ieRight ]
-      Cmp op -> do
-        tell [ IBinJump target (invertCond op) ieLeft ieRight ]
-      op ->
-        tell [ IUnJump target branch expr ]
+      Cmp op | branch -> tell [ IBinJump target op ieLeft ieRight ]
+      Cmp op          -> tell [ IBinJump target (invertCond op) ieLeft ieRight ]
+      op              -> tell [ IUnJump  target branch expr ]
 genJump target branch expr
   = case expr of
     IUnOp{ ieUnOp = Not, .. } ->
@@ -248,8 +245,8 @@ genJump target branch expr
 
 -- |Generates code for a statement.
 genStmt :: AStatement -> Generator ()
-genStmt ASkip{..} = do
-  return ()
+genStmt ASkip{..}
+  = return ()
 genStmt AVarDecl{..} = do
   -- Insert variables in the scope. Checks if the variable has not been already
   -- declared in the same scope, generates an assignment instruction & places
@@ -266,7 +263,7 @@ genStmt AVarDecl{..} = do
   -- Check the types
   (et, eexpr) <- genRValue asWhat
   unless (asType `match` et) $
-    genError asTag $ "type error(AVarDecl): mismatched types"
+    genError asTag "type error(AVarDecl): mismatched types"
 
   -- Generate an assignment instruction.
   tell [IAssVar asName currentScope eexpr]
@@ -303,8 +300,7 @@ genStmt AAssign{..} = do
           unless (Char `match` et) $
             genError alTag "type error(ALArray): mismatched types"
           tell [ IAssArray aexpr iexpr eexpr]
-        _ -> do
-          genError alTag "type error: array expected"
+        _ -> genError alTag "type error: array expected"
     ALElem{..} -> do
       (pt, pexpr) <- genExpr alPair
       case pt of
@@ -316,14 +312,14 @@ genStmt AAssign{..} = do
           unless (st `match` et) $
             genError alTag "type error(ALElem): mismatched type"
           tell [ IAssPair pexpr Snd eexpr ]
-        _ -> do
-          genError alTag "type error: pair expected"
+        _ -> genError alTag "type error: pair expected"
 genStmt ARead{..} = case asTo of
   ALVar{..} -> findVar alName >>= \case
-    Nothing -> genError alTag $ "undefined variable '" ++ alName ++ "'"
-    Just (var, t) | isReadable t -> do
+    Nothing ->
+      genError alTag $ "undefined variable '" ++ alName ++ "'"
+    Just (var, t) | isReadable t ->
       tell [ IAssVar alName var (IRead t) ]
-    _ -> do
+    _ ->
       genError alTag "type error: cannot read type"
   ALArray{..} -> do
     (at, aexpr) <- genExpr alArray
@@ -333,23 +329,23 @@ genStmt ARead{..} = case asTo of
       genError alTag "type error: integer expected"
 
     case at of
-      Array t | isReadable t -> do
+      Array t | isReadable t ->
         tell [ IAssArray aexpr iexpr (IRead t) ]
-      _ -> do
+      _ ->
         genError alTag "type error: cannot read type"
   ALElem{..} -> do
     (pt, pexpr) <- genExpr alPair
     case pt of
-      Pair ft st | alElem == Fst && isReadable ft -> do
+      Pair ft st | alElem == Fst && isReadable ft ->
         tell [ IAssPair pexpr Fst (IRead ft) ]
-      Pair ft st | alElem == Snd && isReadable st -> do
+      Pair ft st | alElem == Snd && isReadable st ->
         tell [ IAssPair pexpr Fst (IRead st) ]
-      _ -> do
+      _ ->
         genError alTag "type error: type cannot be read"
 genStmt AFree{..} = do
   (t, expr) <- genExpr asExpr
   unless (t `match` Null) $
-    genError asTag $ "free can only be used on pairs"
+    genError asTag "free can only be used on pairs"
   tell [IFree expr]
 genStmt AReturn{..} = do
   scope@Scope{ function, functions } <- get
@@ -357,13 +353,12 @@ genStmt AReturn{..} = do
     Nothing -> genError asTag "function not found"
     Just AFunction{ afType } -> do
       (t, expr) <- genExpr asExpr
-      unless (t `match` afType) $ do
+      unless (t `match` afType) $
         genError asTag "invalid return type"
       tell [IReturn expr]
 genStmt AExit{..} = do
   (t, expr) <- genExpr asExpr
-  unless (t `match` Int) $ do
-    genError asTag $ "integer expected"
+  unless (t `match` Int) $ genError asTag "integer expected"
   tell [IExit expr]
 genStmt APrint{..} = do
   (t, expr) <- genExpr asExpr
@@ -373,9 +368,7 @@ genStmt APrintln{..} = do
   tell [IPrintln expr]
 genStmt AIf{..} = do
   (t, expr) <- genExpr asExpr
-  unless (t `match` Bool) $ do
-    genError asTag $ "boolean expected"
-
+  unless (t `match` Bool) $ genError asTag "boolean expected"
   [false, end] <- replicateM 2 getLabel
   (_, true') <- scope (mapM_ genStmt asTrue)
   (_, false') <- scope (mapM_ genStmt asFalse)
@@ -388,13 +381,10 @@ genStmt AIf{..} = do
   tell [ILabel end]
 genStmt AWhile{..} = do
   (t, expr) <- genExpr asExpr
-  unless (t `match` Bool) $ do
-    genError asTag $ "boolean expected"
-
+  unless (t `match` Bool) $ genError asTag "boolean expected"
   start <- getLabel
   (_, body) <- scope (mapM_ genStmt asBody)
   end <- getLabel
-
   genJump end False expr
   tell [ILabel start]
   tell body
@@ -403,8 +393,8 @@ genStmt AWhile{..} = do
 genStmt ABlock{..} = do
   (_, instrs) <- scope $ mapM_ genStmt asBody
   tell instrs
-genStmt AEnd = do
-  tell [IEnd]
+genStmt AEnd
+  = tell [IEnd]
 
 
 -- |Generates code for a function body.
@@ -434,13 +424,8 @@ genFunc AFunction{..} = do
 -- |Generates code for all the functions in the program. If type checking fails,
 -- an error message is returned.
 generateI :: AProgram -> Either String IProgram
-generateI (AProgram functions) = do
-  funcs <- forM (Map.toList functions') $ \func -> do
-    ifunc <- generate' func
-    -- unless (checkFlowGraph ifunc) $
-    -- throwError "not all control paths terminate"
-    return ifunc
-  return $ IProgram funcs
+generateI (AProgram functions)
+  = IProgram <$> forM (Map.toList functions') generate'
   where
     -- |All functions, used to check types.
     functions'
@@ -450,7 +435,7 @@ generateI (AProgram functions) = do
 
     generate' (_, [func]) = do
       (_, Scope{ declarations }, body) <- runGenerator (genFunc func) scope
-      return $ IFunction
+      return IFunction
           { ifName = afName func
           , ifType = afType func
           , ifArgs = args
@@ -476,5 +461,5 @@ generateI (AProgram functions) = do
             , variables = []
             , declarations = Set.empty
             }
-    generate' (name, _) = do
-      Left $ "redefinition of '" ++ name ++ "'"
+    generate' (name, _)
+      = Left $ "redefinition of '" ++ name ++ "'"

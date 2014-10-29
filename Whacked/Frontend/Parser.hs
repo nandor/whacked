@@ -132,7 +132,7 @@ aType
 
     arrayType = do
       t <- baseType <|> pairType
-      count <- length <$> (many1 (brackets whiteSpace))
+      count <- length <$> many1 (brackets whiteSpace)
       return $ foldl (\x _ -> Array x) t [1..count]
 
 
@@ -322,8 +322,7 @@ aFunction = do
   body <- semiSep1 aStatement
   reserved "end"
   -- Vi Coactus, I would have made this a semantic error.
-  unless (allPathsReturn body) $ do
-    unexpected "not all control paths return"
+  unless (allPathsReturn body) $ unexpected "not all control paths return"
   return $ AFunction tag args retType name body
 
 
@@ -340,5 +339,5 @@ aProgram = do
 
 -- |Runs the parser and return the AST or an error.
 parse :: String -> String -> Either ParseError AProgram
-parse sourceName source
- = Parsec.parse (whiteSpace *> aProgram <* eof) sourceName source
+parse
+ = Parsec.parse (whiteSpace *> aProgram <* eof)
