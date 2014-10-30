@@ -305,8 +305,18 @@ instance Show ASM where
   show (ARMCore SDelete)
     = [str|__delete:
           |    PUSH {R4-R12,LR}
-          |    SUB R0, R0, #4
-          |    BL free
-          |    MOV R0, #0
+          |    TST  R0, R0
+          |    BEQ  1f
+          |    SUB  R0, R0, #4
+          |    BL   free
+          |    MOV  R0, #0
           |    POP {R4-R12,PC}
+          |  1:
+          |    LDR  R0, =2f
+          |    BL   printf
+          |    MOV  R0, #0xFF
+          |    BL   exit
+          |  2:
+          |    .asciz "Runtime Error: Attempted free of null pointer.\n"
+          |    .align 4
           |]
