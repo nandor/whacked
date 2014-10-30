@@ -188,7 +188,7 @@ instance Show ASM where
   show (ARMTst cond d m)
     = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMTeq cond d m)
-    = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+    = "    TEQ" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMMov cond d n)
     = "    MOV" ++ show cond ++ " " ++ show d ++ ", " ++ show n
   show (ARMMvn cond d n)
