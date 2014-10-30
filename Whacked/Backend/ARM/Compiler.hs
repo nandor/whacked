@@ -152,7 +152,7 @@ fetchImm var reg
 -- |Moves an immediate into a register.
 move :: ARMReg -> ARMImm -> Compiler ()
 move reg = \case
-  ARMR reg' | reg == reg' ->
+  ARMR reg' | reg /= reg' ->
     tell [ ARMMov AAL reg (ARMR reg') ]
   ARMI imm ->
     tell [ ARMMov AAL reg (ARMI imm) ]

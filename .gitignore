@@ -3,3 +3,4 @@ dist/*
 wacc.s
 binary*
 .gdbinit
+basic*
