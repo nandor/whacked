@@ -1,4 +1,8 @@
 #!/bin/sh
 
-./dist/build/whacked/whacked $1
+filename=$(basename "$1")
+name="${filename%.*}"
+echo ${name}
+
+./dist/build/whacked/whacked $1 -o ${name}.s
 
