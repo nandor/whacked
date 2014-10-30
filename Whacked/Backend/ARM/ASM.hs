@@ -79,6 +79,7 @@ data ARMCond
   | AGE
   | AEQ
   | ANE
+  | AVS
   | AAL
   deriving (Eq, Ord)
 
@@ -100,6 +101,7 @@ instance Show ARMCond where
   show ALE  = "LE"
   show AEQ  = "EQ"
   show ANE  = "NE"
+  show AVS  = "VS"
 
 
 data ASM
@@ -172,10 +174,10 @@ instance Show ASM where
 
 
   show (ARMAdd cond d n m)
-    = "    ADD" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+    = "    ADD" ++ show cond ++ "S " ++ show d ++ ", " ++ show n ++
       ", " ++ show m
   show (ARMSub cond d n m)
-    = "    SUB" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
+    = "    SUB" ++ show cond ++ "S " ++ show d ++ ", " ++ show n ++
       ", " ++ show m
   show (ARMOrr cond d n m)
     = "    ORR" ++ show cond ++ " " ++ show d ++ ", " ++ show n ++
@@ -194,7 +196,7 @@ instance Show ASM where
   show (ARMMvn cond d n)
     = "    MVN" ++ show cond ++ " " ++ show d ++ ", " ++ show n
   show (ARMNeg cond d n)
-    = "    NEG" ++ show cond ++ " " ++ show d ++ ", " ++ show n
+    = "    NEG" ++ show cond ++ "S " ++ show d ++ ", " ++ show n
 
 
   show (ARMSmull cond lo hi m s)

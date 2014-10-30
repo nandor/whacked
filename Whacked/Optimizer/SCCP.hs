@@ -4,12 +4,12 @@ module Whacked.Optimizer.SCCP where
 import           Control.Applicative
 import           Control.Monad
 import           Data.Char
+import           Data.Int
+import           Data.List (nub, (\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.List (nub, (\\))
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Word
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Whacked.Scratch
@@ -21,11 +21,11 @@ import Debug.Trace
 
 -- |Min bound for the integer type.
 minInt :: Int
-minInt = fromIntegral (minBound :: Word32)
+minInt = fromIntegral (minBound :: Int32)
 
 -- |Max bound for the integer type.
 maxInt :: Int
-maxInt = fromIntegral (maxBound :: Word32)
+maxInt = fromIntegral (maxBound :: Int32)
 
 
 -- |Checks if a number fits in range.
@@ -140,7 +140,9 @@ evalUnOp _ Bot
   = Bot
 evalUnOp _ Top
   = Top
-evalUnOp Neg (CInt x)            = CInt (-x)
+evalUnOp Neg (CInt x)
+  | overflow (-x) = Bot
+  | otherwise     = CInt (-x)
 evalUnOp Not (CBool x)           = CBool (not x)
 evalUnOp Chr (CInt x)            = CChar (chr x)
 evalUnOp Ord (CChar x)           = CInt (ord x)
@@ -221,6 +223,13 @@ sccp func@SFunction{..}
           left <- lookupValue vars' siLeft
           right <- lookupValue vars' siRight
           case evalBinOp siBinOp left right of
+            CInt x  -> Just $ SInt siDest x
+            CBool x -> Just $ SBool siDest x
+            CChar x -> Just $ SChar siDest x
+            _       -> Just op
+        simplifyInstr op@SUnOp{ .. } = do
+          arg <- lookupValue vars' siArg
+          case evalUnOp siUnOp arg of
             CInt x  -> Just $ SInt siDest x
             CBool x -> Just $ SBool siDest x
             CChar x -> Just $ SChar siDest x

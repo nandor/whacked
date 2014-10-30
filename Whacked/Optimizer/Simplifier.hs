@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
-
+import Debug.Trace
 
 
 -- |Pushes immediate constants into instructions. Due to the fact that ARM
@@ -38,6 +38,8 @@ moveConstants func@SFunction{..}
       = case instr of
         op@SBinOp{..} ->
           (vars, op{ siRight = replaceVar siRight }:instrs)
+        op@SUnOp{..} ->
+          (vars, op{ siArg = replaceVar siArg }: instrs)
         op@SMov{..} ->
           (vars, op{ siArg = replaceVar siArg }:instrs)
         op@SBool{..} ->
@@ -172,6 +174,11 @@ pruneCallGraph prog@SProgram{..}
       = ["__check_zero"]
     getCalls SCheckBounds{..}
       = ["__check_bounds"]
+    getCalls SBinOp{..}
+      | siBinOp `elem` [ Add, Sub, Mul ] = [ "__check_overflow" ]
+      | otherwise = []
+    getCalls SUnOp{ siUnOp = Neg }
+      = [ "__check_overflow" ]
     getCalls _
       = []
 

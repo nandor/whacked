@@ -188,9 +188,11 @@ compileInstr SBinOp{..} = do
     Add -> do
       imm <- fetchImm siRight R12
       tell [ ARMAdd AAL dest left imm ]
+      tell [ ARMB AVS $ Right "__check_overflow" ]
     Sub -> do
       imm <- fetchImm siRight R12
       tell [ ARMSub AAL dest left imm ]
+      tell [ ARMB AVS $ Right "__check_overflow" ]
     Or  -> do
       imm <- fetchImm siRight R12
       tell [ ARMOrr AAL dest left imm ]
@@ -212,7 +214,9 @@ compileInstr SUnOp{..} = do
   arg  <- fetchImm siArg R12
   case siUnOp of
     Not -> tell [ ARMMvn AAL dest arg ]
-    Neg -> tell [ ARMNeg AAL dest arg ]
+    Neg -> do
+      tell [ ARMNeg AAL dest arg ]
+      tell [ ARMB AVS $ Right "__check_overflow" ]
     Ord -> move dest arg
     Chr -> move dest arg -- TODO(nl1813): Check for overflow.
 compileInstr SBinJump{..} = do
