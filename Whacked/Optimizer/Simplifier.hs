@@ -52,6 +52,8 @@ moveConstants func@SFunction{..}
           (vars, op{ siRight = replaceVar siRight }:instrs)
         op@SReturn{..} ->
           (vars, op{ siArg = replaceVar siArg }:instrs)
+        op@SCheckNull{..} ->
+          (vars, op{ siArg = replaceVar siArg }:instrs)
         _ ->
           (vars, instr:instrs)
       where
@@ -81,6 +83,8 @@ simplify func@SFunction{..}
       = [SCall [siDest] "__alloc" [SImm 8]]
     replace SFree{..}
       = [SCall [] "__delete" [siDest]]
+    replace SCheckNull{..}
+      = [SCall [] "__check_null" [siArg]]
     replace x
       = [x]
 

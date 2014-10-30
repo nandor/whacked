@@ -350,6 +350,7 @@ genExpr IPair{..} dest = do
   return (Pair lt rt, dest)
 genExpr IElem{..} dest = do
   (pt, pexpr) <- genTemp >>= genExpr iePair
+  emit $ SCheckNull pexpr
   case pt of
     Pair lt rt | ieElem == Fst -> do
       emit $ SReadPair Fst dest pexpr
@@ -429,13 +430,15 @@ genInstr IEnd{} = do
   emit $ SReturn expr
 genInstr IAssArray{..} = do
   (_, array) <- genTemp >>= genExpr iiArray
+  emit $ SCheckNull array
   (_, idx)   <- genTemp >>= genExpr iiIndex
   (t, expr)  <- genTemp >>= genExpr iiExpr
   emit $ SWriteArray array idx expr t
 genInstr IAssPair{..} = do
-  (_, pexpr) <- genTemp >>= genExpr iiPair
+  (_, pair) <- genTemp >>= genExpr iiPair
+  emit $ SCheckNull pair
   (t, expr)  <- genTemp >>= genExpr iiExpr
-  emit $ SWritePair iiElem pexpr expr
+  emit $ SWritePair iiElem pair expr
 genInstr IFree{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
   emit $ SFree expr

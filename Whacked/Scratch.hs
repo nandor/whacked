@@ -23,6 +23,7 @@ data SCore
   | SPrintRef
   | SAlloc
   | SDelete
+  | SThrow String
   deriving ( Eq, Ord, Show )
 
 
@@ -30,15 +31,18 @@ data SCore
 -- in assembly language.
 coreFunctions :: [SFunction]
 coreFunctions
-  = [ SCoreFunction "__read_int"     SReadInt
-    , SCoreFunction "__read_char"    SReadChar
-    , SCoreFunction "__print_int"    SPrintInt
-    , SCoreFunction "__print_char"   SPrintChar
-    , SCoreFunction "__print_bool"   SPrintBool
-    , SCoreFunction "__print_string" SPrintString
-    , SCoreFunction "__print_ref"    SPrintRef
-    , SCoreFunction "__alloc"        SAlloc
-    , SCoreFunction "__delete"       SDelete
+  = [ SCoreFunction "__read_int"       SReadInt
+    , SCoreFunction "__read_char"      SReadChar
+    , SCoreFunction "__print_int"      SPrintInt
+    , SCoreFunction "__print_char"     SPrintChar
+    , SCoreFunction "__print_bool"     SPrintBool
+    , SCoreFunction "__print_string"   SPrintString
+    , SCoreFunction "__print_ref"      SPrintRef
+    , SCoreFunction "__alloc"          SAlloc
+    , SCoreFunction "__delete"         SDelete
+    , SCoreFunction "__check_null"     $ SThrow "Null pointer dereference."
+    , SCoreFunction "__check_overflow" $ SThrow "Integer overflow."
+    , SCoreFunction "__check_range"    $ SThrow "Index out of range."
     ]
 
 
@@ -185,6 +189,9 @@ data SInstr
   | SLabel
     { siWhere :: Int
     }
+  | SCheckNull
+    { siArg :: SVar
+    }
   deriving (Eq, Ord)
 
 
@@ -276,6 +283,8 @@ instance Show SInstr where
     = "jmpun @" ++ show siWhere ++ ", " ++ show siWhen ++ "=" ++ show siArg
   show SJump{..}
     = "jmp @" ++ show siWhere
+  show SCheckNull{..}
+    = "nullchk " ++ show siArg
 
 
 -- |Applies a function to all functions.
@@ -373,6 +382,7 @@ getKill x
     SBinJump{..}    -> []
     SUnJump{..}     -> []
     SJump{..}       -> []
+    SCheckNull{..}  -> []
 
 
 -- |Returns the list of variables that are used in a statement.
@@ -398,3 +408,4 @@ getGen x
     SBinJump{..}    -> [siLeft, siRight]
     SUnJump{..}     -> [siArg]
     SJump{..}       -> []
+    SCheckNull{..}  -> [siArg]
