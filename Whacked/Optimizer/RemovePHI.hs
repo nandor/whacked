@@ -122,3 +122,9 @@ removePhi func@SFunction{..}
       = op
     replaceInstr op@SCheckNull{..}
       = op{ siArg = replace siArg }
+    replaceInstr op@SCheckZero{..}
+      = op{ siArg = replace siArg }
+    replaceInstr op@SCheckBounds{..}
+      = op{ siIndex = replace siIndex
+          , siArray = replace siArray
+          }

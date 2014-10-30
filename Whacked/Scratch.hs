@@ -46,8 +46,8 @@ coreFunctions
         SThrow "__check_zero" "Division by zero."
     , SCoreFunction "__check_overflow" $
         SThrow "__check_overflow" "Integer overflow."
-    , SCoreFunction "__check_range" $
-        SThrow "__check_range" "Index out of range."
+    , SCoreFunction "__check_bounds" $
+        SThrow "__check_bounds" "Index out of range."
     ]
 
 
@@ -158,6 +158,10 @@ data SInstr
     , siIndex :: SVar
     , siType  :: Type
     }
+  | SLength
+    { siDest :: SVar
+    , siArray :: SVar
+    }
   | SNewPair
     { siDest :: SVar
     }
@@ -199,6 +203,10 @@ data SInstr
     }
   | SCheckZero
     { siArg :: SVar
+    }
+  | SCheckBounds
+    { siArray :: SVar
+    , siIndex :: SVar
     }
   deriving (Eq, Ord)
 
@@ -266,6 +274,8 @@ instance Show SInstr where
     = show siDest ++ " <- " ++ show siChar
   show SInt{..}
     = show siDest ++ " <- " ++ show siInt
+  show SLength{..}
+    = show siDest ++ " <- len " ++ show siArray
   show SString{..}
     = show siDest ++ " <- " ++ show siString
   show SNewArray{..}
@@ -295,6 +305,8 @@ instance Show SInstr where
     = "nullchk " ++ show siArg
   show SCheckZero{..}
     = "zerochk " ++ show siArg
+  show SCheckBounds{..}
+    = "boundchk " ++ show siArray ++ "[" ++ show siIndex ++ "]"
 
 
 -- |Applies a function to all functions.
@@ -373,51 +385,55 @@ getTarget _            = []
 getKill :: SInstr -> [SVar]
 getKill x
   = filter isVar $ case x of
-    SBinOp{..}      -> [siDest]
-    SUnOp{..}       -> [siDest]
-    SMov{..}        -> [siDest]
-    SCall{..}       -> siRet
-    SBool{..}       -> [siDest]
-    SChar{..}       -> [siDest]
-    SInt{..}        -> [siDest]
-    SString{..}     -> [siDest]
-    SNewArray{..}   -> [siDest]
-    SWriteArray{..} -> []
-    SReadArray{..}  -> [siDest]
-    SNewPair{..}    -> [siDest]
-    SWritePair{..}  -> []
-    SReadPair{..}   -> [siDest]
-    SFree{..}       -> [siDest]
-    SReturn{..}     -> []
-    SBinJump{..}    -> []
-    SUnJump{..}     -> []
-    SJump{..}       -> []
-    SCheckNull{..}  -> []
-    SCheckZero{..}  -> []
+    SBinOp{..}       -> [siDest]
+    SUnOp{..}        -> [siDest]
+    SMov{..}         -> [siDest]
+    SCall{..}        -> siRet
+    SBool{..}        -> [siDest]
+    SChar{..}        -> [siDest]
+    SInt{..}         -> [siDest]
+    SString{..}      -> [siDest]
+    SLength{..}      -> [siDest]
+    SNewArray{..}    -> [siDest]
+    SWriteArray{..}  -> []
+    SReadArray{..}   -> [siDest]
+    SNewPair{..}     -> [siDest]
+    SWritePair{..}   -> []
+    SReadPair{..}    -> [siDest]
+    SFree{..}        -> [siDest]
+    SReturn{..}      -> []
+    SBinJump{..}     -> []
+    SUnJump{..}      -> []
+    SJump{..}        -> []
+    SCheckNull{..}   -> []
+    SCheckZero{..}   -> []
+    SCheckBounds{..} -> []
 
 
 -- |Returns the list of variables that are used in a statement.
 getGen :: SInstr -> [SVar]
 getGen x
   = filter isVar $ case x of
-    SBinOp{..}      -> [siLeft, siRight]
-    SUnOp{..}       -> [siArg]
-    SMov{..}        -> [siArg]
-    SCall{..}       -> siArgs
-    SBool{..}       -> []
-    SChar{..}       -> []
-    SInt{..}        -> []
-    SString{..}     -> []
-    SNewArray{..}   -> []
-    SWriteArray{..} -> [siArray, siIndex, siExpr]
-    SReadArray{..}  -> [siArray, siIndex]
-    SNewPair{..}    -> []
-    SWritePair{..}  -> [siPair, siExpr]
-    SReadPair{..}   -> [siPair]
-    SFree{..}       -> [siDest]
-    SReturn{..}     -> [siArg]
-    SBinJump{..}    -> [siLeft, siRight]
-    SUnJump{..}     -> [siArg]
-    SJump{..}       -> []
-    SCheckNull{..}  -> [siArg]
-    SCheckZero{..}  -> [siArg]
+    SBinOp{..}       -> [siLeft, siRight]
+    SUnOp{..}        -> [siArg]
+    SMov{..}         -> [siArg]
+    SCall{..}        -> siArgs
+    SBool{..}        -> []
+    SChar{..}        -> []
+    SInt{..}         -> []
+    SString{..}      -> []
+    SNewArray{..}    -> []
+    SLength{..}      -> [siArray]
+    SWriteArray{..}  -> [siArray, siIndex, siExpr]
+    SReadArray{..}   -> [siArray, siIndex]
+    SNewPair{..}     -> []
+    SWritePair{..}   -> [siPair, siExpr]
+    SReadPair{..}    -> [siPair]
+    SFree{..}        -> [siDest]
+    SReturn{..}      -> [siArg]
+    SBinJump{..}     -> [siLeft, siRight]
+    SUnJump{..}      -> [siArg]
+    SJump{..}        -> []
+    SCheckNull{..}   -> [siArg]
+    SCheckZero{..}   -> [siArg]
+    SCheckBounds{..} -> [siIndex, siArray]

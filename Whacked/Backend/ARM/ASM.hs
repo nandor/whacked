@@ -298,11 +298,13 @@ instance Show ASM where
 
   show (ARMCore SAlloc)
     = [str|__alloc:
-          |    PUSH {R4-R12,LR}
-          |    ADD R0, R0, #4
-          |    BL malloc
-          |    ADD R0, R0, #4
-          |    POP {R4-R12,PC}
+          |    PUSH  {R4-R12,LR}
+          |    UMULL R4, R5, R0, R1
+          |    MOV   R5, R0
+          |    ADD   R0, R4, #4
+          |    BL    malloc
+          |    STR   R5, [R0], #4
+          |    POP   {R4-R12,PC}
           |]
 
   show (ARMCore SDelete)
@@ -313,7 +315,7 @@ instance Show ASM where
           |    SUB  R0, R0, #4
           |    BL   free
           |    MOV  R0, #0
-          |    POP {R4-R12,PC}
+          |    POP  {R4-R12,PC}
           |  1:
           |    LDR  R0, =2f
           |    BL   printf

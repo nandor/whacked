@@ -304,6 +304,10 @@ genExpr IBinOp{..} dest = do
         (lt, le) <- genTemp >>= genExpr ieLeft
         (rt, re) <- genTemp >>= genExpr ieRight
         return (rt, re, lt, le)
+  case ieBinOp of
+    Div -> emit $ SCheckZero re
+    Mod -> emit $ SCheckZero re
+    _   -> return ()
   emit $ SBinOp lt dest ieBinOp le re
   return (fromJust $ binOpType ieBinOp lt rt, dest)
 genExpr IUnOp{..} dest = do
@@ -337,10 +341,11 @@ genExpr IArray{..} dest = do
     emit $ SWriteArray dest idx expr t
   return (Array ieType, dest)
 genExpr IIndex{..} dest = do
-  (Array t, arr) <- genTemp >>= genExpr ieArray
-  emit $ SCheckNull arr
+  (Array t, array) <- genTemp >>= genExpr ieArray
+  emit $ SCheckNull array
   (_, idx) <- genTemp >>= genExpr ieIndex
-  emit $ SReadArray dest arr idx t
+  emit $ SCheckBounds array idx
+  emit $ SReadArray dest array idx t
   return (t, dest)
 genExpr IPair{..} dest = do
   (lt, lexpr) <- genTemp >>= genExpr ieFst
@@ -433,6 +438,7 @@ genInstr IAssArray{..} = do
   (_, array) <- genTemp >>= genExpr iiArray
   emit $ SCheckNull array
   (_, idx)   <- genTemp >>= genExpr iiIndex
+  emit $ SCheckBounds array idx
   (t, expr)  <- genTemp >>= genExpr iiExpr
   emit $ SWriteArray array idx expr t
 genInstr IAssPair{..} = do

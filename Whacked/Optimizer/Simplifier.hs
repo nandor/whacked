@@ -69,29 +69,23 @@ simplify func@SFunction{..}
     replace op@SBinOp{..}
       = case siBinOp of
           Div ->
-            [ SCheckZero siRight
-            , SCall [siDest] "__aeabi_idiv" [siLeft, siRight]
-            ]
+            [ SCall [siDest] "__aeabi_idiv" [siLeft, siRight] ]
           Mod ->
-            [ SCheckZero siRight
-            , SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]
-            ]
+            [ SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight] ]
           x ->
             [op]
     replace op@SUnOp{..}
       = case siUnOp of
-          Len -> [SReadArray siDest siArg (SImm (-1)) Int]
+          Len -> [SLength siDest siArg]
           x -> [op]
     replace SNewArray{..}
-      = [ SCall [siDest] "__alloc" [SImm (siLength * sizeof siType)]
-        , SWriteArray siDest (SImm (-1)) (SImm siLength) Int
-        ]
+      = [ SCall [siDest] "__alloc" [ SImm siLength, SImm (sizeof siType) ] ]
     replace SNewPair{..}
-      = [SCall [siDest] "__alloc" [SImm 8]]
+      = [ SCall [siDest] "__alloc" [ SImm 2, SImm 4 ] ]
     replace SFree{..}
-      = [SCall [] "__delete" [siDest]]
+      = [ SCall [] "__delete" [siDest] ]
     replace x
-      = [x]
+      = [ x ]
 
 
 -- | Flattens the program, removing blocks.
@@ -176,6 +170,8 @@ pruneCallGraph prog@SProgram{..}
       = ["__check_null"]
     getCalls SCheckZero{..}
       = ["__check_zero"]
+    getCalls SCheckBounds{..}
+      = ["__check_bounds"]
     getCalls _
       = []
 

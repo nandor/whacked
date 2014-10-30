@@ -380,6 +380,10 @@ sccp func@SFunction{..}
           = (cfg, ssa, vars)
         evalInstr (cfg, ssa, vars) SCheckNull{..}
           = (cfg, ssa, vars)
+        evalInstr (cfg, ssa, vars) SCheckZero{..}
+          = (cfg, ssa, vars)
+        evalInstr (cfg, ssa, vars) SCheckBounds{..}
+          = (cfg, ssa, vars)
 
         evalInstr (cfg, ssa, vars) const
           = case lookupValue vars $ siDest const of

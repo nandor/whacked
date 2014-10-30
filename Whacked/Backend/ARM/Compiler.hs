@@ -232,11 +232,19 @@ compileInstr SJump{..} = do
 compileInstr SCheckNull{..} = do
   var <- fetchReg siArg R12
   tell [ ARMTeq AAL var (ARMI 0) ]
-  tell [ ARMB AEQ $ Right "__check_null"]
+  tell [ ARMB AEQ $ Right "__check_null" ]
 compileInstr SCheckZero{..} = do
   var <- fetchReg siArg R12
   tell [ ARMTeq AAL var (ARMI 0) ]
-  tell [ ARMB AEQ $ Right "__check_zero"]
+  tell [ ARMB AEQ $ Right "__check_zero" ]
+compileInstr SCheckBounds{..} = do
+  index <- fetchReg siIndex R12
+  tell [ ARMCmp AAL index (ARMI 0) ]
+  tell [ ARMB ALT $ Right "__check_bounds" ]
+  array <- fetchReg siArray R12
+  tell [ ARMLdr R11 array (ARMI (-4)) ]
+  tell [ ARMCmp AAL index (ARMR R11) ]
+  tell [ ARMB AGE $ Right "__check_bounds" ]
 compileInstr SMov{ siArg = (SImm x), ..} =
   storeImm siDest (ARMI x) R12
 compileInstr SMov{ siArg = x@(SVar _), ..}
@@ -247,6 +255,10 @@ compileInstr SMov{ siArg = x@(SVar _), ..}
     ARMLocStk stk -> do
       var <- fetchReg x R12
       storeReg siDest var
+compileInstr SLength{..} = do
+  dest <- findReg siDest R12
+  array <- findReg siDest R12
+  tell [ ARMLdr dest array (ARMI (-4)) ]
 compileInstr SReadArray{..} = do
   dest <- findReg siDest R12
   array <- fetchReg siArray R12
