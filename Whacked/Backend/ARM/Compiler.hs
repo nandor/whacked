@@ -233,6 +233,10 @@ compileInstr SCheckNull{..} = do
   var <- fetchReg siArg R12
   tell [ ARMTeq AAL var (ARMI 0) ]
   tell [ ARMB AEQ $ Right "__check_null"]
+compileInstr SCheckZero{..} = do
+  var <- fetchReg siArg R12
+  tell [ ARMTeq AAL var (ARMI 0) ]
+  tell [ ARMB AEQ $ Right "__check_zero"]
 compileInstr SMov{ siArg = (SImm x), ..} =
   storeImm siDest (ARMI x) R12
 compileInstr SMov{ siArg = x@(SVar _), ..}

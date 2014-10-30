@@ -40,11 +40,13 @@ coreFunctions
     , SCoreFunction "__print_ref"      SPrintRef
     , SCoreFunction "__alloc"          SAlloc
     , SCoreFunction "__delete"         SDelete
-    , SCoreFunction "__check_null"     $
+    , SCoreFunction "__check_null" $
         SThrow "__check_null" "Null pointer dereference."
+    , SCoreFunction "__check_zero" $
+        SThrow "__check_zero" "Division by zero."
     , SCoreFunction "__check_overflow" $
         SThrow "__check_overflow" "Integer overflow."
-    , SCoreFunction "__check_range"    $
+    , SCoreFunction "__check_range" $
         SThrow "__check_range" "Index out of range."
     ]
 
@@ -195,6 +197,9 @@ data SInstr
   | SCheckNull
     { siArg :: SVar
     }
+  | SCheckZero
+    { siArg :: SVar
+    }
   deriving (Eq, Ord)
 
 
@@ -288,6 +293,8 @@ instance Show SInstr where
     = "jmp @" ++ show siWhere
   show SCheckNull{..}
     = "nullchk " ++ show siArg
+  show SCheckZero{..}
+    = "zerochk " ++ show siArg
 
 
 -- |Applies a function to all functions.
@@ -386,6 +393,7 @@ getKill x
     SUnJump{..}     -> []
     SJump{..}       -> []
     SCheckNull{..}  -> []
+    SCheckZero{..}  -> []
 
 
 -- |Returns the list of variables that are used in a statement.
@@ -412,3 +420,4 @@ getGen x
     SUnJump{..}     -> [siArg]
     SJump{..}       -> []
     SCheckNull{..}  -> [siArg]
+    SCheckZero{..}  -> [siArg]

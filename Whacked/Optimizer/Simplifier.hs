@@ -68,9 +68,16 @@ simplify func@SFunction{..}
   where
     replace op@SBinOp{..}
       = case siBinOp of
-          Div -> [SCall [siDest] "__aeabi_idiv" [siLeft, siRight]]
-          Mod -> [SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]]
-          x -> [op]
+          Div ->
+            [ SCheckZero siRight
+            , SCall [siDest] "__aeabi_idiv" [siLeft, siRight]
+            ]
+          Mod ->
+            [ SCheckZero siRight
+            , SCall [SVar (-1), siDest] "__aeabi_idivmod" [siLeft, siRight]
+            ]
+          x ->
+            [op]
     replace op@SUnOp{..}
       = case siUnOp of
           Len -> [SReadArray siDest siArg (SImm (-1)) Int]
@@ -167,6 +174,8 @@ pruneCallGraph prog@SProgram{..}
       = [siFunc]
     getCalls SCheckNull{..}
       = ["__check_null"]
+    getCalls SCheckZero{..}
+      = ["__check_zero"]
     getCalls _
       = []
 
