@@ -202,6 +202,8 @@ compileInstr SBinOp{..} = do
     Mul -> do
       arg <- fetchReg siRight R12
       tell [ ARMSmull AAL R11 R12 left arg ]
+      tell [ ARMCmpAsr AAL R12 R11 32 ]
+      tell [ ARMB ANE $ Right "__check_overflow" ]
       tell [ ARMMov AAL dest (ARMR R11) ]
     Cmp op -> do
       imm <- fetchImm siRight R12

@@ -20,16 +20,16 @@ import Debug.Trace
 
 
 -- |Min bound for the integer type.
-minInt :: Int
+minInt :: Num a => a
 minInt = fromIntegral (minBound :: Int32)
 
 -- |Max bound for the integer type.
-maxInt :: Int
+maxInt :: Num a => a
 maxInt = fromIntegral (maxBound :: Int32)
 
 
 -- |Checks if a number fits in range.
-overflow :: Int -> Bool
+overflow :: (Ord a, Num a) => a -> Bool
 overflow x
   = x < minInt || maxInt < x
 

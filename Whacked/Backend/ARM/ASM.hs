@@ -124,6 +124,7 @@ data ASM
   | ARMOrr    ARMCond ARMReg ARMReg ARMImm
   | ARMAnd    ARMCond ARMReg ARMReg ARMImm
   | ARMCmp    ARMCond ARMReg ARMImm
+  | ARMCmpAsr ARMCond ARMReg ARMReg Int
   | ARMTst    ARMCond ARMReg ARMImm
   | ARMTeq    ARMCond ARMReg ARMImm
   | ARMMov    ARMCond ARMReg ARMImm
@@ -187,6 +188,9 @@ instance Show ASM where
       ", " ++ show m
   show (ARMCmp cond d m)
     = "    CMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+  show (ARMCmpAsr cond d m asr)
+    = "    CMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m ++
+      ", asr #" ++ show asr
   show (ARMTst cond d m)
     = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMTeq cond d m)
