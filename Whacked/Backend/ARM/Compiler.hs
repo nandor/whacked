@@ -57,8 +57,8 @@ getLabel i = do
 moveLocToVar :: ARMLoc -> SVar -> Compiler ()
 moveLocToVar (ARMLocReg reg) var
   = get >>= \Scope{..} -> case Map.lookup var regs of
-      Just (ARMLocReg reg') | reg == reg' ->
-        tell [ ARMMov AAL reg' (ARMR reg) ]
+      Just (ARMLocReg reg') | reg /= reg' ->
+        move reg' (ARMR reg)
       Just (ARMLocStk stk) ->
         tell [ ARMStr reg SP $ ARMI (stk * 4) ]
       _ ->
