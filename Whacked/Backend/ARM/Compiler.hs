@@ -220,15 +220,19 @@ compileInstr SBinJump{..} = do
   imm  <- fetchImm siRight R11
   label <- getLabel siWhere
   tell [ ARMCmp AAL left imm ]
-  tell [ ARMB (toARMCond siCond) label ]
+  tell [ ARMB (toARMCond siCond) $ Left label ]
 compileInstr SUnJump{..} = do
   arg <- fetchReg siArg R12
   label <- getLabel siWhere
   tell [ ARMTst AAL arg (ARMI 1) ]
-  tell [ ARMB (if siWhen then ANE else AEQ) label ]
+  tell [ ARMB (if siWhen then ANE else AEQ) $ Left label ]
 compileInstr SJump{..} = do
   label <- getLabel siWhere
-  tell [ ARMB AAL label ]
+  tell [ ARMB AAL $ Left label ]
+compileInstr SCheckNull{..} = do
+  var <- fetchReg siArg R12
+  tell [ ARMTeq AAL var (ARMI 0) ]
+  tell [ ARMB AEQ $ Right "__check_null"]
 compileInstr SMov{ siArg = (SImm x), ..} =
   storeImm siDest (ARMI x) R12
 compileInstr SMov{ siArg = x@(SVar _), ..}

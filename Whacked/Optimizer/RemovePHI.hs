@@ -120,3 +120,5 @@ removePhi func@SFunction{..}
       = op{ siArg = replace siArg }
     replaceInstr op@SJump{..}
       = op
+    replaceInstr op@SCheckNull{..}
+      = op{ siArg = replace siArg }

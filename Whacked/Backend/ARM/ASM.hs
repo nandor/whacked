@@ -123,14 +123,15 @@ data ASM
   | ARMAnd    ARMCond ARMReg ARMReg ARMImm
   | ARMCmp    ARMCond ARMReg ARMImm
   | ARMTst    ARMCond ARMReg ARMImm
+  | ARMTeq    ARMCond ARMReg ARMImm
   | ARMMov    ARMCond ARMReg ARMImm
   | ARMMvn    ARMCond ARMReg ARMImm
   | ARMNeg    ARMCond ARMReg ARMImm
   | ARMSmull  ARMCond ARMReg ARMReg ARMReg ARMReg
-  | ARMB      ARMCond Int
+  | ARMB      ARMCond (Either Int String)
   | ARMPUSH [ARMReg]
   | ARMPOP  [ARMReg]
-  | ARMBL String
+  | ARMBL     String
   deriving (Eq, Ord)
 
 
@@ -186,6 +187,8 @@ instance Show ASM where
     = "    CMP" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMTst cond d m)
     = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
+  show (ARMTeq cond d m)
+    = "    TST" ++ show cond ++ " " ++ show d ++ ", " ++ show m
   show (ARMMov cond d n)
     = "    MOV" ++ show cond ++ " " ++ show d ++ ", " ++ show n
   show (ARMMvn cond d n)
@@ -204,7 +207,7 @@ instance Show ASM where
   show (ARMPOP rs)
     = "    POP {" ++ intercalate ", " (map show rs) ++ "}"
   show (ARMB cond xs)
-    = "    B" ++ show cond ++ " L" ++ show xs
+    = "    B" ++ show cond ++ " " ++ (either (('L':) . show) id xs)
   show (ARMBL xs)
     = "    BL " ++ xs
 
@@ -320,3 +323,13 @@ instance Show ASM where
           |    .asciz "Runtime Error: Attempted free of null pointer.\n"
           |    .align 4
           |]
+  show (ARMCore (SThrow func msg))
+    = func ++ ":\n" ++
+      [str|    LDR R0, =1f
+          |    BL  printf
+          |    MOV R0, #0xFF
+          |    BL exit
+          |  1:
+          |] ++
+      "    .asciz " ++ show (msg ++ "\n") ++ "\n" ++
+      "    .align 4\n"

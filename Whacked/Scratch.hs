@@ -23,7 +23,7 @@ data SCore
   | SPrintRef
   | SAlloc
   | SDelete
-  | SThrow String
+  | SThrow String String
   deriving ( Eq, Ord, Show )
 
 
@@ -40,9 +40,12 @@ coreFunctions
     , SCoreFunction "__print_ref"      SPrintRef
     , SCoreFunction "__alloc"          SAlloc
     , SCoreFunction "__delete"         SDelete
-    , SCoreFunction "__check_null"     $ SThrow "Null pointer dereference."
-    , SCoreFunction "__check_overflow" $ SThrow "Integer overflow."
-    , SCoreFunction "__check_range"    $ SThrow "Index out of range."
+    , SCoreFunction "__check_null"     $
+        SThrow "__check_null" "Null pointer dereference."
+    , SCoreFunction "__check_overflow" $
+        SThrow "__check_overflow" "Integer overflow."
+    , SCoreFunction "__check_range"    $
+        SThrow "__check_range" "Index out of range."
     ]
 
 

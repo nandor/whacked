@@ -83,8 +83,6 @@ simplify func@SFunction{..}
       = [SCall [siDest] "__alloc" [SImm 8]]
     replace SFree{..}
       = [SCall [] "__delete" [siDest]]
-    replace SCheckNull{..}
-      = [SCall [] "__check_null" [siArg]]
     replace x
       = [x]
 
@@ -161,8 +159,15 @@ pruneCallGraph prog@SProgram{..}
       = foldr (\f -> Map.insertWith (++) (sfName f) (calls f)) Map.empty spFuncs
 
     calls SFlatFunction{..}
-      = [ siFunc | (_, SCall{ siFunc }) <- sfInstrs ]
+      = concatMap (getCalls . snd) sfInstrs
     calls _
+      = []
+
+    getCalls SCall{..}
+      = [siFunc]
+    getCalls SCheckNull{..}
+      = ["__check_null"]
+    getCalls _
       = []
 
     called = dfs graph ["main"] Set.empty

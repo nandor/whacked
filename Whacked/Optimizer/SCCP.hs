@@ -378,6 +378,8 @@ sccp func@SFunction{..}
           = (cfg, ssa, vars)
         evalInstr (cfg, ssa, vars) SWritePair{..}
           = (cfg, ssa, vars)
+        evalInstr (cfg, ssa, vars) SCheckNull{..}
+          = (cfg, ssa, vars)
 
         evalInstr (cfg, ssa, vars) const
           = case lookupValue vars $ siDest const of

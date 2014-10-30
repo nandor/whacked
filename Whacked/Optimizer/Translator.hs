@@ -338,6 +338,7 @@ genExpr IArray{..} dest = do
   return (Array ieType, dest)
 genExpr IIndex{..} dest = do
   (Array t, arr) <- genTemp >>= genExpr ieArray
+  emit $ SCheckNull arr
   (_, idx) <- genTemp >>= genExpr ieIndex
   emit $ SReadArray dest arr idx t
   return (t, dest)
