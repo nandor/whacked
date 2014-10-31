@@ -448,6 +448,7 @@ genInstr IAssPair{..} = do
   emit $ SWritePair iiElem pair expr
 genInstr IFree{..} = do
   (t, expr) <- genTemp >>= genExpr iiExpr
+  emit $ SCheckNull expr
   emit $ SFree expr
 
 
