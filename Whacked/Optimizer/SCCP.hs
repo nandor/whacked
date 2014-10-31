@@ -227,13 +227,27 @@ sccp func@SFunction{..}
             CBool x -> Just $ SBool siDest x
             CChar x -> Just $ SChar siDest x
             _       -> Just op
-        simplifyInstr op@SUnOp{ .. } = do
+        simplifyInstr op@SUnOp{..} = do
           arg <- lookupValue vars' siArg
           case evalUnOp siUnOp arg of
             CInt x  -> Just $ SInt siDest x
             CBool x -> Just $ SBool siDest x
             CChar x -> Just $ SChar siDest x
             _       -> Just op
+        -- If we can prove that an array is never null at a point in a program,
+        -- we can remove checks for null pointers.
+        simplifyInstr op@SCheckNull{..} = lookupValue vars' siArg >>= \case
+          CRef (Just (SVar _))            -> Nothing
+          CArray (CRef (Just (SVar _))) _ -> Nothing
+          _                               -> Just op
+        -- If we can infer the size of arrays, we can get rid of bound checks.
+        simplifyInstr op@SCheckBounds{..} = do
+          array <- lookupValue vars' siArray
+          index <- lookupValue vars' siIndex
+          case (array, index) of
+            (CArray _ (CInt x), CInt y) | 0 <= y && y < x -> Nothing
+            _                                             -> Just op
+
         simplifyInstr x
           = Just x
 
