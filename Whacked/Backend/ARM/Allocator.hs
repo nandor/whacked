@@ -78,11 +78,11 @@ getPreferredRegs live func@SFlatFunction{..}
     -- For each live variable, associates the list of all registers as
     -- available.
     allowRegs mp (live, op@SCall{..})
-      = putRegs live (getKill op ++ getGen op) allRegs mp
+      = putRegs live (getKill op ++ getGen op) (argRegs ++ allRegs) mp
     allowRegs mp (live, op@SReturn{..})
       = putRegs live (getGen op) (ARMLocReg R0:allRegs) mp
     allowRegs mp (live, op)
-      = putRegs live (getKill op ++ getGen op) allRegs mp
+      = putRegs live (getKill op ++ getGen op) (argRegs ++ allRegs) mp
 
     putRegs live vars regs mp
       = foldr (\x -> Map.insertWith (++) x regs) mp (vars `intersect` live)

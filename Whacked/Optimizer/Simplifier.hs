@@ -47,7 +47,12 @@ moveConstants func@SFunction{..}
         op@SInt{..} | fitsInImm siInt ->
           (Map.insert siDest (SImm siInt) vars, op:instrs)
         op@SWriteArray{..} ->
-          (vars, op{ siIndex = replaceVar siIndex }:instrs)
+          ( vars
+          , op
+            { siIndex = replaceVar siIndex
+            , siExpr = replaceVar siExpr
+            }:instrs
+          )
         op@SReadArray{..} ->
           (vars, op{ siIndex = replaceVar siIndex }:instrs)
         op@SBinJump{..} ->
@@ -56,6 +61,8 @@ moveConstants func@SFunction{..}
           (vars, op{ siArg = replaceVar siArg }:instrs)
         op@SCheckNull{..} ->
           (vars, op{ siArg = replaceVar siArg }:instrs)
+        op@SCall{..} ->
+          (vars, op{ siArgs = map replaceVar siArgs }:instrs)
         _ ->
           (vars, instr:instrs)
       where

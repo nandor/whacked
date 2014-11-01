@@ -78,7 +78,7 @@ moveLocToVar (ARMLocArgIn stk) var
 -- as an argument to another function.
 moveVarToLoc :: SVar -> ARMLoc -> Compiler ()
 moveVarToLoc (SImm x) (ARMLocReg reg) =
-  tell [ ARMMov AAL reg (ARMI x) ]
+  tell [ ARMLoadConst reg x ]
 moveVarToLoc (SImm x) (ARMLocArgOut stk) = do
   tell [ ARMMov AAL R12 (ARMI x) ]
   tell [ ARMStr R12 SP $ ARMI (-(stk + 1) * 4) ]
