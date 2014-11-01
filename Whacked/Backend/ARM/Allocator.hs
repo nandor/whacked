@@ -78,7 +78,7 @@ getPreferredRegs live func@SFlatFunction{..}
     -- For each live variable, associates the list of all registers as
     -- available.
     allowRegs mp (live, op@SCall{..})
-      = putRegs live (getKill op ++ getGen op) (argRegs ++ allRegs) mp
+      = putRegs live (getKill op ++ getGen op) allRegs mp
     allowRegs mp (live, op@SReturn{..})
       = putRegs live (getGen op) (ARMLocReg R0:allRegs) mp
     allowRegs mp (live, op)
@@ -90,7 +90,25 @@ getPreferredRegs live func@SFlatFunction{..}
     -- For function calls, bans all live variables from being placed in R0-R3,
     -- but allows return values to be placed there.
     banRegs mp (live, SCall{..})
-      = foldl clearArgs mp live
+      = foldl banArgs (foldl clearArgs mp live)
+      $ (zip siArgs banIn) ++ (zip siRet banOut)
+      where
+        banIn
+          = [ []
+            , [ARMLocReg R0]
+            , [ARMLocReg R0, ARMLocReg R1]
+            , [ARMLocReg R0, ARMLocReg R1, ARMLocReg R2]
+            ] ++
+          repeat [ARMLocReg R0, ARMLocReg R1, ARMLocReg R2, ARMLocReg R3]
+        banOut
+          = [ [ARMLocReg R1, ARMLocReg R2, ARMLocReg R3]
+            , [ARMLocReg R2, ARMLocReg R3]
+            , [ARMLocReg R3]
+            ] ++
+          repeat []
+        banArgs mp (reg, ban) = fromMaybe mp $ do
+          regs <- nub <$> Map.lookup reg mp
+          return $ Map.insert reg (regs \\ ban) mp
     banRegs mp (live, x)
       = mp
 
