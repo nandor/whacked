@@ -295,7 +295,7 @@ getLabel idx = do
 genExpr :: IExpr -> SVar -> Generator (Type, SVar)
 genExpr IBinOp{..} dest = do
   (rt, re, lt, le) <-
-    if isCommutative ieBinOp && height ieLeft < height ieRight
+    if height ieLeft < height ieRight
       then do
         (rt, re) <- genTemp >>= genExpr ieRight
         (lt, le) <- genTemp >>= genExpr ieLeft
