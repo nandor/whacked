@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import           Whacked.FlowGraph
 import           Whacked.Scratch
 import           Whacked.Types
-import Debug.Trace
+
 
 
 -- |Pushes immediate constants into instructions. Due to the fact that ARM

@@ -23,7 +23,6 @@ import           Whacked.Itch
 import           Whacked.Tree
 import           Whacked.Types
 
-import Debug.Trace
 
 
 -- |The scope keeps information about declared variables, functions return

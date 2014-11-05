@@ -26,7 +26,7 @@ import           Whacked.Itch
 import           Whacked.Scratch
 import           Whacked.Types
 
-import Debug.Trace
+
 
 -- | Control flow graph structure.
 type FlowGraph

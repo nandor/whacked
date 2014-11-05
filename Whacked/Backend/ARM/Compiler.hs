@@ -22,7 +22,6 @@ import           Whacked.Backend.ARM.ASM
 import           Whacked.Backend.ARM.Allocator
 import           Whacked.Scratch
 import           Whacked.Types
-import Debug.Trace
 
 
 data Scope

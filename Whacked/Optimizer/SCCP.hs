@@ -16,7 +16,6 @@ import           Whacked.Scratch
 import           Whacked.Types
 import           Whacked.FlowGraph
 
-import Debug.Trace
 
 
 -- |Min bound for the integer type.
