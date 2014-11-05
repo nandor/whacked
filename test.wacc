@@ -1,3 +1,16 @@
 begin
-    println +5
+  int a = 0;
+  int b = 0;
+  int c = 0;
+
+  read c;
+  if c < 0 then
+    read a;
+    b = 10 + a + c
+  else
+    read b
+  fi;
+
+  print a;
+  print b
 end

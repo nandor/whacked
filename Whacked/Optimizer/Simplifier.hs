@@ -147,9 +147,7 @@ pruneFlowGraph func@SFlatFunction{..}
     reverse node next mp
       = foldr (\x -> Map.insertWith (++) x [node]) mp next
 
-    fromStart = dfs cfg [0] Set.empty
-    fromEnd = dfs cfg' [i | (i, x) <- sfInstrs, isTerminal x] Set.empty
-    reachable = Set.intersection fromStart fromEnd
+    reachable = dfs cfg [0] Set.empty
 
     prune ((i, x):xs)
       | not (i `Set.member` reachable) = prune xs
